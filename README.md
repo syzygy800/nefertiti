@@ -1,5 +1,10 @@
-# Nefertiti
+### Nefertiti ###
+
 Nefertiti is a FREE crypto trading bot that follows a simple but proven trading strategy; buy the dip and then sell those trades as soon as possible.
+
+### Exchanges ###
+
+At the time of this writing, the trading bot supports the following crypto exchanges: Binance, Kucoin, Bittrex, HitBTC, Coinbase Pro, Bitstamp, CEX.IO, and crypto.com
 
 ### Setup ###
 
