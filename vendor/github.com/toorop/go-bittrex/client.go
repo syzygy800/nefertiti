@@ -47,8 +47,14 @@ func (c *client) doTimeoutRequest(timer *time.Timer, req *http.Request) (*http.R
 }
 
 // do prepare and process HTTP request to Bittrex API
-func (c *client) do(method string, version int, resource string, payload string, authNeeded bool) (out []byte, err error) {
-	if err = BeforeRequest(resource); err != nil {
+func (c *client) do(method string, version int, resource string, payload string, authNeeded bool) ([]byte, error) {
+	var (
+		out    []byte
+		err    error
+		cooled bool = false
+	)
+
+	if cooled, err = BeforeRequest(resource); err != nil {
 		return nil, err
 	}
 	defer func() {
@@ -64,7 +70,7 @@ func (c *client) do(method string, version int, resource string, payload string,
 
 	var req *http.Request
 	if req, err = http.NewRequest(method, rawurl, strings.NewReader(payload)); err != nil {
-		return
+		return nil, err
 	}
 	if method == "POST" || method == "PUT" {
 		req.Header.Add("Content-Type", "application/json;charset=utf-8")
@@ -75,7 +81,7 @@ func (c *client) do(method string, version int, resource string, payload string,
 	if authNeeded {
 		if len(c.apiKey) == 0 || len(c.apiSecret) == 0 {
 			err = errors.New("You need to set API Key and API Secret to call this method")
-			return
+			return nil, err
 		}
 		nonce := time.Now().UnixNano()
 		query := req.URL.Query()
@@ -92,27 +98,48 @@ func (c *client) do(method string, version int, resource string, payload string,
 
 	var resp *http.Response
 	if resp, err = c.doTimeoutRequest(timer, req); err != nil {
-		return
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if out, err = ioutil.ReadAll(resp.Body); err != nil {
-		return
+		return nil, err
 	}
 
 	if resp.StatusCode != 200 {
 		err = errors.New(resp.Status)
 		if resp.StatusCode == http.StatusTooManyRequests {
-			HandleRateLimitErr(resource)
+			HandleRateLimitErr(resource, cooled)
 		}
 	}
 
-	return
+	return out, nil
 }
 
-func (client *client) do3(method string, path string, payload []byte, app_id string, auth bool) (out []byte, err error) {
-	if err = BeforeRequest(path); err != nil {
-		return nil, err
+func (client *client) do3(method string, path string, payload []byte, appId string, auth bool) ([]byte, error) {
+	var (
+		code int
+		out  []byte
+		err  error
+	)
+	for {
+		code, out, err = client.do3ex(method, path, payload, appId, auth)
+		if code != http.StatusTooManyRequests {
+			break
+		}
+	}
+	return out, err
+}
+
+func (client *client) do3ex(method string, path string, payload []byte, appId string, auth bool) (int, []byte, error) {
+	var (
+		err    error
+		out    []byte
+		cooled bool = false
+	)
+
+	if cooled, err = BeforeRequest(path); err != nil {
+		return 0, nil, err
 	}
 	defer func() {
 		AfterRequest()
@@ -127,18 +154,18 @@ func (client *client) do3(method string, path string, payload []byte, app_id str
 
 	var req *http.Request
 	if req, err = http.NewRequest(method, url, bytes.NewReader(payload)); err != nil {
-		return
+		return 0, nil, err
 	}
 	req.Header.Add("Content-Type", "application/json")
 
-	if app_id != "" {
-		req.Header.Add("Application-Id", app_id)
+	if appId != "" {
+		req.Header.Add("Application-Id", appId)
 	}
 
 	if auth {
 		if len(client.apiKey) == 0 || len(client.apiSecret) == 0 {
 			err = errors.New("You need to set API Key and API Secret to call this method")
-			return
+			return 0, nil, err
 		}
 
 		// Unix timestamp in millisecond format
@@ -149,14 +176,14 @@ func (client *client) do3(method string, path string, payload []byte, app_id str
 
 		hash := sha512.New()
 		if _, err = hash.Write([]byte(payload)); err != nil {
-			return
+			return 0, nil, err
 		}
 		content := hex.EncodeToString(hash.Sum(nil))
 		req.Header.Add("Api-Content-Hash", content)
 
 		mac := hmac.New(sha512.New, []byte(client.apiSecret))
 		if _, err = mac.Write([]byte(nonce + url + method + content)); err != nil {
-			return
+			return 0, nil, err
 		}
 		req.Header.Add("Api-Signature", hex.EncodeToString(mac.Sum(nil)))
 	}
@@ -165,22 +192,29 @@ func (client *client) do3(method string, path string, payload []byte, app_id str
 
 	var resp *http.Response
 	if resp, err = client.doTimeoutRequest(timer, req); err != nil {
-		return
+		return 0, nil, err
 	}
 	defer resp.Body.Close()
 
 	if out, err = ioutil.ReadAll(resp.Body); err != nil {
-		return
+		return resp.StatusCode, nil, err
 	}
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		pair := make(map[string]string)
 		json.Unmarshal(out, &pair)
 		if msg, ok := pair["code"]; ok {
-			return nil, errors.New(msg)
+			err = errors.New(msg)
+		} else {
+			err = errors.New(resp.Status)
 		}
-		err = errors.New(resp.Status)
+		if resp.StatusCode == http.StatusTooManyRequests {
+			if HandleRateLimitErr(path, cooled) != nil {
+				return 0, nil, err
+			}
+		}
+		return resp.StatusCode, nil, err
 	}
 
-	return
+	return resp.StatusCode, out, nil
 }

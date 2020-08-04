@@ -38,7 +38,7 @@ type BittrexSessionInfo struct {
 	Calls    []exchange.Call `json:"calls"`
 }
 
-func BittrexRequestsPerSecond(path string) float64 {
+func BittrexRequestsPerSecond(path string) (float64, bool) { // -> (rps, cooldown)
 	var (
 		err  error
 		data []byte
@@ -57,7 +57,7 @@ func BittrexRequestsPerSecond(path string) float64 {
 				if data, err = json.Marshal(info); err == nil {
 					err = ioutil.WriteFile(session.GetSessionFile(bittrexSessionInfo), data, 0600)
 				}
-				return exchange.RequestsPerSecond[exchange.INTENSITY_SUPER]
+				return exchange.RequestsPerSecond(exchange.INTENSITY_SUPER), true
 			}
 		}
 	}
@@ -69,35 +69,39 @@ func BittrexRequestsPerSecond(path string) float64 {
 	}
 	for _, call := range info.Calls {
 		if call.Path == path {
-			return exchange.RequestsPerSecond[call.Intensity]
+			return exchange.RequestsPerSecond(call.Intensity), false
 		}
 	}
-	return exchange.RequestsPerSecond[exchange.INTENSITY_LOW]
+	return exchange.RequestsPerSecond(exchange.INTENSITY_LOW), false
 }
 
 func init() {
 	// BeforeRequest
-	exchange.BeforeRequest = func(path string) error {
-		var err error
+	exchange.BeforeRequest = func(path string) (bool, error) {
+		var (
+			err    error
+			rps    float64
+			cooled bool = false
+		)
 
 		if bittrexMutex == nil {
 			if bittrexMutex, err = filemutex.New(session.GetSessionFile(bittrexSessionLock)); err != nil {
-				return err
+				return cooled, err
 			}
 		}
 
 		if err = bittrexMutex.Lock(); err != nil {
-			return err
+			return cooled, err
 		}
 
 		var lastRequest *time.Time
 		if lastRequest, err = session.GetLastRequest(bittrexSessionFile); err != nil {
-			return err
+			return cooled, err
 		}
 
 		if lastRequest != nil {
 			elapsed := time.Since(*lastRequest)
-			rps := BittrexRequestsPerSecond(path)
+			rps, cooled = BittrexRequestsPerSecond(path)
 			if elapsed.Seconds() < (float64(1) / rps) {
 				sleep := time.Duration((float64(time.Second) / rps)) - elapsed
 				if flag.Debug() {
@@ -111,7 +115,7 @@ func init() {
 			log.Println("[DEBUG] GET " + path)
 		}
 
-		return nil
+		return cooled, nil
 	}
 	// AfterRequest
 	exchange.AfterRequest = func() {
@@ -121,7 +125,7 @@ func init() {
 		session.SetLastRequest(bittrexSessionFile, time.Now())
 	}
 	// HandleRateLimitErr
-	exchange.HandleRateLimitErr = func(path string) error {
+	exchange.HandleRateLimitErr = func(path string, cooled bool) error {
 		var (
 			err    error
 			data   []byte
@@ -145,13 +149,12 @@ func init() {
 		}
 		for idx := range info.Calls {
 			if info.Calls[idx].Path == path {
-				switch info.Calls[idx].Intensity {
-				case exchange.INTENSITY_LOW:
-					info.Calls[idx].Intensity = exchange.INTENSITY_MEDIUM
-				case exchange.INTENSITY_MEDIUM:
-					info.Calls[idx].Intensity = exchange.INTENSITY_HIGH
-				case exchange.INTENSITY_HIGH:
-					info.Calls[idx].Intensity = exchange.INTENSITY_SUPER
+				if cooled {
+					// rate limited immediately after a cooldown?
+					// 1. do another round of "cooling down"
+					// 2. do not slow this endpoint down just yet.
+				} else {
+					info.Calls[idx].Intensity = info.Calls[idx].Intensity + 1
 				}
 				exists = true
 			}
@@ -159,7 +162,7 @@ func init() {
 		if !exists {
 			info.Calls = append(info.Calls, exchange.Call{
 				Path:      path,
-				Intensity: exchange.INTENSITY_MEDIUM,
+				Intensity: exchange.INTENSITY_TWO,
 			})
 		}
 		info.Cooldown = true
@@ -863,7 +866,7 @@ func (self *Bittrex) GetPricePrec(client interface{}, market string) (int, error
 		if market3.MarketName() == market {
 			return market3.Precision, nil
 		}
-	}	
+	}
 
 	return 8, nil
 }

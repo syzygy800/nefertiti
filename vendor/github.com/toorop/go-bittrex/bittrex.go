@@ -43,38 +43,32 @@ func fmtApiVersion(version int) string {
 var (
 	cooldown           bool
 	lastRequest        time.Time
-	BeforeRequest      func(path string) error = nil
-	AfterRequest       func()                  = nil
-	HandleRateLimitErr func(path string) error = nil
+	BeforeRequest      func(path string) (bool, error)      = nil // -> (cooled, error)
+	AfterRequest       func()                               = nil
+	HandleRateLimitErr func(path string, cooled bool) error = nil
 )
-
-type intensity int
 
 const (
-	INTENSITY_LOW intensity = iota
-	INTENSITY_MEDIUM
-	INTENSITY_HIGH
-	INTENSITY_SUPER
+	INTENSITY_LOW   = 1  // 1 req/second
+	INTENSITY_TWO   = 2  // 0.5 req/second
+	INTENSITY_SUPER = 60 // 1 req/minute
 )
 
-var RequestsPerSecond = map[intensity]float64{
-	INTENSITY_LOW:    1,          // 1 req/second (default)
-	INTENSITY_MEDIUM: 0.1,        // 1 req/10 seconds
-	INTENSITY_HIGH:   0.03333333, // 1 req/30 seconds
-	INTENSITY_SUPER:  0.01666666, // 1 rec/minute
+func RequestsPerSecond(intensity int) float64 {
+	return float64(1) / float64(intensity)
 }
 
 type Call struct {
-	Path      string    `json:"path"`
-	Intensity intensity `json:"intensity"`
+	Path      string `json:"path"`
+	Intensity int    `json:"intensity"`
 }
 
 var Calls = []Call{}
 
-func GetRequestsPerSecond(path string) float64 {
+func GetRequestsPerSecond(path string) (float64, bool) { // -> (rps, cooldown)
 	if cooldown {
 		cooldown = false
-		return RequestsPerSecond[INTENSITY_SUPER]
+		return RequestsPerSecond(INTENSITY_SUPER), true
 	}
 	for i := range path {
 		if strings.Index("?", string(path[i])) > -1 {
@@ -84,27 +78,27 @@ func GetRequestsPerSecond(path string) float64 {
 	}
 	for _, call := range Calls {
 		if call.Path == path {
-			return RequestsPerSecond[call.Intensity]
+			return RequestsPerSecond(call.Intensity), false
 		}
 	}
-	return RequestsPerSecond[INTENSITY_LOW]
+	return RequestsPerSecond(INTENSITY_LOW), false
 }
 
 func init() {
-	BeforeRequest = func(path string) error {
+	BeforeRequest = func(path string) (bool, error) {
 		// accounts are now only to make a maximum of 60 API calls per minute.
 		// calls after the limit will fail, with throttle settings automatically resetting at the start of the next minute.
 		elapsed := time.Since(lastRequest)
-		rps := GetRequestsPerSecond(path)
+		rps, cooled := GetRequestsPerSecond(path)
 		if elapsed.Seconds() < (float64(1) / rps) {
 			time.Sleep(time.Duration((float64(time.Second) / rps)) - elapsed)
 		}
-		return nil
+		return cooled, nil
 	}
 	AfterRequest = func() {
 		lastRequest = time.Now()
 	}
-	HandleRateLimitErr = func(path string) error {
+	HandleRateLimitErr = func(path string, cooled bool) error {
 		var (
 			exists bool
 		)
@@ -116,13 +110,12 @@ func init() {
 		}
 		for idx := range Calls {
 			if Calls[idx].Path == path {
-				switch Calls[idx].Intensity {
-				case INTENSITY_LOW:
-					Calls[idx].Intensity = INTENSITY_MEDIUM
-				case INTENSITY_MEDIUM:
-					Calls[idx].Intensity = INTENSITY_HIGH
-				case INTENSITY_HIGH:
-					Calls[idx].Intensity = INTENSITY_SUPER
+				if cooled {
+					// rate limited immediately after a cooldown?
+					// 1. do another round of "cooling down"
+					// 2. do not slow this endpoint down just yet.
+				} else {
+					Calls[idx].Intensity = Calls[idx].Intensity + 1
 				}
 				exists = true
 			}
@@ -130,7 +123,7 @@ func init() {
 		if !exists {
 			Calls = append(Calls, Call{
 				Path:      path,
-				Intensity: INTENSITY_MEDIUM,
+				Intensity: INTENSITY_TWO,
 			})
 		}
 		cooldown = true
@@ -148,7 +141,7 @@ func New1(apiKey, apiSecret string) *Bittrex1 {
 func handleErr(path string, resp Response) error {
 	if !resp.Success {
 		if strings.Contains(resp.Message, "was throttled") {
-			err := HandleRateLimitErr(path)
+			err := HandleRateLimitErr(path, false)
 			if err != nil {
 				return err
 			}
