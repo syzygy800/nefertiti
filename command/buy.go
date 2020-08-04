@@ -26,18 +26,17 @@ type (
 )
 
 func report(err error,
-	markets []string,
+	market string,
 	channel model.Channel,
 	service model.Notify,
 	exchange model.Exchange,
-	notify bool,
 ) {
 	pc, file, line, _ := runtime.Caller(1)
 	prefix := errors.FormatCaller(pc, file, line)
 
 	var suffix string
-	if markets != nil {
-		suffix = fmt.Sprintf("%s Market: %v.", suffix, markets)
+	if market != "" {
+		suffix = fmt.Sprintf("%s Market: %v.", suffix, market)
 	}
 	if channel != nil {
 		suffix = fmt.Sprintf("%s Channel: %s.", suffix, channel.GetName())
@@ -51,7 +50,7 @@ func report(err error,
 		log.Printf("[ERROR] %s", msg)
 	}
 
-	if service != nil && notify {
+	if service != nil {
 		err := service.SendMessage(msg, (exchange.GetInfo().Name + " - ERROR"))
 		if err != nil {
 			log.Printf("[ERROR] %v", err)
@@ -78,9 +77,9 @@ func buyEvery(
 	debug bool,
 ) {
 	for range time.Tick(d) {
-		err := buy(client, exchange, markets, agg, size, dip, mult, dist, top, max, min, price, sandbox, false, debug)
+		err, market := buy(client, exchange, markets, agg, size, dip, mult, dist, top, max, min, price, sandbox, false, debug)
 		if err != nil {
-			report(err, markets, nil, service, exchange, !errors.Is(err, model.EOrderBookTooThin))
+			report(err, market, nil, service, exchange)
 		}
 	}
 }
@@ -101,12 +100,12 @@ func buy(
 	sandbox bool,
 	test bool,
 	debug bool,
-) error {
+) (error, string) { // -> (error, market)
 	var err error
 
 	var all []model.Market
 	if all, err = exchange.GetMarkets(true, sandbox); err != nil {
-		return err
+		return err, ""
 	}
 
 	for _, market := range markets {
@@ -119,23 +118,32 @@ func buy(
 		magg = agg
 		if magg == 0 {
 			if magg, err = model.GetAgg(exchange, market, dip, max, min, int(top), sandbox); err != nil {
-				return err
+				if errors.Is(err, model.EOrderBookTooThin) {
+					if len(markets) > 1 {
+						log.Printf("[WARN] %s: %v\n", market, err)
+						continue
+					} else {
+						return err, market
+					}
+				} else {
+					return err, market
+				}
 			}
 		}
 
 		var book1 interface{}
 		if book1, err = exchange.GetBook(client, market, model.BOOK_SIDE_BIDS); err != nil {
-			return err
+			return err, market
 		}
 
 		var book2 model.Book
 		if book2, err = exchange.Aggregate(client, book1, market, magg); err != nil {
-			return err
+			return err, market
 		}
 
 		var ticker float64
 		if ticker, err = exchange.GetTicker(client, market); err != nil {
-			return err
+			return err, market
 		}
 
 		mqty = size
@@ -143,7 +151,7 @@ func buy(
 		if price != 0 {
 			var prec int
 			if prec, err = exchange.GetSizePrec(client, market); err != nil {
-				return err
+				return err, market
 			}
 			mqty = pricing.RoundToPrecision(price/ticker, prec)
 		}
@@ -176,12 +184,12 @@ func buy(
 
 		var stats *model.Stats
 		if stats, err = exchange.Get24h(client, market); err != nil {
-			return err
+			return err, market
 		}
 
 		var avg float64
 		if avg, err = stats.Avg(exchange, sandbox); err != nil {
-			return err
+			return err, market
 		}
 
 		// ignore orders that are more expensive than 24h high minus 5%
@@ -211,7 +219,7 @@ func buy(
 		if !test {
 			var opened model.Orders
 			if opened, err = exchange.GetOpened(client, market); err != nil {
-				return err
+				return err, market
 			}
 			for _, order := range opened {
 				if order.Side == model.SELL {
@@ -221,14 +229,14 @@ func buy(
 			// step 1: loop through the filled BUY orders
 			var closed model.Orders
 			if closed, err = exchange.GetClosed(client, market); err != nil {
-				return err
+				return err, market
 			}
 			for _, fill := range closed {
 				if fill.Side == model.BUY {
 					// step 2: has this filled BUY order NOT been sold?
 					var prec int
 					if prec, err = exchange.GetPricePrec(client, market); err != nil {
-						return err
+						return err, market
 					}
 					if opened.IndexByPrice(model.SELL, market, pricing.Multiply(fill.Price, mult, prec)) > -1 {
 						i = 0
@@ -251,7 +259,12 @@ func buy(
 
 		// we need at least one support
 		if len(book2) == 0 {
-			return errors.Errorf("Not enough supports. Please update your %s aggregation.", market)
+			if len(markets) > 1 {
+				log.Printf("[WARN] %s: %v\n", market, model.EOrderBookTooThin)
+				continue
+			} else {
+				return errors.Errorf("Not enough supports. Please update your %s aggregation.", market), market
+			}
 		}
 		// distance between the buy orders must be at least 2%
 		if dist > 0 {
@@ -275,7 +288,7 @@ func buy(
 									log.Printf("[WARN] %s\n", msg)
 									break outer
 								} else {
-									return errors.New(msg + ". Please update your aggregation.")
+									return errors.New(msg + ". Please update your aggregation."), market
 								}
 							}
 						}
@@ -288,7 +301,7 @@ func buy(
 		if flag.Exists("dca") {
 			var prec int
 			if prec, err = exchange.GetSizePrec(client, market); err != nil {
-				return err
+				return err, market
 			}
 			mqty = pricing.RoundToPrecision((mqty * (1 + (float64(hasOpenSell) * 0.2))), prec)
 		}
@@ -298,7 +311,7 @@ func buy(
 		if curr, err = model.GetBaseCurr(all, market); err == nil {
 			units := model.GetSizeMin(curr)
 			if mqty < units {
-				return errors.Errorf("Cannot buy %s. Size is too low. You must buy at least %f units.", market, units)
+				return errors.Errorf("Cannot buy %s. Size is too low. You must buy at least %f units.", market, units), market
 			}
 		}
 
@@ -310,7 +323,7 @@ func buy(
 				err = exchange.Buy(client, true, market, book2[:top].Calls(), mqty, 1.0, model.LIMIT)
 			}
 			if err != nil {
-				return err
+				return err, market
 			}
 		}
 
@@ -321,12 +334,12 @@ func buy(
 			out, err = json.Marshal(book2[:top])
 		}
 		if err != nil {
-			return err
+			return err, market
 		}
 		log.Println(string(out))
 	}
 
-	return nil
+	return nil, ""
 }
 
 func buySignalsEvery(
@@ -350,7 +363,7 @@ func buySignalsEvery(
 	for range time.Tick(d) {
 		calls, err = buySignals(channel, client, exchange, quote, price, valid, calls, min, btc_volume_min, btc_pump_max, deviation, service, sandbox, false, debug)
 		if err != nil {
-			report(err, nil, channel, service, exchange, true)
+			report(err, "", channel, service, exchange)
 		}
 	}
 }
@@ -498,7 +511,7 @@ func buySignals(
 						// cancel your open buy order(s), then place the new buy orders
 						err = exchange.Buy(client, false, market, calls, size, deviation, channel.GetOrderType())
 						if err != nil {
-							report(err, []string{market}, channel, service, exchange, true)
+							report(err, market, channel, service, exchange)
 						}
 					}
 				}
@@ -770,7 +783,7 @@ func (c *BuyCommand) Run(args []string) int {
 		}
 	}
 
-	if err = buy(client, exchange, splitted, agg, size, dip, mult, dist, top, max, min, price, sandbox, test, flag.Debug()); err != nil {
+	if err, _ = buy(client, exchange, splitted, agg, size, dip, mult, dist, top, max, min, price, sandbox, test, flag.Debug()); err != nil {
 		if flag.Exists("ignore-error") {
 			log.Printf("[ERROR] %v\n", err)
 		} else {
