@@ -4,7 +4,14 @@ Nefertiti is a FREE crypto trading bot that follows a simple but proven trading 
 
 ### Exchanges ###
 
-At the time of this writing, the trading bot supports the following crypto exchanges: Binance, Kucoin, Bittrex, HitBTC, Coinbase Pro, Bitstamp, CEX.IO, and crypto.com
+At the time of this writing, the trading bot supports the following crypto exchanges:
+* Binance
+* KuCoin
+* Bittrex
+* HitBTC
+* Coinbase Pro
+* Bitstamp
+* crypto.com
 
 ### Setup ###
 
@@ -15,6 +22,15 @@ mkdir -p $GOPATH/src/github.com/svanas
 cd $GOPATH/src/github.com/svanas
 git clone https://github.com/svanas/nefertiti.git
 ```
+
+Your developer is using Go version 1.12.7 -- the last version before Go modules became a thing. This code may or may not compile with other versions of the Go compiler.
+
+### Dependencies ###
+
+Most dependencies are vendored in with this repo. You might need to clone the following repositories:
+* https://github.com/svanas/go-binance
+* https://github.com/svanas/go-crypto-dot-com
+* https://github.com/svanas/go-mining-hamster
 
 ### Running ###
 
