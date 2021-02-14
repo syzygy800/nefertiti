@@ -10,6 +10,18 @@ const (
 	FIVE_PERCENT = 1.05
 )
 
+func FormatPrecision(prec int) string {
+	var out string
+	if prec > 0 {
+		out = "0."
+		for i := 0; i < (prec - 1); i++ {
+			out += "0"
+		}
+	}
+	out = out + "1"
+	return out
+}
+
 func NewMult(old, mult float64) float64 {
 	return RoundToPrecision((1 + ((old - 1) * mult)), 5)
 }

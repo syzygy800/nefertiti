@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -510,19 +511,34 @@ func (self *Bitstamp) Sell(
 											"Re-buying %s because your latest activity on this market (at %s) is older than %d days.",
 											market.Name, youngest.Format(time.RFC1123), rebuyAfterDays,
 										), level, service)
-										var prec int
-										if prec, err = self.GetSizePrec(client, market.Name); err != nil {
+										var ticker float64
+										if ticker, err = self.GetTicker(client, market.Name); err != nil {
 											self.error(err, level, service)
 										} else {
-											var qty float64
-											if qty, err = exchange.GetMinOrderSize(client, market.Name, prec); err != nil {
+											var prec int
+											if prec, err = self.GetSizePrec(client, market.Name); err != nil {
 												self.error(err, level, service)
 											} else {
-												if hold.HasMarket(market.Name) {
-													qty = qty * 5
-												}
-												if _, err = client.BuyMarketOrder(market.Name, pricing.RoundToPrecision(qty, prec)); err != nil {
-													self.error(err, level, service)
+												for {
+													var qty float64
+													if qty, err = exchange.GetMinOrderSize(client, market.Name, ticker, prec); err != nil {
+														self.error(err, level, service)
+													} else {
+														if hold.HasMarket(market.Name) {
+															qty = qty * 5
+														}
+														if _, err = client.BuyMarketOrder(market.Name, pricing.RoundToPrecision(qty, prec)); err != nil {
+															// --- BEGIN --- svanas 2020-09-15 --- error: Minimum order size is ... -----------
+															if strings.Contains(err.Error(), "Minimum order size") {
+																lower, _ := strconv.ParseFloat(pricing.FormatPrecision(prec), 64)
+																ticker = ticker - lower
+																continue
+															}
+															// ---- END ---- svanas 2020-09-15 ------------------------------------------------
+															self.error(err, level, service)
+														}
+													}
+													break
 												}
 											}
 										}
@@ -806,13 +822,26 @@ func (self *Bitstamp) GetPricePrec(client interface{}, market string) (int, erro
 	}
 	for _, m := range markets {
 		if m.Name == market {
-			return m.Prec, nil
+			return m.PricePrec, nil
 		}
 	}
 	return 8, nil
 }
 
 func (self *Bitstamp) GetSizePrec(client interface{}, market string) (int, error) {
+	bitstamp, ok := client.(*exchange.Client)
+	if !ok {
+		return 0, errors.New("invalid argument: client")
+	}
+	markets, err := exchange.GetMarkets(bitstamp, true)
+	if err != nil {
+		return 0, err
+	}
+	for _, m := range markets {
+		if m.Name == market {
+			return m.SizePrec, nil
+		}
+	}
 	return 8, nil
 }
 

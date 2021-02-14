@@ -63,9 +63,11 @@ func buyEvery(
 	client interface{},
 	exchange model.Exchange,
 	markets []string,
+	hold model.Markets,
 	agg float64,
 	size float64,
 	dip float64,
+	pip float64,
 	mult float64,
 	dist int64,
 	top int64,
@@ -77,7 +79,7 @@ func buyEvery(
 	debug bool,
 ) {
 	for range time.Tick(d) {
-		err, market := buy(client, exchange, markets, agg, size, dip, mult, dist, top, max, min, price, sandbox, false, debug)
+		err, market := buy(client, exchange, markets, hold, agg, size, dip, pip, mult, dist, top, max, min, price, service, sandbox, false, debug)
 		if err != nil {
 			report(err, market, nil, service, exchange)
 		}
@@ -88,15 +90,18 @@ func buy(
 	client interface{},
 	exchange model.Exchange,
 	markets []string,
+	hold model.Markets,
 	agg float64,
 	size float64,
 	dip float64,
+	pip float64,
 	mult float64,
 	dist int64,
 	top int64,
 	max float64,
 	min float64,
 	price float64,
+	service model.Notify,
 	sandbox bool,
 	test bool,
 	debug bool,
@@ -111,16 +116,18 @@ func buy(
 	for _, market := range markets {
 		var (
 			magg float64
+			mdip float64
 			mqty float64
 			mmin float64
 		)
 
 		magg = agg
+		mdip = dip
 		if magg == 0 {
-			if magg, err = model.GetAgg(exchange, market, dip, max, min, int(top), sandbox); err != nil {
+			if magg, mdip, err = model.GetAgg(exchange, market, dip, pip, max, min, int(top), sandbox); err != nil {
 				if errors.Is(err, model.EOrderBookTooThin) {
 					if len(markets) > 1 {
-						log.Printf("[WARN] %s: %v\n", market, err)
+						report(err, market, nil, service, exchange)
 						continue
 					} else {
 						return err, market
@@ -166,10 +173,10 @@ func buy(
 			}
 		}
 
-		// ignore orders that are cheaper than ticker minus 33%
+		// ignore orders that are cheaper than ticker minus 30%
 		mmin = min
 		if mmin == 0 {
-			mmin = ticker - (0.33 * ticker)
+			mmin = ticker - ((pip / 100) * ticker)
 		}
 		if mmin > 0 {
 			i = 0
@@ -193,14 +200,16 @@ func buy(
 		}
 
 		// ignore orders that are more expensive than 24h high minus 5%
-		i = 0
-		for i < len(book2) {
-			if book2[i].Price > (avg - ((dip / 100) * avg)) {
-				book2 = append(book2[:i], book2[i+1:]...)
-			} else {
-				i++
+		if mdip > 0 {
+			i = 0
+			for i < len(book2) {
+				if book2[i].Price > (avg - ((mdip / 100) * avg)) {
+					book2 = append(book2[:i], book2[i+1:]...)
+				} else {
+					i++
+				}
 			}
-		}
+		}	
 
 		// ignore BUY orders that are more expensive than max (optional)
 		if max > 0 {
@@ -260,7 +269,7 @@ func buy(
 		// we need at least one support
 		if len(book2) == 0 {
 			if len(markets) > 1 {
-				log.Printf("[WARN] %s: %v\n", market, model.EOrderBookTooThin)
+				report(model.EOrderBookTooThin, market, nil, service, exchange)
 				continue
 			} else {
 				return errors.Errorf("Not enough supports. Please update your %s aggregation.", market), market
@@ -309,7 +318,7 @@ func buy(
 		// for BTC and ETH, there is a minimum size (otherwise, we would never be hodl'ing)
 		var curr string
 		if curr, err = model.GetBaseCurr(all, market); err == nil {
-			units := model.GetSizeMin(curr)
+			units := model.GetSizeMin(hold.HasMarket(curr), curr)
 			if mqty < units {
 				return errors.Errorf("Cannot buy %s. Size is too low. You must buy at least %f units.", market, units), market
 			}
@@ -323,7 +332,12 @@ func buy(
 				err = exchange.Buy(client, true, market, book2[:top].Calls(), mqty, 1.0, model.LIMIT)
 			}
 			if err != nil {
-				return err, market
+				if len(markets) > 1 {
+					report(err, market, nil, service, exchange)
+					continue
+				} else {
+					return err, market
+				}
 			}
 		}
 
@@ -449,7 +463,7 @@ func buySignals(
 
 			for i := range calls {
 				if !calls[i].Skip {
-					if calls[i].Corrupt() {
+					if calls[i].Corrupt(channel.GetOrderType()) {
 						log.Printf("[INFO] Ignoring %s because the signal appears to be corrupt.\n", calls[i].Market)
 						calls[i].Skip = true
 					}
@@ -713,6 +727,16 @@ func (c *BuyCommand) Run(args []string) int {
 		}
 	}
 
+	hold := flag.Get("hold").String()
+	if hold != "" {
+		hold := strings.Split(hold, ",")
+		for _, market := range hold {
+			if model.HasMarket(all, market) == false {
+				return c.ReturnError(fmt.Errorf("market %s does not exist", market))
+			}
+		}
+	}
+
 	var agg float64 = 0
 	flg = flag.Get("agg")
 	if flg.Exists {
@@ -751,6 +775,14 @@ func (c *BuyCommand) Run(args []string) int {
 		}
 	}
 
+	var pip float64 = 30
+	flg = flag.Get("pip")
+	if flg.Exists {
+		if pip, err = flg.Float64(); err != nil {
+			return c.ReturnError(errors.Errorf("pip %v is invalid", flg))
+		}
+	}
+
 	var mult float64 = pricing.FIVE_PERCENT
 	flg = flag.Get("mult")
 	if flg.Exists {
@@ -783,7 +815,7 @@ func (c *BuyCommand) Run(args []string) int {
 		}
 	}
 
-	if err, _ = buy(client, exchange, splitted, agg, size, dip, mult, dist, top, max, min, price, sandbox, test, flag.Debug()); err != nil {
+	if err, _ = buy(client, exchange, splitted, strings.Split(hold, ","), agg, size, dip, pip, mult, dist, top, max, min, price, service, sandbox, test, flag.Debug()); err != nil {
 		if flag.Exists("ignore-error") {
 			log.Printf("[ERROR] %v\n", err)
 		} else {
@@ -801,7 +833,7 @@ func (c *BuyCommand) Run(args []string) int {
 			if err = c.ReturnSuccess(); err != nil {
 				return c.ReturnError(err)
 			}
-			buyEvery(time.Duration(repeat*float64(time.Hour)), client, exchange, splitted, agg, size, dip, mult, dist, top, max, min, price, service, sandbox, flag.Debug())
+			buyEvery(time.Duration(repeat*float64(time.Hour)), client, exchange, splitted, strings.Split(hold, ","), agg, size, dip, pip, mult, dist, top, max, min, price, service, sandbox, flag.Debug())
 		}
 	}
 
@@ -816,18 +848,32 @@ The buy command opens new limit buy orders on the specified exchange/market.
 
 Options:
   --exchange = name, for example: Bittrex
-  --market   = a valid market pair
-  --size     = amount of cryptocurrency to buy per order
-  --agg      = aggregate public order book to nearest multiple of agg (optional)
-  --dip      = percentage that will kick the bot into action (optional, defaults to 5%)
-  --dist     = distribution/distance between your orders (optional, defaults to 2%)
-  --top      = number of orders to place in your book (optional, defaults to 2)
-  --max      = maximum price that you will want to pay for the coins (optional)
-  --min      = minimum price (optional, defaults to a value 33% below ticker price)
+  --market   = a valid market pair.
+  --size     = amount of cryptocurrency to buy per order. please note --size is
+               mutually exclusive with --price, eg. the price in quote currency
+               you will want to pay for an order.
+  --agg      = aggregate public order book to nearest multiple of agg.
+               (optional)
+  --dip      = percentage that will kick the bot into action.
+               (optional, defaults to 5%)
+  --pip      = range in where the market is suspected to move up and down.
+               the bot will ignore supports outside of this range.
+               (optional, defaults to 30%)  
+  --dist     = distribution/distance between your orders.
+               (optional, defaults to 2%)
+  --top      = number of orders to place in your book.
+               (optional, defaults to 2)
+  --max      = maximum price that you will want to pay for the coins.
+               (optional)
+  --min      = minimum price that you will want to pay for the coins.
+               (optional)
   --dca      = if included, then slowly but surely, the bot will proportionally
-               increase your stack while lowering your average buying price (optional)
-  --test     = if included, merely reports what it would do (optional, defaults to false)
-  --repeat   = if included, repeats this command every X hours (optional, defaults to false)
+               increase your stack while lowering your average buying price.
+               (optional)
+  --test     = if included, merely reports what it would do.
+               (optional, defaults to false)
+  --repeat   = if included, repeats this command every X hours.
+               (optional, defaults to false)
 
 Alternative Strategy:
   The trading bot can listen to signals (for example: Telegram bots) as an
@@ -838,14 +884,20 @@ Alternative Strategy Options:
   --signals  = provider, for example: MiningHamster 
   --price    = price (in quote currency) that you will want to pay for an order
   --quote    = currency that is used as the reference, for example: BTC or USDT
-  --min      = minimum price for a unit of quote currency. optional, for example: 0.00000050
-  --volume   = minimum BTC volume over the last 14 hours. optional, for example: --volume=10
-  --devn     = buy price deviation. this multiplier is applied to the suggested price from
-               the signal, to calculate your limit price. optional, for example: --devn=1.01
-  --valid    = if included, specifies the time (in hours, default to 1 hour) that the signal
-               is "active". after this timeout elapses, the bot will cancel the (non-filled)
-               limit buy order associated with the signal (optional, defaults to 1 hour)
-  --repeat   = if included, repeats this command every X hours (optional, defaults to false)
+  --min      = minimum price for a unit of quote currency.
+               optional, for example: 0.00000050
+  --volume   = minimum BTC volume over the last 24 hours.
+               optional, for example: --volume=10
+  --devn     = buy price deviation. this multiplier is applied to the suggested
+               price from the signal, to calculate your actual limit price.
+               optional, for example: --devn=1.01
+  --valid    = if included, specifies the time (in hours, defaults to 1 hour)
+               that the signal is "active". after this timeout elapses, the
+               bot will cancel the (non-filled) limit buy order(s) associated
+               with the signal.
+               (optional, defaults to 1 hour)
+  --repeat   = if included, repeats this command every X hours.
+               (optional, defaults to false)
 `
 	return strings.TrimSpace(text)
 }

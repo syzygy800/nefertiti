@@ -46,84 +46,14 @@ func (c *client) doTimeoutRequest(timer *time.Timer, req *http.Request) (*http.R
 	}
 }
 
-// do prepare and process HTTP request to Bittrex API
-func (c *client) do(method string, version int, resource string, payload string, authNeeded bool) ([]byte, error) {
-	var (
-		out    []byte
-		err    error
-		cooled bool = false
-	)
-
-	if cooled, err = BeforeRequest(resource); err != nil {
-		return nil, err
-	}
-	defer func() {
-		AfterRequest()
-	}()
-
-	var rawurl string
-	if strings.HasPrefix(resource, "http") {
-		rawurl = resource
-	} else {
-		rawurl = fmt.Sprintf("%s/%s/%s", fmtApiBase(version), fmtApiVersion(version), resource)
-	}
-
-	var req *http.Request
-	if req, err = http.NewRequest(method, rawurl, strings.NewReader(payload)); err != nil {
-		return nil, err
-	}
-	if method == "POST" || method == "PUT" {
-		req.Header.Add("Content-Type", "application/json;charset=utf-8")
-	}
-	req.Header.Add("Accept", "application/json")
-
-	// Auth
-	if authNeeded {
-		if len(c.apiKey) == 0 || len(c.apiSecret) == 0 {
-			err = errors.New("You need to set API Key and API Secret to call this method")
-			return nil, err
-		}
-		nonce := time.Now().UnixNano()
-		query := req.URL.Query()
-		query.Set("apikey", c.apiKey)
-		query.Set("nonce", fmt.Sprintf("%d", nonce))
-		req.URL.RawQuery = query.Encode()
-		mac := hmac.New(sha512.New, []byte(c.apiSecret))
-		_, err = mac.Write([]byte(req.URL.String()))
-		sig := hex.EncodeToString(mac.Sum(nil))
-		req.Header.Add("apisign", sig)
-	}
-
-	timer := time.NewTimer(DEFAULT_HTTP_CLIENT_TIMEOUT * time.Second)
-
-	var resp *http.Response
-	if resp, err = c.doTimeoutRequest(timer, req); err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if out, err = ioutil.ReadAll(resp.Body); err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != 200 {
-		err = errors.New(resp.Status)
-		if resp.StatusCode == http.StatusTooManyRequests {
-			HandleRateLimitErr(resource, cooled)
-		}
-	}
-
-	return out, nil
-}
-
-func (client *client) do3(method string, path string, payload []byte, appId string, auth bool) ([]byte, error) {
+func (client *client) do(method string, path string, payload []byte, appId string, auth bool) ([]byte, error) {
 	var (
 		code int
 		out  []byte
 		err  error
 	)
 	for {
-		code, out, err = client.do3ex(method, path, payload, appId, auth)
+		code, out, err = client._do(method, path, payload, appId, auth)
 		if code != http.StatusTooManyRequests {
 			break
 		}
@@ -131,7 +61,7 @@ func (client *client) do3(method string, path string, payload []byte, appId stri
 	return out, err
 }
 
-func (client *client) do3ex(method string, path string, payload []byte, appId string, auth bool) (int, []byte, error) {
+func (client *client) _do(method string, path string, payload []byte, appId string, auth bool) (int, []byte, error) {
 	var (
 		err    error
 		out    []byte
@@ -149,7 +79,7 @@ func (client *client) do3ex(method string, path string, payload []byte, appId st
 	if strings.HasPrefix(path, "http") {
 		url = path
 	} else {
-		url = fmt.Sprintf("%s/%s/%s", fmtApiBase(3), fmtApiVersion(3), path)
+		url = fmt.Sprintf("%s/%s/%s", API_BASE, API_VERSION, path)
 	}
 
 	var req *http.Request

@@ -30,6 +30,10 @@ func (this *Telegram) PromptForKeys(interactive, verify bool) (ok bool, err erro
 		this.appKey = string(data)
 	}
 
+	if this.appKey == "none" {
+		return false, nil
+	}
+
 	if this.appKey != "" {
 		chatId := flag.Get("telegram-chat-id").String()
 		if chatId != "" {

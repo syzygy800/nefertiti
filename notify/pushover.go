@@ -29,6 +29,10 @@ func (this *Pushover) promptForKeys(interactive bool) (ok bool, err error) {
 		this.appKey = string(data)
 	}
 
+	if this.appKey == "none" {
+		return false, nil
+	}
+
 	if this.appKey != "" {
 		this.userKey = flag.Get("pushover-user-key").String()
 		if this.userKey == "" && interactive {

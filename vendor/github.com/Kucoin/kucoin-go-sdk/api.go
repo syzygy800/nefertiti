@@ -32,10 +32,10 @@ func RequestsPerSecond(request *Request) float64 {
 		return 10 // 100 reqs per 10 seconds
 	}
 	if request.Path == "/api/v1/orders" { // list orders
-		return 10 // 100 reqs per 10 seconds
+		return 20 // 200 reqs per 10 seconds
 	}
 	if request.Path == "/api/v1/limit/orders" { // recent orders
-		return 10 // 100 reqs per 10 seconds
+		return 20 // 200 reqs per 10 seconds
 	}
 	return REQUESTS_PER_SECOND
 }
@@ -118,7 +118,7 @@ func NewApiService(opts ...ApiServiceOption) *ApiService {
 		as.apiBaseURI = ProductionApiBaseURI
 	}
 	if as.apiKey != "" {
-		as.signer = NewKcSigner(as.apiKey, as.apiSecret, as.apiPassphrase)
+		as.signer = NewKcSigner(as.apiKey, as.apiSecret, as.apiPassphrase, 2)
 	}
 	return as
 }

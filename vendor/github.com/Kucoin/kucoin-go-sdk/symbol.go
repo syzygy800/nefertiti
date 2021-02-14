@@ -109,31 +109,18 @@ func (as *ApiService) Markets() (*ApiResponse, error) {
 	return as.Call(req)
 }
 
-// A PartOrderBookModel represents a list of open orders for a symbol, a part of Order Book within 100 depth for each side(ask or bid).
-type PartOrderBookModel struct {
-	Sequence string     `json:"sequence"`
-	Bids     [][]string `json:"bids"`
-	Asks     [][]string `json:"asks"`
-}
-
-// AggregatedPartOrderBook returns a list of open orders(aggregated) for a symbol.
-func (as *ApiService) AggregatedPartOrderBook(symbol string, depth int64) (*ApiResponse, error) {
-	req := NewRequest(http.MethodGet, "/api/v1/market/orderbook/level2_"+IntToString(depth), map[string]string{"symbol": symbol})
-	return as.Call(req)
-}
-
 // BookEntry = bid or ask info with price and size
 type BookEntry []string
 
 // Price = bid or ask price
 func (be *BookEntry) Price() float64 {
-	out, _ := strconv.ParseFloat((*be)[1], 64)
+	out, _ := strconv.ParseFloat((*be)[0], 64)
 	return out
 }
 
 // Size = bid or ask size
 func (be *BookEntry) Size() float64 {
-	out, _ := strconv.ParseFloat((*be)[2], 64)
+	out, _ := strconv.ParseFloat((*be)[1], 64)
 	return out
 }
 
@@ -147,13 +134,6 @@ type FullOrderBookModel struct {
 // AggregatedFullOrderBook returns a list of open orders(aggregated) for a symbol.
 func (as *ApiService) AggregatedFullOrderBook(symbol string) (*ApiResponse, error) {
 	req := NewRequest(http.MethodGet, "/api/v2/market/orderbook/level2", map[string]string{"symbol": symbol})
-	return as.Call(req)
-}
-
-// AtomicFullOrderBook returns a list of open orders for a symbol.
-// Level-3 order book includes all bids and asks (non-aggregated, each item in Level-3 means a single order).
-func (as *ApiService) AtomicFullOrderBook(symbol string) (*ApiResponse, error) {
-	req := NewRequest(http.MethodGet, "/api/v1/market/orderbook/level3", map[string]string{"symbol": symbol})
 	return as.Call(req)
 }
 

@@ -320,24 +320,6 @@
 			"path": "golang.org/x/sys/windows",
 			"revision": "bb24a47a89eac6c1227fbcb2ae37a8b9ed323366",
 			"revisionTime": "2017-08-30T08:51:02Z"
-		},
-		{
-			"checksumSHA1": "m4WSZX2BL8HT+183BFyBTe35i1c=",
-			"path": "google.golang.org/api/gmail/v1",
-			"revision": "3b68a98d995a13543132bfe07c72a77bfbdf0689",
-			"revisionTime": "2018-04-19T00:06:09Z"
-		},
-		{
-			"checksumSHA1": "BWKmb7kGYbfbvXO6E7tCpTh9zKE=",
-			"path": "google.golang.org/api/googleapi",
-			"revision": "3b68a98d995a13543132bfe07c72a77bfbdf0689",
-			"revisionTime": "2018-04-19T00:06:09Z"
-		},
-		{
-			"checksumSHA1": "1K0JxrUfDqAB3MyRiU1LKjfHyf4=",
-			"path": "google.golang.org/api/googleapi/internal/uritemplates",
-			"revision": "3b68a98d995a13543132bfe07c72a77bfbdf0689",
-			"revisionTime": "2018-04-19T00:06:09Z"
 		}
 	],
 	"rootPath": "github.com/svanas/nefertiti"

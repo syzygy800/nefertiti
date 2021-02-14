@@ -314,6 +314,21 @@ func (self *Kucoin) sell(
 		}
 	}
 
+	if len(old) > 0 {
+		if len(new) > 0 {
+			for _, order := range old {
+				if new.IndexOfOrderId(order.OrderId) > -1 {
+					goto WeAreGood
+				}
+			}
+		}
+		goto WhatTheFuck
+	WhatTheFuck:
+		return old, errors.Errorf("/api/v1/fills returned %d orders, expected at least %d.", len(new), len(old))
+	WeAreGood:
+		// nothing to see here, carry on
+	}
+
 	type (
 		SimpleOrder struct {
 			Low  float64
@@ -1027,7 +1042,7 @@ func (self *Kucoin) GetBook(client interface{}, market string, side model.BookSi
 		return 0, errors.New("invalid argument: client")
 	}
 
-	if resp, err = kucoin.AtomicFullOrderBook(market); err != nil {
+	if resp, err = kucoin.AggregatedFullOrderBook(market); err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
 	if err = resp.ReadData(&book); err != nil {

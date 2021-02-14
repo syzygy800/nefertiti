@@ -64,12 +64,14 @@ func HasMarket(markets []Market, market string) bool {
 }
 
 // GetSizeMin returns the minimum size we must BUY
-func GetSizeMin(curr string) float64 {
-	if strings.EqualFold(curr, BTC) {
-		return 0.0025 // equivalent to roughly EUR 25 (assuming BTC is priced at EUR 10.000)
-	}
-	if strings.EqualFold(curr, ETH) {
-		return 0.05
+func GetSizeMin(hold bool, curr string) float64 {
+	if hold {
+		if strings.EqualFold(curr, BTC) {
+			return 0.0025 // equivalent to roughly EUR 25 (assuming BTC is priced at EUR 10.000)
+		}
+		if strings.EqualFold(curr, ETH) {
+			return 0.05
+		}
 	}
 	return 0
 }

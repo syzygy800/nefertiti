@@ -175,7 +175,7 @@ func init() {
 
 // ----------------------------------------------------------------------------
 
-func bittrexOrderSide(order *exchange.Order3) model.OrderSide {
+func bittrexOrderSide(order *exchange.Order) model.OrderSide {
 	if order.Direction == exchange.OrderSideBuy {
 		return model.BUY
 	} else if order.Direction == exchange.OrderSideSell {
@@ -188,7 +188,7 @@ func bittrexOrderSide(order *exchange.Order3) model.OrderSide {
 
 type Bittrex struct {
 	*model.ExchangeInfo
-	markets []exchange.Market3
+	markets []exchange.Market
 }
 
 func (self *Bittrex) error(err error, level int64, service model.Notify) {
@@ -213,7 +213,7 @@ func (self *Bittrex) error(err error, level int64, service model.Notify) {
 	}
 }
 
-func (self *Bittrex) errorEx(err error, order *exchange.Order3, level int64, service model.Notify) {
+func (self *Bittrex) errorEx(err error, order *exchange.Order, level int64, service model.Notify) {
 	pc, file, line, _ := runtime.Caller(1)
 	prefix := errors.FormatCaller(pc, file, line)
 
@@ -250,7 +250,7 @@ func (self *Bittrex) GetInfo() *model.ExchangeInfo {
 
 func (self *Bittrex) GetClient(private, sandbox bool) (interface{}, error) {
 	if !private {
-		return exchange.New3("", "", BITTREX_APP_ID), nil
+		return exchange.New("", "", BITTREX_APP_ID), nil
 	}
 
 	apiKey, apiSecret, err := promptForApiKeys("Bittrex")
@@ -258,7 +258,7 @@ func (self *Bittrex) GetClient(private, sandbox bool) (interface{}, error) {
 		return nil, err
 	}
 
-	return exchange.New3(apiKey, apiSecret, BITTREX_APP_ID), nil
+	return exchange.New(apiKey, apiSecret, BITTREX_APP_ID), nil
 }
 
 func (self *Bittrex) GetMarkets(cached, sandbox bool) ([]model.Market, error) {
@@ -268,7 +268,7 @@ func (self *Bittrex) GetMarkets(cached, sandbox bool) ([]model.Market, error) {
 	)
 
 	if self.markets == nil || cached == false {
-		client := exchange.New3("", "", BITTREX_APP_ID)
+		client := exchange.New("", "", BITTREX_APP_ID)
 		if self.markets, err = client.GetMarkets(); err != nil {
 			return nil, errors.Wrap(err, 1)
 		}
@@ -324,16 +324,16 @@ func (self *Bittrex) convertMarket(old string) (string, error) {
 
 // listens to the open orders, look for cancelled orders, send a notification.
 func (self *Bittrex) listen(
-	client *exchange.Bittrex3,
+	client *exchange.Bittrex,
 	service model.Notify,
 	level int64,
-	old exchange.Orders3,
-	history exchange.Orders3,
-) (exchange.Orders3, error) {
+	old exchange.Orders,
+	history exchange.Orders,
+) (exchange.Orders, error) {
 	var err error
 
 	// get my new open orders
-	var new exchange.Orders3
+	var new exchange.Orders
 	if new, err = client.GetOpenOrders("all"); err != nil {
 		return old, errors.Wrap(err, 1)
 	}
@@ -391,16 +391,16 @@ func (self *Bittrex) listen(
 
 // listens to the order history, look for newly filled orders, automatically place new LIMIT SELL orders.
 func (self *Bittrex) sell(
-	client *exchange.Bittrex3,
+	client *exchange.Bittrex,
 	strategy model.Strategy,
 	mult float64,
 	hold model.Markets,
 	service model.Notify,
 	twitter *notify.TwitterKeys,
 	level int64,
-	old exchange.Orders3,
+	old exchange.Orders,
 	sandbox bool,
-) (exchange.Orders3, error) {
+) (exchange.Orders, error) {
 	var (
 		err     error
 		markets []model.Market
@@ -411,7 +411,7 @@ func (self *Bittrex) sell(
 	}
 
 	// get my new order history
-	var new exchange.Orders3
+	var new exchange.Orders
 	if new, err = client.GetOrderHistory("all"); err != nil {
 		return old, errors.Wrap(err, 1)
 	}
@@ -514,16 +514,16 @@ func (self *Bittrex) Sell(
 		}
 	}
 
-	client := exchange.New3(apiKey, apiSecret, BITTREX_APP_ID)
+	client := exchange.New(apiKey, apiSecret, BITTREX_APP_ID)
 
 	// get my order history
-	var history exchange.Orders3
+	var history exchange.Orders
 	if history, err = client.GetOrderHistory("all"); err != nil {
 		return errors.Wrap(err, 1)
 	}
 
 	// get my open orders
-	var open exchange.Orders3
+	var open exchange.Orders
 	if open, err = client.GetOpenOrders("all"); err != nil {
 		return errors.Wrap(err, 1)
 	}
@@ -560,7 +560,7 @@ func (self *Bittrex) Sell(
 						side := bittrexOrderSide(&order)
 						if side != model.ORDER_SIDE_NONE {
 							var openedAt time.Time
-							if openedAt, err = time.Parse(exchange.TIME_FORMAT_V3, order.CreatedAt); err != nil {
+							if openedAt, err = time.Parse(exchange.TIME_FORMAT, order.CreatedAt); err != nil {
 								self.errorEx(errors.Wrap(err, 1), &order, level, service)
 							} else {
 								if time.Since(openedAt).Hours() >= float64(reopenAfterDays*24) {
@@ -604,7 +604,7 @@ func (self *Bittrex) Order(
 	kind model.OrderType,
 	meta string,
 ) (oid []byte, raw []byte, err error) {
-	bittrex, ok := client.(*exchange.Bittrex3)
+	bittrex, ok := client.(*exchange.Bittrex)
 	if !ok {
 		return nil, nil, errors.New("arg is not a valid v3 client")
 	}
@@ -613,7 +613,7 @@ func (self *Bittrex) Order(
 		return nil, nil, err
 	}
 
-	var order *exchange.Order3
+	var order *exchange.Order
 	if side == model.BUY {
 		if kind == model.MARKET {
 			order, err = bittrex.CreateOrder(market, exchange.OrderSideBuy, exchange.OrderTypeMarket, size, 0, exchange.IOC)
@@ -641,28 +641,7 @@ func (self *Bittrex) Order(
 }
 
 func (self *Bittrex) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType, meta string) ([]byte, error) {
-	var err error
-
-	bittrex, ok := client.(*exchange.Bittrex2)
-	if !ok {
-		return nil, errors.New("arg is not a valid v2 client")
-	}
-
-	if market, err = self.convertMarket(market); err != nil {
-		return nil, err
-	}
-
-	var order *exchange.Order2
-	if order, err = bittrex.TradeSell(market, exchange.OrderTypeLimit, size, price, exchange.GTC, exchange.LessThanOrEqualTo, price); err != nil {
-		return nil, errors.Wrap(err, 1)
-	}
-
-	var out []byte
-	if out, err = json.Marshal(order); err != nil {
-		return nil, errors.Wrap(err, 1)
-	}
-
-	return out, nil
+	return nil, errors.New("Not implemented")
 }
 
 func (self *Bittrex) OCO(client interface{}, side model.OrderSide, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
@@ -672,7 +651,7 @@ func (self *Bittrex) OCO(client interface{}, side model.OrderSide, market string
 func (self *Bittrex) GetClosed(client interface{}, market string) (model.Orders, error) {
 	var err error
 
-	bittrex, ok := client.(*exchange.Bittrex3)
+	bittrex, ok := client.(*exchange.Bittrex)
 	if !ok {
 		return nil, errors.New("arg is not a valid v3 client")
 	}
@@ -682,7 +661,7 @@ func (self *Bittrex) GetClosed(client interface{}, market string) (model.Orders,
 		return nil, err
 	}
 
-	var history exchange.Orders3
+	var history exchange.Orders
 	if history, err = bittrex.GetOrderHistory(market3); err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
@@ -690,7 +669,7 @@ func (self *Bittrex) GetClosed(client interface{}, market string) (model.Orders,
 	var out model.Orders
 	for _, order := range history {
 		var closedAt time.Time
-		if closedAt, err = time.Parse(exchange.TIME_FORMAT_V3, order.ClosedAt); err != nil {
+		if closedAt, err = time.Parse(exchange.TIME_FORMAT, order.ClosedAt); err != nil {
 			return nil, errors.Wrap(err, 1)
 		}
 		out = append(out, model.Order{
@@ -708,7 +687,7 @@ func (self *Bittrex) GetClosed(client interface{}, market string) (model.Orders,
 func (self *Bittrex) GetOpened(client interface{}, market string) (model.Orders, error) {
 	var err error
 
-	bittrex, ok := client.(*exchange.Bittrex3)
+	bittrex, ok := client.(*exchange.Bittrex)
 	if !ok {
 		return nil, errors.New("arg is not a valid v3 client")
 	}
@@ -718,7 +697,7 @@ func (self *Bittrex) GetOpened(client interface{}, market string) (model.Orders,
 		return nil, err
 	}
 
-	var orders exchange.Orders3
+	var orders exchange.Orders
 	if orders, err = bittrex.GetOpenOrders(market3); err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
@@ -726,7 +705,7 @@ func (self *Bittrex) GetOpened(client interface{}, market string) (model.Orders,
 	var out model.Orders
 	for _, order := range orders {
 		var openedAt time.Time
-		if openedAt, err = time.Parse(exchange.TIME_FORMAT_V3, order.CreatedAt); err != nil {
+		if openedAt, err = time.Parse(exchange.TIME_FORMAT, order.CreatedAt); err != nil {
 			return nil, errors.Wrap(err, 1)
 		}
 		out = append(out, model.Order{
@@ -742,14 +721,14 @@ func (self *Bittrex) GetOpened(client interface{}, market string) (model.Orders,
 }
 
 func (self *Bittrex) GetBook(client interface{}, market string, side model.BookSide) (interface{}, error) {
-	bittrex, ok := client.(*exchange.Bittrex3)
+	bittrex, ok := client.(*exchange.Bittrex)
 	if !ok {
 		return nil, errors.New("arg is not a valid v3 client")
 	}
 
 	var (
 		err  error
-		book *exchange.OrderBook3
+		book *exchange.OrderBook
 	)
 
 	if market, err = self.convertMarket(market); err != nil {
@@ -771,7 +750,7 @@ func (self *Bittrex) GetBook(client interface{}, market string, side model.BookS
 }
 
 func (self *Bittrex) Aggregate(client, book interface{}, market string, agg float64) (model.Book, error) {
-	bids, ok := book.([]exchange.BookEntry3)
+	bids, ok := book.([]exchange.BookEntry)
 	if !ok {
 		return nil, errors.New("arg is not a valid v3 order book")
 	}
@@ -805,7 +784,7 @@ func (self *Bittrex) Aggregate(client, book interface{}, market string, agg floa
 func (self *Bittrex) GetTicker(client interface{}, market string) (float64, error) {
 	var err error
 
-	bittrex, ok := client.(*exchange.Bittrex3)
+	bittrex, ok := client.(*exchange.Bittrex)
 	if !ok {
 		return 0, errors.New("arg is not a valid v3 client")
 	}
@@ -814,7 +793,7 @@ func (self *Bittrex) GetTicker(client interface{}, market string) (float64, erro
 		return 0, err
 	}
 
-	var ticker *exchange.Ticker3
+	var ticker *exchange.Ticker
 	if ticker, err = bittrex.GetTicker(market); err != nil {
 		return 0, errors.Wrap(err, 1)
 	}
@@ -823,7 +802,7 @@ func (self *Bittrex) GetTicker(client interface{}, market string) (float64, erro
 }
 
 func (self *Bittrex) Get24h(client interface{}, market string) (*model.Stats, error) {
-	bittrex, ok := client.(*exchange.Bittrex3)
+	bittrex, ok := client.(*exchange.Bittrex)
 	if !ok {
 		return nil, errors.New("arg is not a valid v3 client")
 	}
@@ -831,7 +810,7 @@ func (self *Bittrex) Get24h(client interface{}, market string) (*model.Stats, er
 	var (
 		err     error
 		market3 string
-		sum     *exchange.MarketSummary3
+		sum     *exchange.MarketSummary
 	)
 	if market3, err = self.convertMarket(market); err != nil {
 		return nil, err
@@ -850,7 +829,7 @@ func (self *Bittrex) Get24h(client interface{}, market string) (*model.Stats, er
 }
 
 func (self *Bittrex) GetPricePrec(client interface{}, market string) (int, error) {
-	bittrex, ok := client.(*exchange.Bittrex3)
+	bittrex, ok := client.(*exchange.Bittrex)
 	if !ok {
 		return 0, errors.New("arg is not a valid v3 client")
 	}
@@ -890,7 +869,7 @@ func (self *Bittrex) GetMaxSize(client interface{}, base, quote string, hold boo
 func (self *Bittrex) Cancel(client interface{}, market string, side model.OrderSide) error {
 	var err error
 
-	bittrex, ok := client.(*exchange.Bittrex3)
+	bittrex, ok := client.(*exchange.Bittrex)
 	if !ok {
 		return errors.New("arg is not a valid v3 client")
 	}
@@ -899,7 +878,7 @@ func (self *Bittrex) Cancel(client interface{}, market string, side model.OrderS
 		return err
 	}
 
-	var orders exchange.Orders3
+	var orders exchange.Orders
 	if orders, err = bittrex.GetOpenOrders(market); err != nil {
 		return errors.Wrap(err, 1)
 	}
@@ -918,7 +897,7 @@ func (self *Bittrex) Cancel(client interface{}, market string, side model.OrderS
 func (self *Bittrex) Buy(client interface{}, cancel bool, market string, calls model.Calls, size, deviation float64, kind model.OrderType) error {
 	var err error
 
-	bittrex, ok := client.(*exchange.Bittrex3)
+	bittrex, ok := client.(*exchange.Bittrex)
 	if !ok {
 		return errors.New("arg is not a valid v3 client")
 	}
@@ -930,7 +909,7 @@ func (self *Bittrex) Buy(client interface{}, cancel bool, market string, calls m
 
 	// step #1: delete the buy order(s) that are open in your book
 	if cancel {
-		var orders exchange.Orders3
+		var orders exchange.Orders
 		if orders, err = bittrex.GetOpenOrders(market3); err != nil {
 			return errors.Wrap(err, 1)
 		}
@@ -970,7 +949,7 @@ func (self *Bittrex) Buy(client interface{}, cancel bool, market string, calls m
 			if err != nil {
 				// --- BEGIN --- svanas 2019-05-12 ------------------------------------
 				if strings.Contains(err.Error(), "MIN_TRADE_REQUIREMENT_NOT_MET") {
-					var markets []exchange.Market3
+					var markets []exchange.Market
 					if markets, err = bittrex.GetMarkets(); err != nil {
 						return errors.Wrap(err, 1)
 					}

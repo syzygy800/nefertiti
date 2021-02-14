@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"strconv"
 	"time"
 )
 
@@ -30,6 +31,7 @@ type KcSigner struct {
 	apiKey        string
 	apiSecret     string
 	apiPassPhrase string
+	apiKeyVersion int
 }
 
 // Sign makes a signature by sha256 with `apiKey` `apiSecret` `apiPassPhrase`.
@@ -43,20 +45,26 @@ func (ks *KcSigner) Headers(plain string) map[string]string {
 	t := IntToString(time.Now().UnixNano() / 1000000)
 	p := []byte(t + plain)
 	s := string(ks.Sign(p))
+	pp := ks.apiPassPhrase
+	if ks.apiKeyVersion > 1 {
+		pp = string(ks.Sign([]byte(ks.apiPassPhrase)))
+	}
 	return map[string]string{
-		"KC-API-KEY":        ks.apiKey,
-		"KC-API-PASSPHRASE": ks.apiPassPhrase,
-		"KC-API-TIMESTAMP":  t,
-		"KC-API-SIGN":       s,
+		"KC-API-KEY":         ks.apiKey,
+		"KC-API-PASSPHRASE":  pp,
+		"KC-API-TIMESTAMP":   t,
+		"KC-API-SIGN":        s,
+		"KC-API-KEY-VERSION": strconv.Itoa(ks.apiKeyVersion),
 	}
 }
 
 // NewKcSigner creates a instance of KcSigner.
-func NewKcSigner(key, secret, passPhrase string) *KcSigner {
+func NewKcSigner(key, secret, passPhrase string, version int) *KcSigner {
 	ks := &KcSigner{
 		apiKey:        key,
 		apiSecret:     secret,
 		apiPassPhrase: passPhrase,
+		apiKeyVersion: version,
 	}
 	ks.key = []byte(secret)
 	return ks

@@ -59,6 +59,14 @@ func (c *AggCommand) Run(args []string) int {
 		}
 	}
 
+	var pip float64 = 30
+	flg = flag.Get("pip")
+	if flg.Exists {
+		if pip, err = flg.Float64(); err != nil {
+			return c.ReturnError(fmt.Errorf("pip %v is invalid", flg))
+		}
+	}
+
 	var max float64 = 0
 	flg = flag.Get("max")
 	if flg.Exists {
@@ -76,7 +84,7 @@ func (c *AggCommand) Run(args []string) int {
 	}
 
 	var agg float64
-	if agg, err = model.GetAgg(exchange, market, dip, max, min, 4, sandbox); err != nil {
+	if agg, _, err = model.GetAgg(exchange, market, dip, pip, max, min, 4, sandbox); err != nil {
 		return c.ReturnError(err)
 	}
 
@@ -94,9 +102,15 @@ The agg command calculates the aggregation level for a given market pair.
 Options:
   --exchange = name
   --market   = a valid market pair
-  --dip      = percentage that will kick the bot into action (optional, defaults to 5%)
-  --max      = maximum price that you will want to pay for the coins (optional)
-  --min      = minimum price (optional, defaults to a value 33% below ticker price)
+  --dip      = percentage that will kick the bot into action.
+               (optional, defaults to 5%)
+  --pip      = range in where the market is suspected to move up and down.
+               the bot will ignore supports outside of this range.
+               (optional, defaults to 30%)  
+  --max      = maximum price that you will want to pay for the coins.
+               (optional)
+  --min      = minimum price that you will want to pay for the coins.
+               (optional)
 `
 	return strings.TrimSpace(text)
 }

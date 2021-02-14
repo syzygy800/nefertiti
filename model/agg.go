@@ -1,16 +1,19 @@
 package model
 
 import (
-	"github.com/svanas/nefertiti/pricing"
+	"math"
+
 	"github.com/go-errors/errors"
+	"github.com/svanas/nefertiti/pricing"
 )
 
 var (
-	EYouAreAskingTooMuch = errors.New("You are asking for too many supports. Please lower your expectations.")
+	EYouAreAskingTooMuch = errors.New("Cannot find any supports. Please ask for fewer supports, or change your other settings.")
 	EOrderBookTooThin    = errors.New("Cannot find any supports. Order book is too thin. Please reconsider this market.")
 )
 
-func GetAgg(exchange Exchange, market string, dip, max, min float64, top int, sandbox bool) (float64, error) {
+// returns (agg, dip, error)
+func GetAgg(exchange Exchange, market string, dip, pip, max, min float64, top int, sandbox bool) (float64, float64, error) {
 	var (
 		err error
 		out float64
@@ -22,23 +25,40 @@ func GetAgg(exchange Exchange, market string, dip, max, min float64, top int, sa
 		return b
 	}
 	for cnt := Max(top, 4); cnt > 0; cnt-- {
-		out, err = getAgg(exchange, market, dip, max, min, cnt, sandbox)
+		out, err = getAgg(exchange, market, dip, pip, max, min, cnt, sandbox)
 		if err == nil {
-			return out, err
+			return out, dip, err
 		} else {
 			if errors.Is(err, EOrderBookTooThin) {
-				return out, err
+				return out, dip, err
+			}
+		}
+	}
+	if dip > 0 {
+		n := math.Round(dip) - 1
+		if n > 0 {
+			for i := n; i >= 0; i-- {
+				for cnt := Max(top, 4); cnt >= top; cnt-- {
+					out, err = getAgg(exchange, market, i, pip, max, min, cnt, sandbox)
+					if err == nil {
+						return out, i, err
+					} else {
+						if errors.Is(err, EOrderBookTooThin) {
+							return out, i, err
+						}
+					}
+				}
 			}
 		}
 	}
 	if err != nil {
-		return 0, err
+		return 0, dip, err
 	} else {
-		return 0, EOrderBookTooThin
+		return 0, dip, EOrderBookTooThin
 	}
 }
 
-func getAgg(exchange Exchange, market string, dip, max, min float64, cnt int, sandbox bool) (float64, error) {
+func getAgg(exchange Exchange, market string, dip, pip, max, min float64, cnt int, sandbox bool) (float64, error) {
 	var (
 		ok  bool
 		err error
@@ -99,9 +119,9 @@ func getAgg(exchange Exchange, market string, dip, max, min float64, cnt int, sa
 				}
 			}
 
-			// ignore orders that are cheaper than ticker minus 33%
+			// ignore orders that are cheaper than ticker minus 30%
 			if min == 0 {
-				min = ticker - (0.33 * ticker)
+				min = ticker - ((pip / 100) * ticker)
 			}
 			if min > 0 {
 				i = 0
@@ -115,12 +135,14 @@ func getAgg(exchange Exchange, market string, dip, max, min float64, cnt int, sa
 			}
 
 			// ignore orders that are more expensive than 24h high minus 5%
-			i = 0
-			for i < len(book2) {
-				if book2[i].Price > (avg - ((dip / 100) * avg)) {
-					book2 = append(book2[:i], book2[i+1:]...)
-				} else {
-					i++
+			if dip > 0 {
+				i = 0
+				for i < len(book2) {
+					if book2[i].Price > (avg - ((dip / 100) * avg)) {
+						book2 = append(book2[:i], book2[i+1:]...)
+					} else {
+						i++
+					}
 				}
 			}
 
@@ -149,7 +171,7 @@ func getAgg(exchange Exchange, market string, dip, max, min float64, cnt int, sa
 				if len(book2) > 0 {
 					return agg, nil
 				} else {
-					if !ok {
+					if !ok && (dip == 0) {
 						return 0, EOrderBookTooThin
 					} else {
 						return 0, EYouAreAskingTooMuch

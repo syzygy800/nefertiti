@@ -180,6 +180,7 @@ type gdaxProduct struct {
 	QuoteCurrency  string `json:"quote_currency"`
 	BaseMinSize    string `json:"base_min_size"`
 	BaseMaxSize    string `json:"base_max_size"`
+	BaseIncrement  string `json:"base_increment"`
 	QuoteIncrement string `json:"quote_increment"`
 	LimitOnly      bool   `json:"limit_only"`
 }
@@ -192,10 +193,6 @@ func (product *gdaxProduct) getMinOrderSize() (float64, error) {
 		return out, nil
 	}
 }
-
-var (
-	gdaxSizePrecCache = map[string]int{}
-)
 
 type Gdax struct {
 	*model.ExchangeInfo
@@ -1037,29 +1034,23 @@ func (self *Gdax) GetPricePrec(client interface{}, market string) (int, error) {
 	}
 	for _, p := range products {
 		if p.Id == market {
-			i := strings.Index(p.QuoteIncrement, ".")
-			if i > -1 {
-				n := i + 1
-				for n < len(p.QuoteIncrement) {
-					if string(p.QuoteIncrement[n]) != "0" {
-						return n - i, nil
-					}
-					n++
-				}
-				return 0, nil
-			}
-			return 0, errors.Errorf("cannot parse quote_increment value of %s", p.QuoteIncrement)
+			return getPrecFromStr(p.QuoteIncrement, 0), nil
 		}
 	}
 	return 0, errors.Errorf("market %s not found", market)
 }
 
 func (self *Gdax) GetSizePrec(client interface{}, market string) (int, error) {
-	out, ok := gdaxSizePrecCache[market]
-	if ok {
-		return out, nil
+	products, err := self.GetProducts(client, true)
+	if err != nil {
+		return 8, err
 	}
-	return 8, nil
+	for _, p := range products {
+		if p.Id == market {
+			return getPrecFromStr(p.BaseIncrement, 8), nil
+		}
+	}
+	return 8, errors.Errorf("market %s not found", market)
 }
 
 func (self *Gdax) GetMaxSize(client interface{}, base, quote string, hold bool, def float64) float64 {
@@ -1178,16 +1169,6 @@ func (self *Gdax) Buy(client interface{}, cancel bool, market string, calls mode
 				ProductId: market,
 			}
 			if _, err = gdaxClient.CreateOrder(&order); err != nil {
-				// --- BEGIN --- svanas 2019-01-12 --- error: size is too accurate. fixed. --------
-				if strings.Contains(err.Error(), "size is too accurate") {
-					prec, _ := self.GetSizePrec(client, market)
-					if prec > 0 {
-						prec--
-						gdaxSizePrecCache[market] = prec
-						return self.Buy(client, cancel, market, calls, pricing.RoundToPrecision(size, prec), deviation, kind)
-					}
-				}
-				// ---- END ---- svanas 2019-01-12 ------------------------------------------------
 				return errors.Wrap(err, 1)
 			}
 		}

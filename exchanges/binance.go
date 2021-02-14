@@ -81,6 +81,26 @@ func init() {
 	}
 }
 
+func isBinanceError(err error) (*exchange.BinanceError, bool) {
+	var (
+		ok      bool
+		wrapped *errors.Error
+		binance *exchange.BinanceError
+	)
+
+	wrapped, ok = err.(*errors.Error)
+	if ok {
+		return isBinanceError(wrapped.Err)
+	}
+
+	binance, ok = err.(*exchange.BinanceError)
+	if ok {
+		return binance, true
+	}
+
+	return nil, false
+}
+
 func binanceOrderSide(order *exchange.Order) model.OrderSide {
 	if order.Side == string(exchange.SideTypeBuy) {
 		return model.BUY
@@ -231,6 +251,14 @@ func (self *Binance) notify(err error, level int64, service model.Notify) {
 
 	if service != nil {
 		if notify.CanSend(level, notify.ERROR) {
+			// --- BEGIN --- svanas 2020-09-12 --- do not push -1001 internal error ----
+			binanceError, ok := isBinanceError(err)
+			if ok {
+				if binanceError.Code == -1001 {
+					return
+				}
+			}
+			// ---- END ---- svanas 2020-09-12 -----------------------------------------
 			err := service.SendMessage(msg, "Binance - ERROR")
 			if err != nil {
 				self.report(err)
@@ -501,6 +529,14 @@ func (self *Binance) sell(
 							if call != nil && call.HasTarget() {
 								if strategy == model.STRATEGY_STANDARD || strategy == model.STRATEGY_TRAILING_STOP_LOSS_QUICK || strategy == model.STRATEGY_STOP_LOSS {
 									mult2 = pricing.FloorToPrecision((call.ParseTarget() / bought), 2)
+									// --- BEGIN --- svanas 2020-09-14 --- do not sell for the limit buy price -----
+									if mult2 <= 1.0 {
+										mult2 = pricing.CeilToPrecision((call.ParseTarget() / bought), 2)
+										if mult2 <= 1.0 {
+											mult2 = mult1
+										}
+									}
+									// ---- END ---- svanas 2020-09-14 ---------------------------------------------
 								}
 							}
 							var prec int

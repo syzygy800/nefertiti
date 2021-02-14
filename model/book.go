@@ -85,7 +85,11 @@ func (c *Call) ParseTarget() float64 {
 	return 0
 }
 
-func (c *Call) Corrupt() bool {
+func (c *Call) Corrupt(orderType OrderType) bool {
+	// limit order without a limit? then ignore this signal.
+	if c.Price == 0 && orderType == LIMIT {
+		return true
+	}
 	if c.HasTarget() {
 		// is the target lower than the buy zone? then ignore this signal.
 		if c.ParseTarget() < c.Price {
