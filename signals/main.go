@@ -20,6 +20,7 @@ func (signals *Signals) FindByName(name string) (model.Channel, error) {
 
 func New() *Signals {
 	var out Signals
+	out = append(out, NewCryptoBaseScanner())
 	out = append(out, NewListings())
 	out = append(out, NewMiningHamster())
 	out = append(out, NewVolume())
