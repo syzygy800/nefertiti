@@ -23,6 +23,7 @@ func New() *Signals {
 	out = append(out, NewCryptoBaseScanner())
 	out = append(out, NewListings())
 	out = append(out, NewMiningHamster())
+	out = append(out, NewQualitySignals())
 	out = append(out, NewVolume())
 	return &out
 }
