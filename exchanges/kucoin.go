@@ -739,7 +739,7 @@ func (self *Kucoin) Sell(
 			self.error(err, level, service)
 			time.Sleep(time.Minute)
 		} else {
-			// listens to the open orders, look for cancelled orders, send a notification on newly opened orders.
+			// listens to the open orders, look for cancelled orders, send a notification on newly opened orders.
 			opened, err = self.listen(client, service, level, opened, filled)
 			if err != nil {
 				self.error(err, level, service)
