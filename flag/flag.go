@@ -111,6 +111,11 @@ func Debug() bool {
 	return Exists("debug")
 }
 
+// when included, then the bot will respect the --dip setting (or the default 5% value) and not be smart about it.
+func Strict() bool {
+	return Exists("strict")
+}
+
 func Listen() bool {
 	return Exists("listen")
 }

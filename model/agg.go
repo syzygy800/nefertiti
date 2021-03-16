@@ -13,7 +13,7 @@ var (
 )
 
 // returns (agg, dip, error)
-func GetAgg(exchange Exchange, market string, dip, pip, max, min float64, top int, sandbox bool) (float64, float64, error) {
+func GetAgg(exchange Exchange, market string, dip, pip, max, min float64, top int, strict, sandbox bool) (float64, float64, error) {
 	var (
 		err error
 		out float64
@@ -34,7 +34,7 @@ func GetAgg(exchange Exchange, market string, dip, pip, max, min float64, top in
 			}
 		}
 	}
-	if dip > 0 {
+	if !strict && dip > 0 {
 		n := math.Round(dip) - 1
 		if n > 0 {
 			for i := n; i >= 0; i-- {

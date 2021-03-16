@@ -213,8 +213,30 @@ type Binance struct {
 
 //-------------------- private -------------------
 
-func (self *Binance) futures() bool {
-	return flag.Exists("futures")
+func (self *Binance) baseURL(sandbox bool) string {
+	var output string
+
+	if sandbox {
+		output = self.ExchangeInfo.REST.Sandbox
+	} else {
+		output = self.ExchangeInfo.REST.URI
+	}
+
+	flg := flag.Get("cluster")
+	if flg.Exists {
+		if cluster, err := flg.Int64(); err == nil {
+			switch cluster {
+			case 1:
+				output = exchange.BASE_URL_1
+			case 2:
+				output = exchange.BASE_URL_2
+			case 3:
+				output = exchange.BASE_URL_3
+			}
+		}
+	}
+
+	return output
 }
 
 // The broker ID should be sent as the initial part in the "newClientOrderId" when your
@@ -252,12 +274,12 @@ func (self *Binance) notify(err error, level int64, service model.Notify) {
 	if service != nil {
 		if notify.CanSend(level, notify.ERROR) {
 			// --- BEGIN --- svanas 2020-09-12 --- do not push -1001 internal error ----
-			binanceError, ok := isBinanceError(err)
-			if ok {
-				if binanceError.Code == -1001 {
-					return
-				}
-			}
+			//			binanceError, ok := isBinanceError(err)
+			//			if ok {
+			//				if binanceError.Code == -1001 {
+			//					return
+			//				}
+			//			}
 			// ---- END ---- svanas 2020-09-12 -----------------------------------------
 			err := service.SendMessage(msg, "Binance - ERROR")
 			if err != nil {
@@ -287,7 +309,7 @@ func (self *Binance) GetInfo() *model.ExchangeInfo {
 
 func (self *Binance) GetClient(private, sandbox bool) (interface{}, error) {
 	if !private {
-		return exchange.NewClient("", "", self.futures()), nil
+		return exchange.NewClient(self.baseURL(sandbox), "", ""), nil
 	}
 
 	apiKey, apiSecret, err := promptForApiKeys("Binance")
@@ -295,13 +317,13 @@ func (self *Binance) GetClient(private, sandbox bool) (interface{}, error) {
 		return nil, err
 	}
 
-	return exchange.NewClient(apiKey, apiSecret, self.futures()), nil
+	return exchange.NewClient(self.baseURL(sandbox), apiKey, apiSecret), nil
 }
 
 func (self *Binance) GetMarkets(cached, sandbox bool) ([]model.Market, error) {
 	var out []model.Market
 
-	precs, err := exchange.GetPrecs(exchange.NewClient("", "", self.futures()), cached)
+	precs, err := exchange.GetPrecs(exchange.NewClient(self.baseURL(sandbox), "", ""), cached)
 
 	if err != nil {
 		return nil, errors.Wrap(err, 1)
@@ -657,7 +679,7 @@ func (self *Binance) Sell(
 		}
 	}
 
-	client := exchange.NewClient(apiKey, apiSecret, self.futures())
+	client := exchange.NewClient(self.baseURL(sandbox), apiKey, apiSecret)
 
 	// get my open orders
 	var open []*exchange.Order
@@ -1442,12 +1464,33 @@ func NewBinance() model.Exchange {
 			Name: "Binance",
 			URL:  "https://www.binance.com/",
 			REST: model.Endpoint{
-				URI: "https://api.binance.com",
+				URI:     exchange.BASE_URL,
+				Sandbox: "https://testnet.binance.vision/api",
 			},
 			WebSocket: model.Endpoint{
-				URI: "wss://stream.binance.com:9443",
+				URI:     "wss://stream.binance.com:9443",
+				Sandbox: "wss://testnet.binance.vision",
 			},
 			Country: "China",
+		},
+	}
+}
+
+func NewBinanceUS() model.Exchange {
+	return &Binance{
+		ExchangeInfo: &model.ExchangeInfo{
+			Code: "BIUS",
+			Name: "BinanceUS",
+			URL:  "https://www.binance.us/",
+			REST: model.Endpoint{
+				URI:     exchange.BASE_URL_US,
+				Sandbox: "https://testnet.binance.vision/api",
+			},
+			WebSocket: model.Endpoint{
+				URI:     "wss://stream.binance.us:9443",
+				Sandbox: "wss://testnet.binance.vision",
+			},
+			Country: "United States",
 		},
 	}
 }

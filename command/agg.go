@@ -84,7 +84,7 @@ func (c *AggCommand) Run(args []string) int {
 	}
 
 	var agg float64
-	if agg, _, err = model.GetAgg(exchange, market, dip, pip, max, min, 4, sandbox); err != nil {
+	if agg, _, err = model.GetAgg(exchange, market, dip, pip, max, min, 4, flag.Strict(), sandbox); err != nil {
 		return c.ReturnError(err)
 	}
 

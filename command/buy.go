@@ -75,11 +75,12 @@ func buyEvery(
 	min float64,
 	price float64,
 	service model.Notify,
+	strict bool,
 	sandbox bool,
 	debug bool,
 ) {
 	for range time.Tick(d) {
-		err, market := buy(client, exchange, markets, hold, agg, size, dip, pip, mult, dist, top, max, min, price, service, sandbox, false, debug)
+		err, market := buy(client, exchange, markets, hold, agg, size, dip, pip, mult, dist, top, max, min, price, service, strict, sandbox, false, debug)
 		if err != nil {
 			report(err, market, nil, service, exchange)
 		}
@@ -102,6 +103,7 @@ func buy(
 	min float64,
 	price float64,
 	service model.Notify,
+	strict bool,
 	sandbox bool,
 	test bool,
 	debug bool,
@@ -124,7 +126,7 @@ func buy(
 		magg = agg
 		mdip = dip
 		if magg == 0 {
-			if magg, mdip, err = model.GetAgg(exchange, market, dip, pip, max, min, int(top), sandbox); err != nil {
+			if magg, mdip, err = model.GetAgg(exchange, market, dip, pip, max, min, int(top), strict, sandbox); err != nil {
 				if errors.Is(err, model.EOrderBookTooThin) {
 					if len(markets) > 1 {
 						report(err, market, nil, service, exchange)
@@ -209,7 +211,7 @@ func buy(
 					i++
 				}
 			}
-		}	
+		}
 
 		// ignore BUY orders that are more expensive than max (optional)
 		if max > 0 {
@@ -815,7 +817,7 @@ func (c *BuyCommand) Run(args []string) int {
 		}
 	}
 
-	if err, _ = buy(client, exchange, splitted, strings.Split(hold, ","), agg, size, dip, pip, mult, dist, top, max, min, price, service, sandbox, test, flag.Debug()); err != nil {
+	if err, _ = buy(client, exchange, splitted, strings.Split(hold, ","), agg, size, dip, pip, mult, dist, top, max, min, price, service, flag.Strict(), sandbox, test, flag.Debug()); err != nil {
 		if flag.Exists("ignore-error") {
 			log.Printf("[ERROR] %v\n", err)
 		} else {
@@ -833,7 +835,7 @@ func (c *BuyCommand) Run(args []string) int {
 			if err = c.ReturnSuccess(); err != nil {
 				return c.ReturnError(err)
 			}
-			buyEvery(time.Duration(repeat*float64(time.Hour)), client, exchange, splitted, strings.Split(hold, ","), agg, size, dip, pip, mult, dist, top, max, min, price, service, sandbox, flag.Debug())
+			buyEvery(time.Duration(repeat*float64(time.Hour)), client, exchange, splitted, strings.Split(hold, ","), agg, size, dip, pip, mult, dist, top, max, min, price, service, flag.Strict(), sandbox, flag.Debug())
 		}
 	}
 

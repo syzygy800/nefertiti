@@ -477,7 +477,12 @@ func (self *Gdax) sell(
 								quote string
 							)
 							if base, quote, err = model.ParseMarket(markets, msg.ProductId); err != nil {
-								self.error(err, notify.Level(), service)
+								if markets, err = self.GetMarkets(false, sandbox); err == nil {
+									base, quote, err = model.ParseMarket(markets, msg.ProductId)
+								}
+								if err != nil {
+									self.error(err, notify.Level(), service)
+								}
 							}
 
 							var prec int
