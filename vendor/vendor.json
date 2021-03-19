@@ -208,9 +208,8 @@
 		},
 		{
 			"checksumSHA1": "cdOCt0Yb+hdErz8NAQqayxPmRsY=",
-			"origin": "github.com/hashicorp/go-multierror/vendor/github.com/hashicorp/errwrap",
 			"path": "github.com/hashicorp/errwrap",
-			"revision": "83588e72410abfbe4df460eeb6f30841ae47d4c4",
+			"revision": "8a6fb523712970c966eefc6b39ed2c5e74880354",
 			"revisionTime": "2017-06-22T06:09:55Z"
 		},
 		{
