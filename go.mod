@@ -40,14 +40,14 @@ require (
 	golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
 )
 
-replace github.com/Kucoin/kucoin-go-sdk => ./vendor/github.com/Kucoin/kucoin-go-sdk
+replace github.com/Kucoin/kucoin-go-sdk => ./vendor-modified/github.com/Kucoin/kucoin-go-sdk
 
-replace github.com/bitbandi/go-hitbtc => ./vendor/github.com/bitbandi/go-hitbtc
+replace github.com/bitbandi/go-hitbtc => ./vendor-modified/github.com/bitbandi/go-hitbtc
 
-replace github.com/go-errors/errors => ./vendor/github.com/go-errors/errors
+replace github.com/go-errors/errors => ./vendor-modified/github.com/go-errors/errors
 
-replace github.com/go-telegram-bot-api/telegram-bot-api => ./vendor/github.com/go-telegram-bot-api/telegram-bot-api
+replace github.com/go-telegram-bot-api/telegram-bot-api => ./vendor-modified/github.com/go-telegram-bot-api/telegram-bot-api
 
-replace github.com/preichenberger/go-coinbase-exchange => ./vendor/github.com/preichenberger/go-coinbase-exchange
+replace github.com/preichenberger/go-coinbase-exchange => ./vendor-modified/github.com/preichenberger/go-coinbase-exchange
 
-replace github.com/toorop/go-bittrex => ./vendor/github.com/toorop/go-bittrex
+replace github.com/toorop/go-bittrex => ./vendor-modified/github.com/toorop/go-bittrex
