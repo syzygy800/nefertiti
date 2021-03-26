@@ -515,24 +515,44 @@ func (self *Bitstamp) Sell(
 										if ticker, err = self.GetTicker(client, market.Name); err != nil {
 											self.error(err, level, service)
 										} else {
-											var prec int
-											if prec, err = self.GetSizePrec(client, market.Name); err != nil {
+											var precSize int
+											if precSize, err = self.GetSizePrec(client, market.Name); err != nil {
 												self.error(err, level, service)
 											} else {
+												orderType := model.MARKET
 												for {
 													var qty float64
-													if qty, err = exchange.GetMinOrderSize(client, market.Name, ticker, prec); err != nil {
+													if qty, err = exchange.GetMinOrderSize(client, market.Name, ticker, precSize); err != nil {
 														self.error(err, level, service)
 													} else {
 														if hold.HasMarket(market.Name) {
 															qty = qty * 5
 														}
-														if _, err = client.BuyMarketOrder(market.Name, pricing.RoundToPrecision(qty, prec)); err != nil {
+														if orderType == model.MARKET {
+															_, err = client.BuyMarketOrder(market.Name, pricing.RoundToPrecision(qty, precSize))
+														} else {
+															var precPrice int
+															if precPrice, err = self.GetPricePrec(client, market.Name); err == nil {
+																ticker = ticker * 1.01
+																_, err = client.BuyLimitOrder(market.Name,
+																	pricing.RoundToPrecision(qty, precSize),
+																	pricing.RoundToPrecision(ticker, precPrice),
+																)
+															}
+														}
+														if err != nil {
 															// --- BEGIN --- svanas 2020-09-15 --- error: Minimum order size is ... -----------
 															if strings.Contains(err.Error(), "Minimum order size") {
-																lower, _ := strconv.ParseFloat(pricing.FormatPrecision(prec), 64)
+																lower, _ := strconv.ParseFloat(pricing.FormatPrecision(precSize), 64)
 																ticker = ticker - lower
 																continue
+															}
+															// --- BEGIN --- svanas 2021-03-26 --- error: Order could not be placed -----------
+															if strings.Contains(err.Error(), "Order could not be placed") {
+																if orderType == model.MARKET {
+																	orderType = model.LIMIT
+																	continue
+																}
 															}
 															// ---- END ---- svanas 2020-09-15 ------------------------------------------------
 															self.error(err, level, service)
