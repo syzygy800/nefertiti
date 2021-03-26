@@ -1,6 +1,7 @@
 package exchanges
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/svanas/nefertiti/flag"
@@ -27,6 +28,7 @@ func New() *Exchanges {
 	out = append(out, NewBitstamp())
 	out = append(out, NewCexIo())
 	out = append(out, NewBinance())
+	out = append(out, NewBinanceUS())
 	out = append(out, NewHitBTC())
 	out = append(out, NewKucoin())
 	out = append(out, NewCryptoDotCom())
@@ -45,7 +47,12 @@ func getPrecFromStr(value string, def int) int {
 		}
 		return 0
 	}
+	i, err := strconv.Atoi(value)
+	if err == nil && i == 1 {
+		return 0
+	} else {
 	return def
+	}
 }
 
 func promptForApiKeys(exchange string) (apiKey, apiSecret string, err error) {
