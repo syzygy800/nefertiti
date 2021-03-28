@@ -6,10 +6,10 @@ Nefertiti is a FREE crypto trading bot that follows a simple but proven trading 
 
 At the time of this writing, the trading bot supports the following crypto exchanges:
 
-<a href="https://www.bitstamp.net/ref/QWE1MDzZoyPWZNyU/"><img src="https://i.ibb.co/JjRnHLW/bitstamp-logo.png"></a> &nbsp; &nbsp; &nbsp;
-<a href="https://bittrex.com/Account/Register?referralCode=CIC-YDN-5DX"><img src="https://i.ibb.co/nzkbK2W/bittrex-logo-1.png"></a> &nbsp; &nbsp; &nbsp;
-<a href="https://hitbtc.com/?ref_id=5aad6226b7072"><img src="https://i.ibb.co/YksC3cJ/hitbtc-logo.png"></a> &nbsp; &nbsp; &nbsp;
-<a href="https://pro.coinbase.com/"><img src="https://i.ibb.co/4ghKrJS/gdax-logo.png"></a> &nbsp; &nbsp; &nbsp;
+<a href="https://www.bitstamp.net/ref/QWE1MDzZoyPWZNyU/"><img src="https://i.ibb.co/JjRnHLW/bitstamp-logo.png"></a> &nbsp;
+<a href="https://bittrex.com/Account/Register?referralCode=CIC-YDN-5DX"><img src="https://i.ibb.co/nzkbK2W/bittrex-logo-1.png"></a> &nbsp;
+<a href="https://hitbtc.com/?ref_id=5aad6226b7072"><img src="https://i.ibb.co/YksC3cJ/hitbtc-logo.png"></a> &nbsp;
+<a href="https://pro.coinbase.com/"><img src="https://i.ibb.co/4ghKrJS/gdax-logo.png"></a> &nbsp;
 <a href="https://www.binance.com/en/register?ref=UME24R7B"><img src="https://i.ibb.co/FHg7Ytd/binance-logo.png"></a> &nbsp; &nbsp; &nbsp;
 <a href="https://www.kucoin.com/?rcode=KJ6stw"><img src="https://i.ibb.co/MPKkJTL/Ku-Coin-logo-1.png"></a> &nbsp; &nbsp; &nbsp;
 <a href="https://crypto.com/exch/rf3v8ucd4k"><img src="https://i.ibb.co/tJdKPTy/crypto-com-review.png"></a>
@@ -52,7 +52,6 @@ Click the button below to download the Go installer.
 
 4. Confirm that the command prints the installed version of Go.
 
-
 ##### Mac
 1. Open the package file you downloaded and follow the prompts to install Go.
    
@@ -65,7 +64,6 @@ Click the button below to download the Go installer.
     ```
 
 3. Confirm that the command prints the installed version of Go.
-
 
 ##### Windows
 1. Open the MSI file you downloaded and follow the prompts to install Go.
@@ -86,7 +84,7 @@ Click the button below to download the Go installer.
       
      4. Confirm that the command prints the installed version of Go.
 
-### Cloning
+## Cloning
 You will need Go installed and `GOPATH` configured.
 
   ```
