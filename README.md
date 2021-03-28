@@ -23,7 +23,7 @@ cd $GOPATH/src/github.com/svanas
 git clone https://github.com/svanas/nefertiti.git
 ```
 
-Your developer is using Go version 1.12.7 -- the last version before Go modules became a thing. This code may or may not compile with other versions of the Go compiler.
+Your developer is using Go version 1.16.2 (https://golang.org/dl/) -- This code may or may not compile with other versions of the Go compiler.
 
 ### Dependencies ###
 
