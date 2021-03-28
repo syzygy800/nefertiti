@@ -93,7 +93,7 @@ Click the button below to download the Go installer.
      4. Confirm that the command prints the installed version of Go.
 
 ## Cloning
-You will need Go installed and `GOPATH` configured.
+You will need Go installed and `$GOPATH` configured.
 
   ```
   mkdir -p $GOPATH/src/github.com/svanas
