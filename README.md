@@ -14,6 +14,14 @@ At the time of this writing, the trading bot supports the following crypto excha
 <a href="https://www.kucoin.com/?rcode=KJ6stw"><img src="https://i.ibb.co/MPKkJTL/Ku-Coin-logo-1.png"></a> &nbsp; &nbsp; &nbsp;
 <a href="https://crypto.com/exch/rf3v8ucd4k"><img src="https://i.ibb.co/tJdKPTy/crypto-com-review.png"></a>
 
+## Signals
+
+At the time of this writing, the bot supports the following signal providers:
+
+<a href="https://www.mininghamster.com/referral/azr8N29xml4dq4GpbzxTNuB3DZpfCxzA"><img src="https://nefertiti-tradebot.com/wp-content/uploads/2018/04/mininghamster.jpg" width="100"></a> &nbsp;  &nbsp;  &nbsp;
+<a href="https://premium.cryptoqualitysignals.com/register/WYn"><img src="https://nefertiti-tradebot.com/wp-content/uploads/2019/01/1_Sa5hV8OSo2Kgsv7hq3OACw.jpeg" width="100"></a> &nbsp;  &nbsp;  &nbsp;
+<a href="https://altrady.com/?a=nefertiti"><img src="https://nefertiti-tradebot.com/wp-content/uploads/2019/02/icon-1024x1024-300x300.png" width="100"></a>
+
 ## Setup
 
 Download and install Go quickly with the steps described here.
@@ -102,10 +110,6 @@ Most dependencies are vendored in with this repo. You might need to clone the fo
 * https://github.com/svanas/go-binance
 * https://github.com/svanas/go-crypto-dot-com
 * https://github.com/svanas/go-mining-hamster
-
-<a href="https://www.mininghamster.com/referral/azr8N29xml4dq4GpbzxTNuB3DZpfCxzA"><img src="https://nefertiti-tradebot.com/wp-content/uploads/2018/04/mininghamster.jpg" width="100"></a> &nbsp;  &nbsp;  &nbsp;
-<a href="https://premium.cryptoqualitysignals.com/register/WYn"><img src="https://nefertiti-tradebot.com/wp-content/uploads/2019/01/1_Sa5hV8OSo2Kgsv7hq3OACw.jpeg" width="100"></a> &nbsp;  &nbsp;  &nbsp;
-<a href="https://altrady.com/?a=nefertiti"><img src="https://nefertiti-tradebot.com/wp-content/uploads/2019/02/icon-1024x1024-300x300.png" width="100"></a>
 
 <br>
 
