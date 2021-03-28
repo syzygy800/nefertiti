@@ -103,6 +103,10 @@ Most dependencies are vendored in with this repo. You might need to clone the fo
 * https://github.com/svanas/go-crypto-dot-com
 * https://github.com/svanas/go-mining-hamster
 
+<a href="https://www.mininghamster.com/referral/azr8N29xml4dq4GpbzxTNuB3DZpfCxzA"><img src="https://nefertiti-tradebot.com/wp-content/uploads/2018/04/mininghamster.jpg" width="100"></a> &nbsp;  &nbsp;  &nbsp;
+<a href="https://premium.cryptoqualitysignals.com/register/WYn"><img src="https://nefertiti-tradebot.com/wp-content/uploads/2019/01/1_Sa5hV8OSo2Kgsv7hq3OACw.jpeg" width="100"></a> &nbsp;  &nbsp;  &nbsp;
+<a href="https://altrady.com/?a=nefertiti"><img src="https://nefertiti-tradebot.com/wp-content/uploads/2019/02/icon-1024x1024-300x300.png" width="100"></a>
+
 <br>
 
   ```
