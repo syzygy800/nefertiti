@@ -6,13 +6,13 @@ Nefertiti is a FREE crypto trading bot that follows a simple but proven trading 
 
 At the time of this writing, the trading bot supports the following crypto exchanges:
 
-<a href="https://www.bitstamp.net/ref/QWE1MDzZoyPWZNyU/"><img src="https://i.ibb.co/JjRnHLW/bitstamp-logo.png"></a> &nbsp;
-<a href="https://bittrex.com/Account/Register?referralCode=CIC-YDN-5DX"><img src="https://i.ibb.co/nzkbK2W/bittrex-logo-1.png"></a> &nbsp;
-<a href="https://hitbtc.com/?ref_id=5aad6226b7072"><img src="https://i.ibb.co/YksC3cJ/hitbtc-logo.png"></a> &nbsp;
-<a href="https://pro.coinbase.com/"><img src="https://i.ibb.co/4ghKrJS/gdax-logo.png"></a> &nbsp;
-<a href="https://www.binance.com/en/register?ref=UME24R7B"><img src="https://i.ibb.co/FHg7Ytd/binance-logo.png"></a> &nbsp; &nbsp; &nbsp;
-<a href="https://www.kucoin.com/?rcode=KJ6stw"><img src="https://i.ibb.co/MPKkJTL/Ku-Coin-logo-1.png"></a> &nbsp; &nbsp; &nbsp;
-<a href="https://crypto.com/exch/rf3v8ucd4k"><img src="https://i.ibb.co/tJdKPTy/crypto-com-review.png"></a>
+<a href="https://www.bitstamp.net/ref/QWE1MDzZoyPWZNyU/"><img src="https://nefertiti-tradebot.com/wp-content/uploads/2019/12/bitstamp-logo.png"></a> &nbsp;
+<a href="https://bittrex.com/Account/Register?referralCode=CIC-YDN-5DX"><img src="https://nefertiti-tradebot.com/wp-content/uploads/2019/12/bittrex_logo-1.png"></a> &nbsp;
+<a href="https://hitbtc.com/?ref_id=5aad6226b7072"><img src="hhttps://nefertiti-tradebot.com/wp-content/uploads/2019/12/hitbtc-logo.png"></a> &nbsp;
+<a href="https://pro.coinbase.com/"><img src="https://nefertiti-tradebot.com/wp-content/uploads/2019/12/gdax_logo.png"></a> &nbsp;
+<a href="https://www.binance.com/en/register?ref=UME24R7B"><img src="https://nefertiti-tradebot.com/wp-content/uploads/2019/12/binance_logo.png"></a> &nbsp; &nbsp; &nbsp;
+<a href="https://www.kucoin.com/?rcode=KJ6stw"><img src="https://nefertiti-tradebot.com/wp-content/uploads/2019/12/KuCoin-logo-1.png"></a> &nbsp; &nbsp; &nbsp;
+<a href="https://crypto.com/exch/rf3v8ucd4k"><img src="https://nefertiti-tradebot.com/wp-content/uploads/2020/09/crypto-com-review.png"></a>
 
 ## Signals
 
