@@ -16,7 +16,7 @@ At the time of this writing, the trading bot supports the following crypto excha
 
 ## Signals
 
-At the time of this writing, the bot supports the following signal providers:
+At the time of this writing, the trading bot supports the following signal providers:
 
 <a href="https://www.mininghamster.com/referral/azr8N29xml4dq4GpbzxTNuB3DZpfCxzA"><img src="https://nefertiti-tradebot.com/wp-content/uploads/2018/04/mininghamster.jpg" width="100"></a> &nbsp;  &nbsp;  &nbsp;
 <a href="https://premium.cryptoqualitysignals.com/register/WYn"><img src="https://nefertiti-tradebot.com/wp-content/uploads/2019/01/1_Sa5hV8OSo2Kgsv7hq3OACw.jpeg" width="100"></a> &nbsp;  &nbsp;  &nbsp;
