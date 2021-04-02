@@ -101,6 +101,14 @@ You will need Go installed and `$GOPATH` configured.
   git clone https://github.com/svanas/nefertiti.git
   ```
 
+## Updating
+Update your local working branch with commits from the remote, and update all remote tracking branches.
+
+  ```
+  cd $GOPATH/src/github.com/svanas
+  git pull
+  ```
+
 ## Notes
 Your developer is using the latest Go version (https://golang.org/dl/) -- This code may or may not compile with other versions of the Go compiler.
 
