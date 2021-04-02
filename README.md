@@ -40,7 +40,7 @@ Click the button below to download the Go installer.
     For example, run the following as root or through sudo:
 
     ```
-    rm -rf /usr/local/go && tar -C /usr/local -xzf go1.16.2.linux-amd64.tar.gz
+    rm -rf /usr/local/go && tar -C /usr/local -xzf go1.16.3.linux-amd64.tar.gz
     ```
 
 2. Add /usr/local/go/bin to the PATH environment variable.
