@@ -252,13 +252,23 @@ func (self *Binance) getBrokerId() string {
 	return out
 }
 
-func (self *Binance) report(err error) {
+// send a warning to StdOut
+func (self *Binance) warn(err error) {
+	pc, file, line, _ := runtime.Caller(1)
+	log.Printf("[WARN] %s %v",
+		errors.FormatCaller(pc, file, line), err,
+	)
+}
+
+// send an error to StdOut
+func (self *Binance) error(err error) {
 	pc, file, line, _ := runtime.Caller(1)
 	log.Printf("[ERROR] %s %v",
 		errors.FormatCaller(pc, file, line), err,
 	)
 }
 
+// send an error to StdOut *and* a notification to Pushover/Telegram
 func (self *Binance) notify(err error, level int64, service model.Notify) {
 	pc, file, line, _ := runtime.Caller(1)
 	prefix := errors.FormatCaller(pc, file, line)
@@ -283,7 +293,7 @@ func (self *Binance) notify(err error, level int64, service model.Notify) {
 			// ---- END ---- svanas 2020-09-12 -----------------------------------------
 			err := service.SendMessage(msg, "Binance - ERROR")
 			if err != nil {
-				self.report(err)
+				self.error(err)
 			}
 		}
 	}
@@ -394,7 +404,7 @@ func (self *Binance) listen(client *exchange.Client, service model.Notify, level
 				if side != model.ORDER_SIDE_NONE {
 					if notify.CanSend(level, notify.OPENED) || (level == notify.LEVEL_DEFAULT && side == model.SELL) {
 						if err = service.SendMessage(string(data), ("Binance - Open " + model.FormatOrderSide(side))); err != nil {
-							self.report(err)
+							self.error(err)
 						}
 					}
 				}
@@ -463,7 +473,14 @@ func (self *Binance) sell(
 							if ticker, err = self.GetTicker(client, order.Symbol); err == nil {
 								var prec int
 								if prec, err = self.GetPricePrec(client, order.Symbol); err == nil {
-									adjusted := order.GetStopPrice() * 1.01
+									// here we allow for a small 1% pump (otherwise, we wouldn't want to buy back in)
+									adjusted := order.GetStopPrice()
+									for true {
+										adjusted = adjusted * 1.01
+										if pricing.RoundToPrecision(adjusted, prec) > order.GetStopPrice() {
+											break
+										}
+									}									
 									if ticker > pricing.RoundToPrecision(adjusted, prec) {
 										log.Printf("[INFO] Not re-buying %s because ticker %.8f is higher than stop price %s\n", order.Symbol, ticker, order.StopPrice)
 									} else {
@@ -507,7 +524,7 @@ func (self *Binance) sell(
 							}
 						}
 						if err = service.SendMessage(string(data), title); err != nil {
-							self.report(err)
+							self.error(err)
 						}
 					}
 					if twitter != nil {
@@ -610,7 +627,7 @@ func (self *Binance) sell(
 															model.NewMetaDataEx(bought, mult2, false).String(),
 															model.NewMetaDataEx(bought, mult2, false).String(),
 														); err != nil {
-															self.report(err)
+															self.warn(err)
 														}
 														handled = err == nil
 													}
@@ -867,7 +884,7 @@ func (self *Binance) Sell(
 														if err != nil {
 															_, ok := err.(*exchange.BinanceError)
 															if ok {
-																self.report(err)
+																self.warn(err)
 																_, _, err = self.Order(client,
 																	binanceOrderSide(order),
 																	order.Symbol,
@@ -900,8 +917,6 @@ func (self *Binance) Sell(
 			}
 		}
 	}
-
-	return nil
 }
 
 func (self *Binance) Order(
@@ -993,7 +1008,7 @@ func (self *Binance) StopLoss(client interface{}, market string, size float64, p
 		// --- BEGIN --- svanas 2019-02-07 ------------------------------------
 		_, ok := err.(*exchange.BinanceError)
 		if ok {
-			self.report(err)
+			self.warn(err)
 			// -1013 stop loss orders are not supported for this symbol
 			if kind != model.LIMIT {
 				return self.StopLoss(client, market, size, price, model.LIMIT, meta)
@@ -1071,7 +1086,7 @@ func (self *Binance) OCO(client interface{}, side model.OrderSide, market string
 	if resp, err = svc.Do(context.Background()); err != nil {
 		_, ok := err.(*exchange.BinanceError)
 		if ok {
-			self.report(err)
+			self.warn(err)
 			// -2010 Filter failure: MAX_NUM_ALGO_ORDERS
 			if strings.Contains(err.Error(), "MAX_NUM_ALGO_ORDERS") {
 				var out []byte

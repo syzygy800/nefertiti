@@ -117,27 +117,27 @@ func (self *Kucoin) error(err error, level int64, service model.Notify) {
 	}
 }
 
-func (self *Kucoin) getAvailableBalance(client *exchange.ApiService, curr string) (float64, error) {
-	var (
-		err      error
-		out      float64
-		resp     *exchange.ApiResponse
-		accounts exchange.AccountsModel
-	)
-	if resp, err = client.Accounts(curr, "trade"); err != nil {
-		return 0, errors.Wrap(err, 1)
-	}
-	if err = resp.ReadData(&accounts); err != nil {
-		return 0, errors.Wrap(err, 1)
-	}
-	if len(accounts) == 0 {
-		return 0, errors.Errorf("Currency %s does not exist", curr)
-	}
-	if out, err = strconv.ParseFloat(accounts[0].Available, 64); err != nil {
-		return 0, errors.Wrap(err, 1)
-	}
-	return out, nil
-}
+// func (self *Kucoin) getAvailableBalance(client *exchange.ApiService, curr string) (float64, error) {
+// 	var (
+// 		err      error
+// 		out      float64
+// 		resp     *exchange.ApiResponse
+// 		accounts exchange.AccountsModel
+// 	)
+// 	if resp, err = client.Accounts(curr, "trade"); err != nil {
+// 		return 0, errors.Wrap(err, 1)
+// 	}
+// 	if err = resp.ReadData(&accounts); err != nil {
+// 		return 0, errors.Wrap(err, 1)
+// 	}
+// 	if len(accounts) == 0 {
+// 		return 0, errors.Errorf("Currency %s does not exist", curr)
+// 	}
+// 	if out, err = strconv.ParseFloat(accounts[0].Available, 64); err != nil {
+// 		return 0, errors.Wrap(err, 1)
+// 	}
+// 	return out, nil
+// }
 
 func (self *Kucoin) getSymbols(client *exchange.ApiService, cached bool) (exchange.SymbolsModel, error) {
 	if self.symbols == nil || cached == false {
@@ -172,6 +172,58 @@ func (self *Kucoin) getMinSize(client *exchange.ApiService, market string, cache
 		}
 	}
 	return 0, nil
+}
+
+func (self *Kucoin) getOrders(client *exchange.ApiService, params map[string]string) (exchange.OrdersModel, error) {
+	var (
+		err    error
+		curr   int64
+		output exchange.OrdersModel
+	)
+
+	curr = 1
+	for true {
+		var resp *exchange.ApiResponse
+		if resp, err = client.Orders(params, &exchange.PaginationParam{CurrentPage: curr, PageSize: 50}); err != nil {
+			return nil, errors.Wrap(err, 1)
+		}
+		var (
+			page   *exchange.PaginationModel
+			orders exchange.OrdersModel
+		)
+		if page, err = resp.ReadPaginationData(&orders); err != nil {
+			return nil, errors.Wrap(err, 1)
+		}
+		output = append(output, orders...)
+		if page.CurrentPage >= page.TotalPage {
+			break
+		} else {
+			curr++
+		}
+	}
+
+	curr = 1
+	for true {
+		var resp *exchange.ApiResponse
+		if resp, err = client.StopOrders(params, &exchange.PaginationParam{CurrentPage: curr, PageSize: 50}); err != nil {
+			return nil, errors.Wrap(err, 1)
+		}
+		var (
+			page   *exchange.PaginationModel
+			orders exchange.OrdersModel
+		)
+		if page, err = resp.ReadPaginationData(&orders); err != nil {
+			return nil, errors.Wrap(err, 1)
+		}
+		output = append(output, orders...)
+		if page.CurrentPage >= page.TotalPage {
+			break
+		} else {
+			curr++
+		}
+	}
+
+	return output, nil
 }
 
 //-------------------- public --------------------
@@ -227,45 +279,6 @@ func (self *Kucoin) GetMarkets(cached, sandbox bool) ([]model.Market, error) {
 
 func (self *Kucoin) FormatMarket(base, quote string) string {
 	return strings.ToUpper(fmt.Sprintf("%s-%s", base, quote))
-}
-
-// get my opened orders
-func (self *Kucoin) opened(
-	client *exchange.ApiService,
-	market string,
-) (exchange.OrdersModel, error) {
-	var (
-		err    error
-		curr   int64 = 1
-		output exchange.OrdersModel
-	)
-
-	params := map[string]string{
-		"status": "active",
-		"symbol": market,
-	}
-
-	for true {
-		var resp *exchange.ApiResponse
-		if resp, err = client.Orders(params, &exchange.PaginationParam{CurrentPage: curr, PageSize: 50}); err != nil {
-			return nil, errors.Wrap(err, 1)
-		}
-		var (
-			page   *exchange.PaginationModel
-			orders exchange.OrdersModel
-		)
-		if page, err = resp.ReadPaginationData(&orders); err != nil {
-			return nil, errors.Wrap(err, 1)
-		}
-		output = append(output, orders...)
-		if page.CurrentPage >= page.TotalPage {
-			break
-		} else {
-			curr++
-		}
-	}
-
-	return output, nil
 }
 
 // listens to the filled orders, look for newly filled orders, automatically place new sell orders.
@@ -432,7 +445,7 @@ func (self *Kucoin) sell(
 				log.Printf("[INFO] Not re-buying %s because ticker %.8f is higher than stop price %.8f\n", symbol, ticker, stop.High)
 			} else {
 				var opened exchange.OrdersModel
-				if opened, err = self.opened(client, symbol); err != nil {
+				if opened, err = self.getOrders(client, map[string]string{"status": "active", "symbol": symbol}); err != nil {
 					self.error(err, level, service)
 				} else {
 					var cb exchange.OrderPredicate
@@ -462,12 +475,12 @@ func (self *Kucoin) sell(
 		amount := buy.Size
 		bought := avg(buy)
 
-		var sp int
-		if sp, err = self.GetSizePrec(client, symbol); err != nil {
-			return new, err
-		} else {
-			amount = pricing.FloorToPrecision(amount, sp)
-		}
+		// var sp int
+		// if sp, err = self.GetSizePrec(client, symbol); err != nil {
+		// 	return new, err
+		// } else {
+		// 	amount = pricing.FloorToPrecision(amount, sp)
+		// }
 
 		if bought == 0 {
 			if bought, err = self.GetTicker(client, symbol); err != nil {
@@ -483,24 +496,24 @@ func (self *Kucoin) sell(
 		base, quote, err = model.ParseMarket(markets, symbol)
 		if err == nil {
 			// --- BEGIN --- svanas 2019-02-19 --- if we have dust, try and sell it ---
-			var available float64
-			if available, err = self.getAvailableBalance(client, base); err != nil {
-				self.error(err, level, service)
-			} else {
-				available = pricing.FloorToPrecision(available, sp)
-				if available > amount {
-					amount = available
-				}
-			}
+			// var available float64
+			// if available, err = self.getAvailableBalance(client, base); err != nil {
+			// 	self.error(err, level, service)
+			// } else {
+			// 	available = pricing.FloorToPrecision(available, sp)
+			// 	if available > amount {
+			// 		amount = available
+			// 	}
+			// }
 			// ---- END ---- svanas 2019-02-19 ----------------------------------------
-			var pp int
-			if pp, err = self.GetPricePrec(client, symbol); err == nil {
+			var prec int
+			if prec, err = self.GetPricePrec(client, symbol); err == nil {
 				if strategy == model.STRATEGY_TRAILING_STOP_LOSS || strategy == model.STRATEGY_STOP_LOSS {
 					var ticker float64
 					if ticker, err = self.GetTicker(client, symbol); err == nil {
 						sold := false
 						if strategy == model.STRATEGY_STOP_LOSS {
-							if ticker >= pricing.Multiply(bought, mult, pp) {
+							if ticker >= pricing.Multiply(bought, mult, prec) {
 								_, _, err = self.Order(client,
 									model.SELL,
 									symbol,
@@ -520,19 +533,22 @@ func (self *Kucoin) sell(
 							_, err = self.StopLoss(client,
 								symbol,
 								amount,
-								pricing.RoundToPrecision(stop, pp),
+								pricing.RoundToPrecision(stop, prec),
 								model.MARKET, "",
 							)
 						}
 					}
 				} else {
-					_, _, err = self.Order(client,
-						model.SELL,
-						symbol,
-						self.GetMaxSize(client, base, quote, hold.HasMarket(symbol), amount),
-						pricing.Multiply(bought, mult, pp),
-						model.LIMIT, "",
-					)
+					amount = self.GetMaxSize(client, base, quote, hold.HasMarket(symbol), amount)
+					if amount > 0 {
+						_, _, err = self.Order(client,
+							model.SELL,
+							symbol,
+							amount,
+							pricing.Multiply(bought, mult, prec),
+							model.LIMIT, "",
+						)
+					}
 				}
 			}
 		}
@@ -558,31 +574,14 @@ func (self *Kucoin) listen(
 	old exchange.OrdersModel,
 	filled exchange.FillsModel,
 ) (exchange.OrdersModel, error) {
-	var err error
+	var (
+		err error
+		new exchange.OrdersModel
+	)
 
 	// get my opened orders
-	var (
-		curr int64 = 1
-		new  exchange.OrdersModel
-	)
-	for true {
-		var resp *exchange.ApiResponse
-		if resp, err = client.Orders(map[string]string{"status": "active"}, &exchange.PaginationParam{CurrentPage: curr, PageSize: 50}); err != nil {
-			return old, errors.Wrap(err, 1)
-		}
-		var (
-			page   *exchange.PaginationModel
-			orders exchange.OrdersModel
-		)
-		if page, err = resp.ReadPaginationData(&orders); err != nil {
-			return old, errors.Wrap(err, 1)
-		}
-		new = append(new, orders...)
-		if page.CurrentPage >= page.TotalPage {
-			break
-		} else {
-			curr++
-		}
+	if new, err = self.getOrders(client, map[string]string{"status": "active"}); err != nil {
+		return old, err
 	}
 
 	// look for cancelled orders
@@ -678,20 +677,20 @@ func (self *Kucoin) Sell(
 		exchange.ApiPassPhraseOption(apiPassphrase),
 	)
 
-	var (
-		curr int64
-		resp *exchange.ApiResponse
-		page *exchange.PaginationModel
-	)
-
 	// get my filled orders
-	var filled exchange.FillsModel
-	curr = 1
+	var (
+		curr   int64 = 1
+		filled exchange.FillsModel
+	)
 	for true {
+		var resp *exchange.ApiResponse
 		if resp, err = client.Fills(map[string]string{}, &exchange.PaginationParam{CurrentPage: curr, PageSize: 50}); err != nil {
 			return errors.Wrap(err, 1)
 		}
-		var orders exchange.FillsModel
+		var (
+			page   *exchange.PaginationModel
+			orders exchange.FillsModel
+		)
 		if page, err = resp.ReadPaginationData(&orders); err != nil {
 			return errors.Wrap(err, 1)
 		}
@@ -705,21 +704,8 @@ func (self *Kucoin) Sell(
 
 	// get my opened orders
 	var opened exchange.OrdersModel
-	curr = 1
-	for true {
-		if resp, err = client.Orders(map[string]string{"status": "active"}, &exchange.PaginationParam{CurrentPage: curr, PageSize: 50}); err != nil {
-			return errors.Wrap(err, 1)
-		}
-		var orders exchange.OrdersModel
-		if page, err = resp.ReadPaginationData(&orders); err != nil {
-			return errors.Wrap(err, 1)
-		}
-		opened = append(opened, orders...)
-		if page.CurrentPage >= page.TotalPage {
-			break
-		} else {
-			curr++
-		}
+	if opened, err = self.getOrders(client, map[string]string{"status": "active"}); err != nil {
+		return err
 	}
 
 	if err = success(service); err != nil {
@@ -773,7 +759,6 @@ func (self *Kucoin) Sell(
 												)
 												sold = true
 											}
-
 										}
 									}
 									if !sold {
@@ -850,8 +835,6 @@ func (self *Kucoin) Sell(
 			}
 		}
 	}
-
-	return nil
 }
 
 func (self *Kucoin) Order(
@@ -986,10 +969,8 @@ func (self *Kucoin) GetClosed(client interface{}, market string) (model.Orders, 
 func (self *Kucoin) GetOpened(client interface{}, market string) (model.Orders, error) {
 	var (
 		err    error
-		resp   *exchange.ApiResponse
-		page   *exchange.PaginationModel
-		orders exchange.OrdersModel
 		out    model.Orders
+		orders exchange.OrdersModel
 	)
 
 	kucoin, ok := client.(*exchange.ApiService)
@@ -997,33 +978,18 @@ func (self *Kucoin) GetOpened(client interface{}, market string) (model.Orders, 
 		return nil, errors.New("invalid argument: client")
 	}
 
-	var params = map[string]string{
-		"status": "active",
-		"symbol": market,
+	if orders, err = self.getOrders(kucoin, map[string]string{"status": "active", "symbol": market}); err != nil {
+		return nil, err
 	}
 
-	var curr int64 = 1
-	for true {
-		if resp, err = kucoin.Orders(params, &exchange.PaginationParam{CurrentPage: curr, PageSize: 50}); err != nil {
-			return nil, errors.Wrap(err, 1)
-		}
-		if page, err = resp.ReadPaginationData(&orders); err != nil {
-			return nil, errors.Wrap(err, 1)
-		}
-		for _, order := range orders {
-			out = append(out, model.Order{
-				Side:      model.NewOrderSide(order.Side),
-				Market:    order.Symbol,
-				Size:      order.ParseSize(),
-				Price:     order.ParsePrice(),
-				CreatedAt: order.ParseCreatedAt(),
-			})
-		}
-		if page.CurrentPage >= page.TotalPage {
-			break
-		} else {
-			curr++
-		}
+	for _, order := range orders {
+		out = append(out, model.Order{
+			Side:      model.NewOrderSide(order.Side),
+			Market:    order.Symbol,
+			Size:      order.ParseSize(),
+			Price:     order.ParsePrice(),
+			CreatedAt: order.ParseCreatedAt(),
+		})
 	}
 
 	return out, nil
@@ -1193,6 +1159,11 @@ func (self *Kucoin) GetSizePrec(client interface{}, market string) (int, error) 
 }
 
 func (self *Kucoin) GetMaxSize(client interface{}, base, quote string, hold bool, def float64) float64 {
+	if hold {
+		if base == "KCS" {
+			return 0
+		}
+	}
 	fn := func() int {
 		prec, err := self.GetSizePrec(client, self.FormatMarket(base, quote))
 		if err != nil {
@@ -1207,8 +1178,6 @@ func (self *Kucoin) GetMaxSize(client interface{}, base, quote string, hold bool
 func (self *Kucoin) Cancel(client interface{}, market string, side model.OrderSide) error {
 	var (
 		err    error
-		resp   *exchange.ApiResponse
-		page   *exchange.PaginationModel
 		orders exchange.OrdersModel
 	)
 
@@ -1217,29 +1186,17 @@ func (self *Kucoin) Cancel(client interface{}, market string, side model.OrderSi
 		return errors.New("invalid argument: client")
 	}
 
-	var params = map[string]string{
+	if orders, err = self.getOrders(kucoin, map[string]string{
 		"status": "active",
 		"symbol": market,
 		"side":   side.String(),
+	}); err != nil {
+		return err
 	}
 
-	var curr int64 = 1
-	for true {
-		if resp, err = kucoin.Orders(params, &exchange.PaginationParam{CurrentPage: curr, PageSize: 50}); err != nil {
+	for _, order := range orders {
+		if _, err = kucoin.CancelOrder(order.Id); err != nil {
 			return errors.Wrap(err, 1)
-		}
-		if page, err = resp.ReadPaginationData(&orders); err != nil {
-			return errors.Wrap(err, 1)
-		}
-		for _, order := range orders {
-			if _, err = kucoin.CancelOrder(order.Id); err != nil {
-				return errors.Wrap(err, 1)
-			}
-		}
-		if page.CurrentPage >= page.TotalPage {
-			break
-		} else {
-			curr++
 		}
 	}
 
@@ -1247,12 +1204,7 @@ func (self *Kucoin) Cancel(client interface{}, market string, side model.OrderSi
 }
 
 func (self *Kucoin) Buy(client interface{}, cancel bool, market string, calls model.Calls, size, deviation float64, kind model.OrderType) error {
-	var (
-		err    error
-		resp   *exchange.ApiResponse
-		page   *exchange.PaginationModel
-		orders exchange.OrdersModel
-	)
+	var err error
 
 	kucoin, ok := client.(*exchange.ApiService)
 	if !ok {
@@ -1261,34 +1213,24 @@ func (self *Kucoin) Buy(client interface{}, cancel bool, market string, calls mo
 
 	// step #1: delete the buy order(s) that are open in your book
 	if cancel {
-		var params = map[string]string{
+		var orders exchange.OrdersModel
+		if orders, err = self.getOrders(kucoin, map[string]string{
 			"status": "active",
 			"symbol": market,
 			"side":   "buy",
+			"type":   "limit",
+		}); err != nil {
+			return err
 		}
-		var curr int64 = 1
-		for true {
-			if resp, err = kucoin.Orders(params, &exchange.PaginationParam{CurrentPage: curr, PageSize: 50}); err != nil {
-				return errors.Wrap(err, 1)
-			}
-			if page, err = resp.ReadPaginationData(&orders); err != nil {
-				return errors.Wrap(err, 1)
-			}
-			for _, order := range orders {
-				// do not cancel orders that we're about to re-place
-				index := calls.IndexByPrice(order.ParsePrice())
-				if index > -1 {
-					calls[index].Skip = true
-				} else {
-					if _, err = kucoin.CancelOrder(order.Id); err != nil {
-						return errors.Wrap(err, 1)
-					}
-				}
-			}
-			if page.CurrentPage >= page.TotalPage {
-				break
+		for _, order := range orders {
+			// do not cancel orders that we're about to re-place
+			index := calls.IndexByPrice(order.ParsePrice())
+			if index > -1 {
+				calls[index].Skip = true
 			} else {
-				curr++
+				if _, err = kucoin.CancelOrder(order.Id); err != nil {
+					return errors.Wrap(err, 1)
+				}
 			}
 		}
 	}
