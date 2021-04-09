@@ -37,6 +37,9 @@ func RequestsPerSecond(request *Request) float64 {
 	if request.Path == "/api/v1/limit/orders" { // recent orders
 		return 20 // 200 reqs per 10 seconds
 	}
+	if request.Path == "/api/v1/stop-order" { // stop-loss orders
+		return 20 // 200 reqs per 10 seconds
+	}
 	return REQUESTS_PER_SECOND
 }
 

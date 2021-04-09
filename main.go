@@ -18,7 +18,7 @@ import (
 
 const (
 	APP_NAME    = "nefertiti"
-	APP_VERSION = "0.0.137"
+	APP_VERSION = "0.0.138"
 )
 
 var (

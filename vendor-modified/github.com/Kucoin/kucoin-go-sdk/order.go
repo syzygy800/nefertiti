@@ -136,6 +136,12 @@ func (as *ApiService) Orders(params map[string]string, pagination *PaginationPar
 	return as.Call(req)
 }
 
+func (as *ApiService) StopOrders(params map[string]string, pagination *PaginationParam) (*ApiResponse, error) {
+	pagination.ReadParam(params)
+	req := NewRequest(http.MethodGet, "/api/v1/stop-order", params)
+	return as.Call(req)
+}
+
 // Order returns a single order by order id.
 func (as *ApiService) Order(orderId string) (*ApiResponse, error) {
 	req := NewRequest(http.MethodGet, "/api/v1/orders/"+orderId, nil)
