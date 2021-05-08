@@ -105,7 +105,7 @@ You will need Go installed and `$GOPATH` configured.
 Update your local working branch with commits from the remote, and update all remote tracking branches.
 
   ```
-  cd $GOPATH/src/github.com/svanas
+  cd $GOPATH/src/github.com/svanas/nefertiti
   git pull
   ```
 
