@@ -480,7 +480,7 @@ func (self *Binance) sell(
 										if pricing.RoundToPrecision(adjusted, prec) > order.GetStopPrice() {
 											break
 										}
-									}									
+									}
 									if ticker > pricing.RoundToPrecision(adjusted, prec) {
 										log.Printf("[INFO] Not re-buying %s because ticker %.8f is higher than stop price %s\n", order.Symbol, ticker, order.StopPrice)
 									} else {
@@ -1405,13 +1405,16 @@ func (self *Binance) Buy(client interface{}, cancel bool, market string, calls m
 	// step 2: open the top X buy orders
 	for _, call := range calls {
 		if !call.Skip {
-			// --- BEGIN --- svanas 2018-11-30 --- <APIError> code=-1013, msg=Filter failure: MIN_NOTIONAL.
 			var (
 				oid   []byte
 				min   float64
 				qty   float64 = size
 				limit float64 = call.Price
 			)
+			if deviation != 1.0 {
+				kind, limit = call.Deviate(self, client, kind, deviation)
+			}
+			// --- BEGIN --- svanas 2018-11-30 --- <APIError> code=-1013, msg=Filter failure: MIN_NOTIONAL.
 			if min, err = self.getMinTrade(binance, market, true); err != nil {
 				return err
 			}
@@ -1430,12 +1433,6 @@ func (self *Binance) Buy(client interface{}, cancel bool, market string, calls m
 				}
 			}
 			// ---- END ---- svanas 2018-11-30 ------------------------------------------------------------
-			if deviation > 1.0 && kind == model.LIMIT {
-				var prec int
-				if prec, err = self.GetPricePrec(client, market); err == nil {
-					limit = pricing.RoundToPrecision((limit * deviation), prec)
-				}
-			}
 			oid, _, err = self.Order(client,
 				model.BUY,
 				market,

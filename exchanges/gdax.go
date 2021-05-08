@@ -732,8 +732,6 @@ func (self *Gdax) sell(
 			lastInterval = time.Now()
 		}
 	}
-
-	return nil
 }
 
 func (self *Gdax) Sell(
@@ -1160,11 +1158,8 @@ func (self *Gdax) Buy(client interface{}, cancel bool, market string, calls mode
 	for _, call := range calls {
 		if !call.Skip {
 			limit := call.Price
-			if deviation > 1.0 {
-				var prec int
-				if prec, err = self.GetPricePrec(client, market); err == nil {
-					limit = pricing.RoundToPrecision((limit * deviation), prec)
-				}
+			if deviation != 1.0 {
+				kind, limit = call.Deviate(self, client, kind, deviation)
 			}
 			order := exchange.Order{
 				Type:      model.OrderTypeString[model.LIMIT],
@@ -1174,7 +1169,12 @@ func (self *Gdax) Buy(client interface{}, cancel bool, market string, calls mode
 				ProductId: market,
 			}
 			if _, err = gdaxClient.CreateOrder(&order); err != nil {
-				return errors.Wrap(err, 1)
+				var raw []byte
+				if raw, _ = json.Marshal(order); raw == nil {
+					return errors.Wrap(err, 1)
+				} else {
+					return errors.Wrap(errors.Append(err, "\t", string(raw)), 1)
+				}
 			}
 		}
 	}

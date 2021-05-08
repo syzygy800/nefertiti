@@ -641,8 +641,6 @@ func (self *Bitstamp) Sell(
 			}
 		}
 	}
-
-	return nil
 }
 
 func (self *Bitstamp) Order(
@@ -967,11 +965,8 @@ func (self *Bitstamp) Buy(client interface{}, cancel bool, market string, calls 
 				qty   float64 = size
 				limit float64 = call.Price
 			)
-			if deviation > 1.0 {
-				var prec int
-				if prec, err = self.GetPricePrec(client, market); err == nil {
-					limit = pricing.RoundToPrecision((limit * deviation), prec)
-				}
+			if deviation != 1.0 {
+				kind, limit = call.Deviate(self, client, kind, deviation)
 			}
 			// --- BEGIN --- svanas 2020-01-06 --- Minimum order size is 25.0 EUR ---
 			if min, err = exchange.GetMinimumOrder(bitstamp, market); err != nil {

@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/go-errors/errors"
+	"github.com/svanas/nefertiti/pricing"
 )
 
 type (
@@ -97,6 +98,27 @@ func (c *Call) Corrupt(orderType OrderType) bool {
 		}
 	}
 	return false
+}
+
+// Multiply the buy target. Returns (new order type, deviated buy target). Does not modify the buy signal itself.
+func (c *Call) Deviate(exchange Exchange, client interface{}, kind OrderType, mult float64) (OrderType, float64) {
+	if mult != 1.0 {
+		limit := c.Price
+		if limit == 0 {
+			ticker, err := exchange.GetTicker(client, c.Market)
+			if err == nil {
+				limit = ticker
+			}
+		}
+		if limit > 0 {
+			prec, err := exchange.GetPricePrec(client, c.Market)
+			if err == nil {
+				limit = pricing.RoundToPrecision((limit * mult), prec)
+				return LIMIT, limit
+			}
+		}
+	}
+	return kind, c.Price
 }
 
 func (c Calls) HasBuy() bool {

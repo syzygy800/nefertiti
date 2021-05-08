@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-errors/errors"
+	"github.com/svanas/nefertiti/uuid"
 )
 
 const (
@@ -138,24 +139,68 @@ func (client *Client) post(path string, values url.Values) ([]byte, error) {
 	// set the endpoint for this request
 	endpoint.Path += path
 
-	// add required key, signature & nonce to values
-	nonce := strconv.FormatInt(time.Now().UnixNano(), 10)
-	mac := hmac.New(sha256.New, []byte(client.Secret))
-	mac.Write([]byte(nonce + client.CustomerId + client.Key))
-	values.Set("key", client.Key)
-	values.Set("signature", strings.ToUpper(hex.EncodeToString(mac.Sum(nil))))
-	values.Set("nonce", nonce)
+	// v1 authentication (deprecated)
+	// nonce := strconv.FormatInt(time.Now().UnixNano(), 10)
+	// mac := hmac.New(sha256.New, []byte(client.Secret))
+	// mac.Write([]byte(nonce + client.CustomerId + client.Key))
+	// values.Set("key", client.Key)
+	// values.Set("signature", strings.ToUpper(hex.EncodeToString(mac.Sum(nil))))
+	// values.Set("nonce", nonce)
 
 	// encode the url.Values in the body
+	var payload string
+	payload = values.Encode()
 	var input *strings.Reader
-	input = strings.NewReader(values.Encode())
+	input = strings.NewReader(payload)
 
 	// create the request
 	var req *http.Request
 	if req, err = http.NewRequest("POST", endpoint.String(), input); err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	// there is no need to set Content-Type if there is no body
+	if payload != "" {
+		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	}
+
+	// compute v2 authentication headers
+	x_auth := "BITSTAMP" + " " + client.Key
+	x_auth_nonce := strings.ToLower(uuid.New().Long())
+	x_auth_timestamp := strconv.FormatInt((time.Now().UnixNano() / 1000000), 10)
+	x_auth_version := "v2"
+
+	// there is no need to set Content-Type if there is no body
+	content_type := func() string {
+		if payload == "" {
+			return ""
+		}
+		return "application/x-www-form-urlencoded"
+	}
+
+	// v2 auth message that we will need to sign
+	x_auth_message := x_auth +
+		req.Method +
+		req.Host +
+		"/api/v2" + path +
+		"" +
+		content_type() +
+		x_auth_nonce +
+		x_auth_timestamp +
+		x_auth_version +
+		payload
+
+	// compute the v2 signature
+	mac := hmac.New(sha256.New, []byte(client.Secret))
+	mac.Write([]byte(x_auth_message))
+	x_auth_signature := strings.ToUpper(hex.EncodeToString(mac.Sum(nil)))
+
+	// add v2 autentication headers
+	req.Header.Add("X-Auth", x_auth)
+	req.Header.Add("X-Auth-Nonce", x_auth_nonce)
+	req.Header.Add("X-Auth-Timestamp", x_auth_timestamp)
+	req.Header.Add("X-Auth-Version", x_auth_version)
+	req.Header.Add("X-Auth-Signature", x_auth_signature)
 
 	// submit the http request
 	var resp *http.Response

@@ -174,6 +174,7 @@ func (self *Kucoin) getMinSize(client *exchange.ApiService, market string, cache
 	return 0, nil
 }
 
+// getOrders returns a list your current orders.
 func (self *Kucoin) getOrders(client *exchange.ApiService, params map[string]string) (exchange.OrdersModel, error) {
 	var (
 		err    error
@@ -217,6 +218,44 @@ func (self *Kucoin) getOrders(client *exchange.ApiService, params map[string]str
 		}
 		output = append(output, orders...)
 		if page.CurrentPage >= page.TotalPage {
+			break
+		} else {
+			curr++
+		}
+	}
+
+	return output, nil
+}
+
+// getRecentFills returns a list of your recent fills, up to max orders.
+func (self *Kucoin) getRecentFills(client *exchange.ApiService, max int) (exchange.FillsModel, error) {
+	const PAGE_SIZE = 100
+
+	var (
+		err    error
+		curr   int64 = 1
+		output exchange.FillsModel
+	)
+
+	for {
+		var resp *exchange.ApiResponse
+		if resp, err = client.Fills(map[string]string{}, &exchange.PaginationParam{CurrentPage: curr, PageSize: PAGE_SIZE}); err != nil {
+			return nil, errors.Wrap(err, 1)
+		}
+		var (
+			page   *exchange.PaginationModel
+			orders exchange.FillsModel
+		)
+		if page, err = resp.ReadPaginationData(&orders); err != nil {
+			return nil, errors.Wrap(err, 1)
+		}
+		if len(orders) == 0 {
+			if page.CurrentPage == 1 && page.TotalPage > 1 || page.CurrentPage > 1 {
+				errors.Errorf("/api/v1/fills?currentPage=%d&pageSize=%d returned 0 orders, expected at least 1.", curr, PAGE_SIZE)
+			}
+		}
+		output = append(output, orders...)
+		if len(output) >= max || page.CurrentPage >= page.TotalPage {
 			break
 		} else {
 			curr++
@@ -296,35 +335,10 @@ func (self *Kucoin) sell(
 ) (exchange.FillsModel, error) {
 	var err error
 
-	// get the markets
-	var markets []model.Market
-	if markets, err = self.GetMarkets(false, sandbox); err != nil {
-		return old, err
-	}
-
 	// get my filled orders
-	var (
-		curr int64 = 1
-		new  exchange.FillsModel
-	)
-	for true {
-		var resp *exchange.ApiResponse
-		if resp, err = client.Fills(map[string]string{}, &exchange.PaginationParam{CurrentPage: curr, PageSize: 50}); err != nil {
-			return old, errors.Wrap(err, 1)
-		}
-		var (
-			page   *exchange.PaginationModel
-			orders exchange.FillsModel
-		)
-		if page, err = resp.ReadPaginationData(&orders); err != nil {
-			return old, errors.Wrap(err, 1)
-		}
-		new = append(new, orders...)
-		if page.CurrentPage >= page.TotalPage {
-			break
-		} else {
-			curr++
-		}
+	var new exchange.FillsModel
+	if new, err = self.getRecentFills(client, 500); err != nil {
+		return old, err
 	}
 
 	if len(old) > 0 {
@@ -340,6 +354,12 @@ func (self *Kucoin) sell(
 		return old, errors.Errorf("/api/v1/fills returned %d orders, expected at least %d.", len(new), len(old))
 	WeAreGood:
 		// nothing to see here, carry on
+	}
+
+	// get the markets
+	var markets []model.Market
+	if markets, err = self.GetMarkets(false, sandbox); err != nil {
+		return old, err
 	}
 
 	type (
@@ -475,12 +495,12 @@ func (self *Kucoin) sell(
 		amount := buy.Size
 		bought := avg(buy)
 
-		// var sp int
-		// if sp, err = self.GetSizePrec(client, symbol); err != nil {
-		// 	return new, err
-		// } else {
-		// 	amount = pricing.FloorToPrecision(amount, sp)
-		// }
+		var sp int
+		if sp, err = self.GetSizePrec(client, symbol); err != nil {
+			return new, err
+		} else {
+			amount = pricing.FloorToPrecision(amount, sp)
+		}
 
 		if bought == 0 {
 			if bought, err = self.GetTicker(client, symbol); err != nil {
@@ -506,14 +526,14 @@ func (self *Kucoin) sell(
 			// 	}
 			// }
 			// ---- END ---- svanas 2019-02-19 ----------------------------------------
-			var prec int
-			if prec, err = self.GetPricePrec(client, symbol); err == nil {
+			var pp int
+			if pp, err = self.GetPricePrec(client, symbol); err == nil {
 				if strategy == model.STRATEGY_TRAILING_STOP_LOSS || strategy == model.STRATEGY_STOP_LOSS {
 					var ticker float64
 					if ticker, err = self.GetTicker(client, symbol); err == nil {
 						sold := false
 						if strategy == model.STRATEGY_STOP_LOSS {
-							if ticker >= pricing.Multiply(bought, mult, prec) {
+							if ticker >= pricing.Multiply(bought, mult, pp) {
 								_, _, err = self.Order(client,
 									model.SELL,
 									symbol,
@@ -533,7 +553,7 @@ func (self *Kucoin) sell(
 							_, err = self.StopLoss(client,
 								symbol,
 								amount,
-								pricing.RoundToPrecision(stop, prec),
+								pricing.RoundToPrecision(stop, pp),
 								model.MARKET, "",
 							)
 						}
@@ -545,7 +565,7 @@ func (self *Kucoin) sell(
 							model.SELL,
 							symbol,
 							amount,
-							pricing.Multiply(bought, mult, prec),
+							pricing.Multiply(bought, mult, pp),
 							model.LIMIT, "",
 						)
 					}
@@ -678,28 +698,9 @@ func (self *Kucoin) Sell(
 	)
 
 	// get my filled orders
-	var (
-		curr   int64 = 1
-		filled exchange.FillsModel
-	)
-	for true {
-		var resp *exchange.ApiResponse
-		if resp, err = client.Fills(map[string]string{}, &exchange.PaginationParam{CurrentPage: curr, PageSize: 50}); err != nil {
-			return errors.Wrap(err, 1)
-		}
-		var (
-			page   *exchange.PaginationModel
-			orders exchange.FillsModel
-		)
-		if page, err = resp.ReadPaginationData(&orders); err != nil {
-			return errors.Wrap(err, 1)
-		}
-		filled = append(filled, orders...)
-		if page.CurrentPage >= page.TotalPage {
-			break
-		} else {
-			curr++
-		}
+	var filled exchange.FillsModel
+	if filled, err = self.getRecentFills(client, 500); err != nil {
+		return err
 	}
 
 	// get my opened orders
@@ -1254,11 +1255,8 @@ func (self *Kucoin) Buy(client interface{}, cancel bool, market string, calls mo
 	for _, call := range calls {
 		if !call.Skip {
 			limit := call.Price
-			if deviation > 1.0 && kind == model.LIMIT {
-				var prec int
-				if prec, err = self.GetPricePrec(client, market); err == nil {
-					limit = pricing.RoundToPrecision((limit * deviation), prec)
-				}
+			if deviation != 1.0 {
+				kind, limit = call.Deviate(self, client, kind, deviation)
 			}
 			_, _, err = self.Order(client,
 				model.BUY,

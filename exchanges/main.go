@@ -51,7 +51,7 @@ func getPrecFromStr(value string, def int) int {
 	if err == nil && i == 1 {
 		return 0
 	} else {
-	return def
+		return def
 	}
 }
 

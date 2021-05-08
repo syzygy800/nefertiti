@@ -461,8 +461,6 @@ func (self *CexIo) Sell(
 			}
 		}
 	}
-
-	return nil
 }
 
 func (self *CexIo) Order(
@@ -790,11 +788,8 @@ func (self *CexIo) Buy(client interface{}, cancel bool, market string, calls mod
 	for _, call := range calls {
 		if !call.Skip {
 			limit := call.Price
-			if deviation > 1.0 {
-				var prec int
-				if prec, err = self.GetPricePrec(client, market); err == nil {
-					limit = pricing.RoundToPrecision((limit * deviation), prec)
-				}
+			if deviation != 1.0 {
+				kind, limit = call.Deviate(self, client, kind, deviation)
 			}
 			if _, err = cexio.PlaceOrder(symbol1, symbol2, exchange.BUY, size, limit); err != nil {
 				return err

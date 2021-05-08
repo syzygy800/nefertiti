@@ -542,8 +542,6 @@ func (self *CryptoDotCom) Sell(
 			}
 		}
 	}
-
-	return nil
 }
 
 func (self *CryptoDotCom) Order(
@@ -838,11 +836,8 @@ func (self *CryptoDotCom) Buy(client interface{}, cancel bool, market string, ca
 	for _, call := range calls {
 		if !call.Skip {
 			limit := call.Price
-			if deviation > 1.0 {
-				var prec int
-				if prec, err = self.GetPricePrec(client, market); err == nil {
-					limit = pricing.RoundToPrecision((limit * deviation), prec)
-				}
+			if deviation != 1.0 {
+				kind, limit = call.Deviate(self, client, kind, deviation)
 			}
 			if kind == model.MARKET {
 				_, err = crypto.CreateOrder(market, exchange.BUY, exchange.MARKET, size, 0)

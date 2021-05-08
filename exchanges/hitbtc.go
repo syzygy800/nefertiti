@@ -551,8 +551,6 @@ func (self *HitBTC) Sell(
 			}
 		}
 	}
-
-	return nil
 }
 
 func (self *HitBTC) Order(
@@ -898,11 +896,8 @@ func (self *HitBTC) Buy(client interface{}, cancel bool, market string, calls mo
 	for _, call := range calls {
 		if !call.Skip {
 			limit := call.Price
-			if deviation > 1.0 && kind == model.LIMIT {
-				var prec int
-				if prec, err = self.GetPricePrec(client, market); err == nil {
-					limit = pricing.RoundToPrecision((limit * deviation), prec)
-				}
+			if deviation != 1.0 {
+				kind, limit = call.Deviate(self, client, kind, deviation)
 			}
 			_, _, err = self.Order(client,
 				model.BUY,
