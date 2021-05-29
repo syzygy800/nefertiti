@@ -173,7 +173,7 @@ type CryptoBaseScanner struct {
 // https://cryptobasescanner.docs.apiary.io/#
 func (self *CryptoBaseScanner) get(
 	exchange model.Exchange,
-	quote string,
+	quote model.Assets,
 	algorithm CryptoBaseScannerAlgo,
 	btc_volume_min,
 	success_ratio float64,
@@ -229,7 +229,7 @@ func (self *CryptoBaseScanner) get(
 	// add new bases to the cache
 	for _, base := range latest.Bases {
 		if exchange.GetInfo().Equals(base.ExchangeName) {
-			if strings.EqualFold(base.QuoteCurrency, quote) {
+			if quote.HasAsset(base.QuoteCurrency) {
 				var buy bool
 				if buy, err = base.Buy(exchange, algorithm, btc_volume_min, success_ratio, sandbox, debug); err != nil {
 					log.Printf("[ERROR] %v\n", err)
@@ -294,7 +294,7 @@ func (self *CryptoBaseScanner) GetOrderType() model.OrderType {
 
 func (self *CryptoBaseScanner) GetMarkets(
 	exchange model.Exchange,
-	quote string,
+	quote model.Assets,
 	btc_volume_min,
 	btc_pump_max float64,
 	valid time.Duration,

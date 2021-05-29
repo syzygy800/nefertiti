@@ -67,11 +67,10 @@ func (c *SellCommand) Run(args []string) int {
 		return c.ReturnError(err)
 	}
 
-	hold := flag.Get("hold").String()
-	if hold != "" {
-		markets := strings.Split(hold, ",")
-		for _, market := range markets {
-			if model.HasMarket(all, market) == false {
+	hold := flag.Get("hold").Split(",")
+	if len(hold) > 0 && hold[0] != "" {
+		for _, market := range hold {
+			if market != "" && !model.HasMarket(all, market) {
 				return c.ReturnError(fmt.Errorf("market %s does not exist", market))
 			}
 		}
@@ -105,7 +104,7 @@ func (c *SellCommand) Run(args []string) int {
 		return nil
 	}
 
-	if err = exchange.Sell(time.Now(), strings.Split(hold, ","), sandbox, flag.Exists("tweet"), flag.Debug(), success); err != nil {
+	if err = exchange.Sell(time.Now(), hold, sandbox, flag.Exists("tweet"), flag.Debug(), success); err != nil {
 		return c.ReturnError(err)
 	}
 

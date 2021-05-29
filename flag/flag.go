@@ -21,18 +21,29 @@ func New(exists bool, val string) *Flag {
 	}
 }
 
-func (flg *Flag) String() string {
-	return flg.value
+func (self *Flag) String() string {
+	return self.value
 }
 
-func (flg *Flag) Int64() (out int64, err error) {
-	out, err = strconv.ParseInt(flg.value, 0, 0)
-	return
+func (self *Flag) Split(sep string) []string {
+	return strings.Split(self.value, sep)
 }
 
-func (flg *Flag) Float64() (out float64, err error) {
-	out, err = strconv.ParseFloat(flg.value, 64)
-	return
+func (self *Flag) Contains(sep, value string) bool {
+	for _, sub := range self.Split(sep) {
+		if strings.EqualFold(sub, value) {
+			return true
+		}
+	}
+	return false
+}
+
+func (self *Flag) Int64() (int64, error) {
+	return strconv.ParseInt(self.value, 0, 0)
+}
+
+func (self *Flag) Float64() (float64, error) {
+	return strconv.ParseFloat(self.value, 64)
 }
 
 // Get() finds a named flag in the args list and returns its value

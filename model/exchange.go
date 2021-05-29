@@ -48,4 +48,5 @@ type Exchange interface {
 	GetMaxSize(client interface{}, base, quote string, hold bool, def float64) float64
 	Cancel(client interface{}, market string, side OrderSide) error
 	Buy(client interface{}, cancel bool, market string, calls Calls, size, deviation float64, kind OrderType) error
+	IsLeveragedToken(name string) bool
 }

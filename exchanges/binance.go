@@ -275,7 +275,7 @@ func (self *Binance) notify(err error, level int64, service model.Notify) {
 
 	msg := fmt.Sprintf("%s %v", prefix, err)
 	_, ok := err.(*errors.Error)
-	if ok {
+	if ok && flag.Debug() {
 		log.Printf("[ERROR] %s", err.(*errors.Error).ErrorStack(prefix, ""))
 	} else {
 		log.Printf("[ERROR] %s", msg)
@@ -462,39 +462,22 @@ func (self *Binance) sell(
 			}
 			log.Println("[FILLED] " + string(data))
 
-			// has a stop loss been filled? then place a buy order double the order size
+			// has a stop loss been filled? then place a buy order double the order size *** if --dca is included ***
 			if side == model.SELL {
 				if strategy == model.STRATEGY_STOP_LOSS {
 					if order.Type == string(exchange.OrderTypeStopLoss) || order.Type == string(exchange.OrderTypeStopLossLimit) {
 						if model.ParseMetaData(order.ClientOrderId).Trail {
 							// do not mistakenly re-buy trailing profit orders that were filled
-						} else {
-							var ticker float64
-							if ticker, err = self.GetTicker(client, order.Symbol); err == nil {
-								var prec int
-								if prec, err = self.GetPricePrec(client, order.Symbol); err == nil {
-									// here we allow for a small 1% pump (otherwise, we wouldn't want to buy back in)
-									adjusted := order.GetStopPrice()
-									for true {
-										adjusted = adjusted * 1.01
-										if pricing.RoundToPrecision(adjusted, prec) > order.GetStopPrice() {
-											break
-										}
-									}
-									if ticker > pricing.RoundToPrecision(adjusted, prec) {
-										log.Printf("[INFO] Not re-buying %s because ticker %.8f is higher than stop price %s\n", order.Symbol, ticker, order.StopPrice)
-									} else {
-										size := 2 * order.GetSize()
-										if prec, err = self.GetSizePrec(client, order.Symbol); err == nil {
-											_, _, err = self.Order(client,
-												model.BUY,
-												order.Symbol,
-												pricing.RoundToPrecision(size, prec),
-												0, model.MARKET, "",
-											)
-										}
-									}
-								}
+						} else if flag.Exists("dca") {
+							var prec int
+							if prec, err = self.GetSizePrec(client, order.Symbol); err == nil {
+								size := 2 * order.GetSize()
+								_, _, err = self.Order(client,
+									model.BUY,
+									order.Symbol,
+									pricing.RoundToPrecision(size, prec),
+									0, model.MARKET, "",
+								)
 							}
 							if err != nil {
 								return new, errors.Append(err, "\t", string(data))
@@ -712,7 +695,7 @@ func (self *Binance) Sell(
 	)
 	flg := flag.Get("quote")
 	if flg.Exists {
-		quotes = strings.Split(flg.String(), ",")
+		quotes = flg.Split(",")
 	} else {
 		flag.Set("quote", strings.Join(quotes, ","))
 	}
@@ -740,7 +723,7 @@ func (self *Binance) Sell(
 		var (
 			level    int64          = notify.Level()
 			strategy model.Strategy = model.GetStrategy()
-			quotes   []string       = strings.Split(flag.Get("quote").String(), ",")
+			quotes   []string       = flag.Get("quote").Split(",")
 		)
 		// listen to the filled orders, look for newly filled orders, automatically place new sell orders.
 		filled, err = self.sell(client, strategy, quotes, model.GetMult(), hold, service, twitter, level, filled, sandbox, debug)
@@ -1467,6 +1450,10 @@ func (self *Binance) Buy(client interface{}, cancel bool, market string, calls m
 	}
 
 	return nil
+}
+
+func (self *Binance) IsLeveragedToken(name string) bool {
+	return (len(name) > 2 && strings.HasSuffix(strings.ToUpper(name), "UP")) || (len(name) > 4 && strings.HasSuffix(strings.ToUpper(name), "DOWN"))
 }
 
 func NewBinance() model.Exchange {

@@ -134,7 +134,7 @@ func (self *CryptoDotCom) error(err error, level int64, service model.Notify) {
 
 	msg := fmt.Sprintf("%s %v", prefix, err)
 	_, ok := err.(*errors.Error)
-	if ok {
+	if ok && flag.Debug() {
 		log.Printf("[ERROR] %s", err.(*errors.Error).ErrorStack(prefix, ""))
 	} else {
 		log.Printf("[ERROR] %s", msg)
@@ -492,7 +492,7 @@ func (self *CryptoDotCom) Sell(
 
 	flg := flag.Get("quote")
 	if flg.Exists {
-		quotes = strings.Split(flg.String(), ",")
+		quotes = flg.Split(",")
 	} else {
 		flag.Set("quote", strings.Join(quotes, ","))
 	}
@@ -851,6 +851,10 @@ func (self *CryptoDotCom) Buy(client interface{}, cancel bool, market string, ca
 	}
 
 	return nil
+}
+
+func (self *CryptoDotCom) IsLeveragedToken(name string) bool {
+	return false
 }
 
 func NewCryptoDotCom() model.Exchange {

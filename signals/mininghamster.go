@@ -91,7 +91,7 @@ func (self *MiningHamster) GetOrderType() model.OrderType {
 
 func (self *MiningHamster) GetMarkets(
 	exchange model.Exchange,
-	quote string,
+	quote model.Assets,
 	btc_volume_min,
 	btc_pump_max float64,
 	valid time.Duration,
@@ -118,7 +118,7 @@ func (self *MiningHamster) GetMarkets(
 				log.Printf("[DEBUG] %s", string(msg))
 			}
 		}
-		if strings.EqualFold(signal.QuoteCurrency(), quote) {
+		if quote.HasAsset(signal.QuoteCurrency()) {
 			market := exchange.FormatMarket(signal.BaseCurrency(), signal.QuoteCurrency())
 			if out == nil || out.IndexOf(market) == -1 {
 				out = append(out, market)

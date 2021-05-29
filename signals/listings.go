@@ -52,7 +52,7 @@ func (self *Listings) getClient(exchange model.Exchange, sandbox bool) (interfac
 
 func (self *Listings) GetMarkets(
 	exchange model.Exchange,
-	quote string,
+	quote model.Assets,
 	btc_volume_min,
 	btc_pump_max float64,
 	valid time.Duration,
@@ -83,7 +83,7 @@ func (self *Listings) GetMarkets(
 				var ticker float64
 				ticker, err = exchange.GetTicker(client, market.Name)
 				if err == nil && ticker > 0 {
-					if strings.EqualFold(market.Quote, quote) {
+					if quote.HasAsset(market.Quote) {
 						self.cache = append(self.cache, Listing{
 							Market:  market.Name,
 							Price:   ticker,

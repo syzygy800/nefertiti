@@ -197,7 +197,7 @@ func (self *Bittrex) error(err error, level int64, service model.Notify) {
 
 	msg := fmt.Sprintf("%s %v", prefix, err)
 	_, ok := err.(*errors.Error)
-	if ok {
+	if ok && flag.Debug() {
 		log.Printf("[ERROR] %s", err.(*errors.Error).ErrorStack(prefix, ""))
 	} else {
 		log.Printf("[ERROR] %s", msg)
@@ -219,7 +219,7 @@ func (self *Bittrex) errorEx(err error, order *exchange.Order, level int64, serv
 
 	msg := fmt.Sprintf("%s %v", prefix, err)
 	_, ok := err.(*errors.Error)
-	if !ok {
+	if !ok || !flag.Debug() {
 		log.Printf("[ERROR] %s", msg)
 	} else {
 		if order == nil {
@@ -445,6 +445,14 @@ func (self *Bittrex) sell(
 						quote string
 					)
 					base, quote, err = model.ParseMarket(markets, order.MarketName())
+					// --- BEGIN --- svanas 2021-05-28 --- do not error on new listings ---
+					if err != nil {
+						markets, err = self.GetMarkets(false, sandbox)
+						if err == nil {
+							base, quote, err = model.ParseMarket(markets, order.MarketName())
+						}
+					}
+					// ---- END ---- svanas 2021-05-28 ------------------------------------
 					if err == nil {
 						var prec int
 						if prec, err = self.GetPricePrec(client, order.MarketName()); err == nil {
@@ -961,6 +969,10 @@ func (self *Bittrex) Buy(client interface{}, cancel bool, market string, calls m
 	}
 
 	return nil
+}
+
+func (self *Bittrex) IsLeveragedToken(name string) bool {
+	return len(name) > 4 && (strings.HasSuffix(strings.ToUpper(name), "BEAR") || strings.HasSuffix(strings.ToUpper(name), "BULL"))
 }
 
 func NewBittrex() model.Exchange {

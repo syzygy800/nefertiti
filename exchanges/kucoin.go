@@ -101,7 +101,7 @@ func (self *Kucoin) error(err error, level int64, service model.Notify) {
 	}
 
 	_, ok := err.(*errors.Error)
-	if ok {
+	if ok && flag.Debug() {
 		log.Printf("[ERROR] %s", err.(*errors.Error).ErrorStack(prefix, ""))
 	} else {
 		log.Printf("[ERROR] %s", msg)
@@ -1272,6 +1272,10 @@ func (self *Kucoin) Buy(client interface{}, cancel bool, market string, calls mo
 	}
 
 	return nil
+}
+
+func (self *Kucoin) IsLeveragedToken(name string) bool {
+	return len(name) > 2 && (strings.HasSuffix(strings.ToUpper(name), "3L") || strings.HasSuffix(strings.ToUpper(name), "3S"))
 }
 
 func NewKucoin() model.Exchange {

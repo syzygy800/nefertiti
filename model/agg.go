@@ -15,17 +15,63 @@ var (
 // returns (agg, dip, error)
 func GetAgg(exchange Exchange, market string, dip, pip, max, min float64, top int, strict, sandbox bool) (float64, float64, error) {
 	var (
-		err error
-		out float64
+		err    error
+		client interface{}
+		ticker float64
+		stats  *Stats  // 24-hour statistics
+		avg    float64 // 24-hour average
 	)
+
+	if client, err = exchange.GetClient(false, sandbox); err != nil {
+		return 0, dip, err
+	}
+
+	if ticker, err = exchange.GetTicker(client, market); err != nil {
+		return 0, dip, err
+	}
+
+	if stats, err = exchange.Get24h(client, market); err != nil {
+		return 0, dip, err
+	}
+
+	if avg, err = stats.Avg(exchange, sandbox); err != nil {
+		return 0, dip, err
+	}
+
+	return GetAggEx(exchange, client, market, ticker, avg, dip, pip, max, min, top, strict)
+}
+
+// returns (agg, dip, error)
+func GetAggEx(
+	exchange Exchange,
+	client interface{},
+	market string,
+	ticker float64,
+	avg float64,
+	dip, pip float64,
+	max, min float64,
+	top int,
+	strict bool,
+) (float64, float64, error) {
+	var (
+		err  error
+		out  float64
+		book interface{} // bids
+	)
+
 	Max := func(a, b int) int {
 		if a > b {
 			return a
 		}
 		return b
 	}
+
+	if book, err = exchange.GetBook(client, market, BOOK_SIDE_BIDS); err != nil {
+		return 0, dip, err
+	}
+
 	for cnt := Max(top, 4); cnt > 0; cnt-- {
-		out, err = getAgg(exchange, market, dip, pip, max, min, cnt, sandbox)
+		out, err = getAgg(exchange, client, market, ticker, avg, book, dip, pip, max, min, cnt)
 		if err == nil {
 			return out, dip, err
 		} else {
@@ -34,12 +80,13 @@ func GetAgg(exchange Exchange, market string, dip, pip, max, min float64, top in
 			}
 		}
 	}
+
 	if !strict && dip > 0 {
 		n := math.Round(dip) - 1
 		if n > 0 {
 			for i := n; i >= 0; i-- {
 				for cnt := Max(top, 4); cnt >= top; cnt-- {
-					out, err = getAgg(exchange, market, i, pip, max, min, cnt, sandbox)
+					out, err = getAgg(exchange, client, market, ticker, avg, book, i, pip, max, min, cnt)
 					if err == nil {
 						return out, i, err
 					} else {
@@ -51,6 +98,7 @@ func GetAgg(exchange Exchange, market string, dip, pip, max, min float64, top in
 			}
 		}
 	}
+
 	if err != nil {
 		return 0, dip, err
 	} else {
@@ -58,7 +106,17 @@ func GetAgg(exchange Exchange, market string, dip, pip, max, min float64, top in
 	}
 }
 
-func getAgg(exchange Exchange, market string, dip, pip, max, min float64, cnt int, sandbox bool) (float64, error) {
+func getAgg(
+	exchange Exchange,
+	client interface{},
+	market string,
+	ticker float64,
+	avg float64,
+	book1 interface{},
+	dip, pip float64,
+	max, min float64,
+	cnt int,
+) (float64, error) {
 	var (
 		ok  bool
 		err error
@@ -72,31 +130,6 @@ func getAgg(exchange Exchange, market string, dip, pip, max, min float64, cnt in
 		0.8, // 20
 		0.5, // 10
 		0.5, // 5
-	}
-
-	var client interface{}
-	if client, err = exchange.GetClient(false, sandbox); err != nil {
-		return 0, err
-	}
-
-	var ticker float64
-	if ticker, err = exchange.GetTicker(client, market); err != nil {
-		return 0, err
-	}
-
-	var stats *Stats
-	if stats, err = exchange.Get24h(client, market); err != nil {
-		return 0, err
-	}
-
-	var avg float64
-	if avg, err = stats.Avg(exchange, sandbox); err != nil {
-		return 0, err
-	}
-
-	var book1 interface{}
-	if book1, err = exchange.GetBook(client, market, BOOK_SIDE_BIDS); err != nil {
-		return 0, err
 	}
 
 	var agg float64 = 500

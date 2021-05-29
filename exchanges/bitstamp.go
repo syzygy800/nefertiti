@@ -95,7 +95,7 @@ func (self *Bitstamp) error(err error, level int64, service model.Notify) {
 
 	msg := fmt.Sprintf("%s %v", prefix, err)
 	_, ok := err.(*errors.Error)
-	if ok {
+	if ok && flag.Debug() {
 		log.Printf("[ERROR] %s", err.(*errors.Error).ErrorStack(prefix, ""))
 	} else {
 		log.Printf("[ERROR] %s", msg)
@@ -1008,6 +1008,10 @@ func (self *Bitstamp) Buy(client interface{}, cancel bool, market string, calls 
 	}
 
 	return nil
+}
+
+func (self *Bitstamp) IsLeveragedToken(name string) bool {
+	return false
 }
 
 func NewBitstamp() model.Exchange {

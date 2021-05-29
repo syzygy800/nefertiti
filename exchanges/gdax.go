@@ -1182,6 +1182,10 @@ func (self *Gdax) Buy(client interface{}, cancel bool, market string, calls mode
 	return nil
 }
 
+func (self *Gdax) IsLeveragedToken(name string) bool {
+	return false
+}
+
 func NewGdax() model.Exchange {
 	return &Gdax{
 		ExchangeInfo: &model.ExchangeInfo{

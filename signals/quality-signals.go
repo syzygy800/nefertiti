@@ -239,7 +239,7 @@ func (self *CryptoQualitySignals) GetOrderType() model.OrderType {
 
 func (self *CryptoQualitySignals) GetMarkets(
 	exchange model.Exchange,
-	quote string,
+	quote model.Assets,
 	btc_volume_min,
 	btc_pump_max float64,
 	valid time.Duration,
@@ -272,7 +272,7 @@ func (self *CryptoQualitySignals) GetMarkets(
 	var out model.Markets
 	for _, signal := range self.cache {
 		if signal.Buy(exchange, risk_level, debug) {
-			if strings.EqualFold(signal.Quote, quote) {
+			if quote.HasAsset(signal.Quote) {
 				market := signal.Market(exchange)
 				if out == nil || out.IndexOf(market) == -1 {
 					out = append(out, market)

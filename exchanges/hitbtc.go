@@ -119,7 +119,7 @@ func (self *HitBTC) error(err error, level int64, service model.Notify) {
 
 	msg := fmt.Sprintf("%s %v", prefix, err)
 	_, ok := err.(*errors.Error)
-	if ok {
+	if ok && flag.Debug() {
 		log.Printf("[ERROR] %s", err.(*errors.Error).ErrorStack(prefix, ""))
 	} else {
 		log.Printf("[ERROR] %s", msg)
@@ -913,6 +913,10 @@ func (self *HitBTC) Buy(client interface{}, cancel bool, market string, calls mo
 	}
 
 	return nil
+}
+
+func (self *HitBTC) IsLeveragedToken(name string) bool {
+	return false
 }
 
 func NewHitBTC() model.Exchange {

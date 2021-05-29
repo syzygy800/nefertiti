@@ -18,7 +18,7 @@ import (
 
 const (
 	APP_NAME    = "nefertiti"
-	APP_VERSION = "0.0.142"
+	APP_VERSION = "0.0.149"
 )
 
 var (
@@ -144,7 +144,7 @@ func main() {
 	if err != nil {
 		prefix := errors.FormatCaller(cnt, file, line)
 		_, ok := err.(*errors.Error)
-		if ok {
+		if ok && flag.Debug() {
 			log.Printf("[ERROR] %s", err.(*errors.Error).ErrorStack(prefix, ""))
 		} else {
 			log.Printf("[ERROR] %s", fmt.Sprintf("%s %v", prefix, err))

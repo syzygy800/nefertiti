@@ -28,10 +28,20 @@ func (c cache) indexByMarket(market string) int {
 }
 
 type Volume struct {
+	apiKey string
 	cache
 }
 
 func (self *Volume) Init() error {
+	if self.apiKey == "" {
+		data, err := passphrase.Read("ethplorer.io API key")
+		if err == nil {
+			self.apiKey = string(data)
+		}
+		if self.apiKey == "" {
+			self.apiKey = ethplorer.FREE_KEY
+		}
+	}
 	return nil
 }
 
@@ -53,7 +63,7 @@ func (self *Volume) GetOrderType() model.OrderType {
 
 func (self *Volume) get(
 	exchange model.Exchange,
-	quote string,
+	quote model.Assets,
 	btc_volume_min,
 	diff float64,
 	valid time.Duration,
@@ -62,7 +72,7 @@ func (self *Volume) get(
 	var err error
 
 	var client *ethplorer.Client
-	client = ethplorer.New(ethplorer.FREE_KEY)
+	client = ethplorer.New(self.apiKey)
 
 	var top []ethplorer.Top
 	if top, err = client.GetTop(ethplorer.ByTradeVolume); err != nil {
@@ -80,16 +90,18 @@ func (self *Volume) get(
 			if markets, err = exchange.GetMarkets(true, sandbox); err != nil {
 				return err
 			}
-			market := exchange.FormatMarket(token.Symbol, quote)
-			if model.HasMarket(markets, market) {
-				if debug {
-					log.Printf("[DEBUG] %s %.2f%%", token.Symbol, token.VolumeDiff())
-				}
-				if self.cache.indexByMarket(market) == -1 {
-					self.cache = append(self.cache, signal{
-						Market:  market,
-						Created: time.Now(),
-					})
+			for _, asset := range quote {
+				market := exchange.FormatMarket(token.Symbol, asset)
+				if model.HasMarket(markets, market) {
+					if debug {
+						log.Printf("[DEBUG] %s %.2f%%", token.Symbol, token.VolumeDiff())
+					}
+					if self.cache.indexByMarket(market) == -1 {
+						self.cache = append(self.cache, signal{
+							Market:  market,
+							Created: time.Now(),
+						})
+					}
 				}
 			}
 		}
@@ -112,7 +124,7 @@ func (self *Volume) get(
 
 func (self *Volume) GetMarkets(
 	exchange model.Exchange,
-	quote string,
+	quote model.Assets,
 	btc_volume_min,
 	btc_pump_max float64,
 	valid time.Duration,
@@ -159,5 +171,7 @@ func (self *Volume) GetCalls(exchange model.Exchange, market string, sandbox, de
 }
 
 func NewVolume() model.Channel {
-	return &Volume{}
+	return &Volume{
+		apiKey: flag.Get("ethplorer-api-key").String(),
+	}
 }

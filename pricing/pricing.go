@@ -27,11 +27,22 @@ func NewMult(old, mult float64) float64 {
 }
 
 func Multiply(price, mult float64, prec int) float64 {
-	var out float64
-	out = price * mult
-	// sets the number of places after the decimal
-	out, _ = strconv.ParseFloat(fmt.Sprintf("%.[2]*[1]f", out, prec), 64)
-	return out
+	var (
+		multiplied float64
+		rounded    float64
+	)
+	multiplied = price * mult
+	if multiplied != 0 {
+		for {
+			rounded, _ = strconv.ParseFloat(fmt.Sprintf("%.[2]*[1]f", multiplied, prec), 64)
+			if (mult > 1 && rounded > price) || (mult < 1 && rounded < price) || (mult == 1) {
+				break
+			} else {
+				multiplied = multiplied * 1.01
+			}
+		}
+	}
+	return rounded
 }
 
 // RoundToNearest rounds [x] to to nearest multiple of [unit]

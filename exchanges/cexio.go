@@ -800,6 +800,10 @@ func (self *CexIo) Buy(client interface{}, cancel bool, market string, calls mod
 	return nil
 }
 
+func (self *CexIo) IsLeveragedToken(name string) bool {
+	return false
+}
+
 func NewCexIo() model.Exchange {
 	return &CexIo{
 		ExchangeInfo: &model.ExchangeInfo{
