@@ -9,6 +9,7 @@ import (
 	"github.com/svanas/nefertiti/ethplorer"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
+	"github.com/svanas/nefertiti/passphrase"
 )
 
 type signal struct {
