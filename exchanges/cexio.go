@@ -119,8 +119,8 @@ func (self *CexIo) GetInfo() *model.ExchangeInfo {
 	return self.ExchangeInfo
 }
 
-func (self *CexIo) GetClient(private, sandbox bool) (interface{}, error) {
-	if !private {
+func (self *CexIo) GetClient(permission model.Permission, sandbox bool) (interface{}, error) {
+	if permission != model.PRIVATE {
 		return exchange.New("", "", ""), nil
 	}
 
@@ -506,7 +506,7 @@ func (self *CexIo) StopLoss(client interface{}, market string, size float64, pri
 	return nil, errors.New("Not implemented")
 }
 
-func (self *CexIo) OCO(client interface{}, side model.OrderSide, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
+func (self *CexIo) OCO(client interface{}, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
 	return nil, errors.New("Not implemented")
 }
 

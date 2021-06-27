@@ -72,7 +72,7 @@ func (c *BookCommand) Run(args []string) int {
 	}
 
 	var client interface{}
-	if client, err = exchange.GetClient(false, sandbox); err != nil {
+	if client, err = exchange.GetClient(model.BOOK, sandbox); err != nil {
 		return c.ReturnError(err)
 	}
 

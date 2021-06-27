@@ -172,8 +172,8 @@ func (self *HitBTC) GetInfo() *model.ExchangeInfo {
 	return self.ExchangeInfo
 }
 
-func (self *HitBTC) GetClient(private, sandbox bool) (interface{}, error) {
-	if !private {
+func (self *HitBTC) GetClient(permission model.Permission, sandbox bool) (interface{}, error) {
+	if permission != model.PRIVATE {
 		return exchange.New("", ""), nil
 	}
 
@@ -647,7 +647,7 @@ func (self *HitBTC) StopLoss(client interface{}, market string, size float64, pr
 	return out, nil
 }
 
-func (self *HitBTC) OCO(client interface{}, side model.OrderSide, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
+func (self *HitBTC) OCO(client interface{}, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
 	return nil, errors.New("Not implemented")
 }
 

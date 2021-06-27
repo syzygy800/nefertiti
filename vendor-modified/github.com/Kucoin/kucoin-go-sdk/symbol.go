@@ -133,7 +133,7 @@ type FullOrderBookModel struct {
 
 // AggregatedFullOrderBook returns a list of open orders(aggregated) for a symbol.
 func (as *ApiService) AggregatedFullOrderBook(symbol string) (*ApiResponse, error) {
-	req := NewRequest(http.MethodGet, "/api/v2/market/orderbook/level2", map[string]string{"symbol": symbol})
+	req := NewRequest(http.MethodGet, "/api/v3/market/orderbook/level2", map[string]string{"symbol": symbol})
 	return as.Call(req)
 }
 

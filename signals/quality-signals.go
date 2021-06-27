@@ -168,7 +168,7 @@ func (self *CryptoQualitySignals) get(exchange model.Exchange, validity time.Dur
 	if len(self.cache) > 0 {
 		cache := make(map[string]float64)
 		var client interface{}
-		if client, err = exchange.GetClient(false, sandbox); err != nil {
+		if client, err = exchange.GetClient(model.PUBLIC, sandbox); err != nil {
 			return err
 		}
 		for idx := range self.cache {
@@ -291,7 +291,7 @@ func (self *CryptoQualitySignals) GetCalls(exchange model.Exchange, market strin
 	)
 
 	var client interface{}
-	if client, err = exchange.GetClient(false, sandbox); err != nil {
+	if client, err = exchange.GetClient(model.PUBLIC, sandbox); err != nil {
 		return nil, err
 	}
 

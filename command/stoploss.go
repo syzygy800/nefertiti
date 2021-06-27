@@ -80,7 +80,7 @@ func (c *StopLossCommand) Run(args []string) int {
 	}
 
 	var client interface{}
-	if client, err = exchange.GetClient(true, sandbox); err != nil {
+	if client, err = exchange.GetClient(model.PRIVATE, sandbox); err != nil {
 		return c.ReturnError(err)
 	}
 

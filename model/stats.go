@@ -10,7 +10,7 @@ type Stats struct {
 }
 
 func (s *Stats) Avg(exchange Exchange, sandbox bool) (float64, error) {
-	client, err := exchange.GetClient(false, sandbox)
+	client, err := exchange.GetClient(PUBLIC, sandbox)
 	if err != nil {
 		return 0, err
 	}

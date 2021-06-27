@@ -42,7 +42,7 @@ func (self *Listings) GetOrderType() model.OrderType {
 func (self *Listings) getClient(exchange model.Exchange, sandbox bool) (interface{}, error) {
 	if self.client == nil {
 		var err error
-		self.client, err = exchange.GetClient(false, sandbox)
+		self.client, err = exchange.GetClient(model.PUBLIC, sandbox)
 		if err != nil {
 			return nil, err
 		}

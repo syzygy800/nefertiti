@@ -631,7 +631,7 @@ func (c *BuyCommand) Run(args []string) int {
 	test := flag.Exists("test")
 
 	var client interface{}
-	if client, err = exchange.GetClient(!test, sandbox); err != nil {
+	if client, err = exchange.GetClient(model.PRIVATE, sandbox); err != nil {
 		return c.ReturnError(err)
 	}
 

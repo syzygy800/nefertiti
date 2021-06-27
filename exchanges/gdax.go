@@ -242,8 +242,8 @@ func (self *Gdax) GetInfo() *model.ExchangeInfo {
 	return self.ExchangeInfo
 }
 
-func (self *Gdax) GetClient(private, sandbox bool) (interface{}, error) {
-	if !private {
+func (self *Gdax) GetClient(permission model.Permission, sandbox bool) (interface{}, error) {
+	if permission != model.PRIVATE {
 		return exchange.NewClient("", "", "", sandbox), nil
 	}
 
@@ -865,7 +865,7 @@ func (self *Gdax) StopLoss(client interface{}, market string, size float64, pric
 	return out, nil
 }
 
-func (self *Gdax) OCO(client interface{}, side model.OrderSide, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
+func (self *Gdax) OCO(client interface{}, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
 	return nil, errors.New("Not implemented")
 }
 

@@ -229,8 +229,8 @@ func (self *CryptoDotCom) GetInfo() *model.ExchangeInfo {
 	return self.ExchangeInfo
 }
 
-func (self *CryptoDotCom) GetClient(private, sandbox bool) (interface{}, error) {
-	if !private {
+func (self *CryptoDotCom) GetClient(permission model.Permission, sandbox bool) (interface{}, error) {
+	if permission != model.PRIVATE {
 		return exchange.New("", ""), nil
 	}
 
@@ -585,7 +585,7 @@ func (self *CryptoDotCom) StopLoss(client interface{}, market string, size float
 	return nil, errors.New("Not implemented")
 }
 
-func (self *CryptoDotCom) OCO(client interface{}, side model.OrderSide, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
+func (self *CryptoDotCom) OCO(client interface{}, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
 	return nil, errors.New("Not implemented")
 }
 

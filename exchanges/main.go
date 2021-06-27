@@ -66,6 +66,7 @@ func promptForApiKeys(exchange string) (apiKey, apiSecret string, err error) {
 			return "", "", errors.Wrap(err, 1)
 		}
 		apiKey = string(data)
+		flag.Set("api-key", apiKey)
 	}
 
 	apiSecret = flag.Get("api-secret").String()
@@ -78,6 +79,7 @@ func promptForApiKeys(exchange string) (apiKey, apiSecret string, err error) {
 			return "", "", errors.Wrap(err, 1)
 		}
 		apiSecret = string(data)
+		flag.Set("api-secret", apiSecret)
 	}
 
 	return apiKey, apiSecret, nil

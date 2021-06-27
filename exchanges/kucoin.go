@@ -271,14 +271,15 @@ func (self *Kucoin) GetInfo() *model.ExchangeInfo {
 	return self.ExchangeInfo
 }
 
-func (self *Kucoin) GetClient(private, sandbox bool) (interface{}, error) {
-	if !private {
+func (self *Kucoin) GetClient(permission model.Permission, sandbox bool) (interface{}, error) {
+	// starting 04/26/21, the KuCoin order book endpoints require authentication.
+	if permission == model.PUBLIC {
 		return exchange.NewApiService(
 			exchange.ApiBaseURIOption(self.baseURI(sandbox)),
 		), nil
 	}
 
-	apiKey, apiSecret, apiPassphrase, err := promptForApiKeysEx("Kucoin")
+	apiKey, apiSecret, apiPassphrase, err := promptForApiKeysEx("KuCoin")
 	if err != nil {
 		return nil, err
 	}
@@ -674,7 +675,7 @@ func (self *Kucoin) Sell(
 		apiSecret     string
 		apiPassphrase string
 	)
-	if apiKey, apiSecret, apiPassphrase, err = promptForApiKeysEx("Kucoin"); err != nil {
+	if apiKey, apiSecret, apiPassphrase, err = promptForApiKeysEx("KuCoin"); err != nil {
 		return err
 	}
 
@@ -920,7 +921,7 @@ func (self *Kucoin) StopLoss(client interface{}, market string, size float64, pr
 	return out, nil
 }
 
-func (self *Kucoin) OCO(client interface{}, side model.OrderSide, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
+func (self *Kucoin) OCO(client interface{}, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
 	return nil, errors.New("Not implemented")
 }
 

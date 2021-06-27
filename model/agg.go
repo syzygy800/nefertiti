@@ -8,8 +8,7 @@ import (
 )
 
 var (
-	EYouAreAskingTooMuch = errors.New("Cannot find any supports. Please ask for fewer supports, or change your other settings.")
-	EOrderBookTooThin    = errors.New("Cannot find any supports. Order book is too thin. Please reconsider this market.")
+	EOrderBookTooThin = errors.New("Cannot find any supports. Order book is too thin. Please reconsider this market.")
 )
 
 // returns (agg, dip, error)
@@ -22,7 +21,7 @@ func GetAgg(exchange Exchange, market string, dip, pip, max, min float64, top in
 		avg    float64 // 24-hour average
 	)
 
-	if client, err = exchange.GetClient(false, sandbox); err != nil {
+	if client, err = exchange.GetClient(BOOK, sandbox); err != nil {
 		return 0, dip, err
 	}
 
@@ -71,13 +70,8 @@ func GetAggEx(
 	}
 
 	for cnt := Max(top, 4); cnt > 0; cnt-- {
-		out, err = getAgg(exchange, client, market, ticker, avg, book, dip, pip, max, min, cnt)
-		if err == nil {
+		if out, err = getAgg(exchange, client, market, ticker, avg, book, dip, pip, max, min, cnt); err == nil {
 			return out, dip, err
-		} else {
-			if errors.Is(err, EOrderBookTooThin) {
-				return out, dip, err
-			}
 		}
 	}
 
@@ -86,13 +80,8 @@ func GetAggEx(
 		if n > 0 {
 			for i := n; i >= 0; i-- {
 				for cnt := Max(top, 4); cnt >= top; cnt-- {
-					out, err = getAgg(exchange, client, market, ticker, avg, book, i, pip, max, min, cnt)
-					if err == nil {
+					if out, err = getAgg(exchange, client, market, ticker, avg, book, i, pip, max, min, cnt); err == nil {
 						return out, i, err
-					} else {
-						if errors.Is(err, EOrderBookTooThin) {
-							return out, i, err
-						}
 					}
 				}
 			}
@@ -118,8 +107,8 @@ func getAgg(
 	cnt int,
 ) (float64, error) {
 	var (
-		ok  bool
 		err error
+		agg float64 = 500
 	)
 
 	var steps = [...]float64{
@@ -132,7 +121,6 @@ func getAgg(
 		0.5, // 5
 	}
 
-	var agg float64 = 500
 	for {
 		for _, step := range steps {
 			agg = pricing.RoundToPrecision(agg*step, 8)
@@ -191,10 +179,7 @@ func getAgg(
 				}
 			}
 
-			// we need at least 4 supports
-			if len(book2) > 0 {
-				ok = true
-			}
+			// we need at least 2 supports
 			if len(book2) >= cnt {
 				return agg, nil
 			}
@@ -204,11 +189,7 @@ func getAgg(
 				if len(book2) > 0 {
 					return agg, nil
 				} else {
-					if !ok && (dip == 0) {
-						return 0, EOrderBookTooThin
-					} else {
-						return 0, EYouAreAskingTooMuch
-					}
+					return 0, EOrderBookTooThin
 				}
 			}
 		}

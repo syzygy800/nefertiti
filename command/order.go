@@ -89,26 +89,22 @@ func (c *OrderCommand) Run(args []string) int {
 		return c.ReturnError(errors.New("missing argument: price"))
 	}
 
+	var client interface{}
+	if client, err = exchange.GetClient(model.PRIVATE, sandbox); err != nil {
+		return c.ReturnError(err)
+	}
+
 	var mult float64 = 1.0
 	flg = flag.Get("mult")
 	if flg.Exists {
 		if mult, err = flg.Float64(); err != nil {
 			return c.ReturnError(fmt.Errorf("mult %v is invalid", flg))
 		}
-		var client interface{}
-		if client, err = exchange.GetClient(false, sandbox); err != nil {
-			return c.ReturnError(err)
-		}
 		var prec int
 		if prec, err = exchange.GetPricePrec(client, market); err != nil {
 			return c.ReturnError(err)
 		}
 		price = pricing.Multiply(price, mult, prec)
-	}
-
-	var client interface{}
-	if client, err = exchange.GetClient(true, sandbox); err != nil {
-		return c.ReturnError(err)
 	}
 
 	var out []byte

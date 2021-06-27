@@ -317,8 +317,8 @@ func (self *Binance) GetInfo() *model.ExchangeInfo {
 	return self.ExchangeInfo
 }
 
-func (self *Binance) GetClient(private, sandbox bool) (interface{}, error) {
-	if !private {
+func (self *Binance) GetClient(permission model.Permission, sandbox bool) (interface{}, error) {
+	if permission != model.PRIVATE {
 		return exchange.NewClient(self.baseURL(sandbox), "", ""), nil
 	}
 
@@ -454,39 +454,14 @@ func (self *Binance) sell(
 	// look for newly filled orders
 	for _, order := range new {
 		if binanceOrderIndex(old, order.OrderId) == -1 {
-			side := binanceOrderSide(order)
-
 			var data []byte
 			if data, err = binanceOrderToString(order); err != nil {
 				return new, err
 			}
+
 			log.Println("[FILLED] " + string(data))
 
-			// has a stop loss been filled? then place a buy order double the order size *** if --dca is included ***
-			if side == model.SELL {
-				if strategy == model.STRATEGY_STOP_LOSS {
-					if order.Type == string(exchange.OrderTypeStopLoss) || order.Type == string(exchange.OrderTypeStopLossLimit) {
-						if model.ParseMetaData(order.ClientOrderId).Trail {
-							// do not mistakenly re-buy trailing profit orders that were filled
-						} else if flag.Exists("dca") {
-							var prec int
-							if prec, err = self.GetSizePrec(client, order.Symbol); err == nil {
-								size := 2 * order.GetSize()
-								_, _, err = self.Order(client,
-									model.BUY,
-									order.Symbol,
-									pricing.RoundToPrecision(size, prec),
-									0, model.MARKET, "",
-								)
-							}
-							if err != nil {
-								return new, errors.Append(err, "\t", string(data))
-							}
-						}
-					}
-				}
-			}
-
+			side := binanceOrderSide(order)
 			if side != model.ORDER_SIDE_NONE {
 				// send notification(s)
 				if notify.CanSend(level, notify.FILLED) {
@@ -514,6 +489,32 @@ func (self *Binance) sell(
 						notify.Tweet(twitter, fmt.Sprintf("Done %s. %s priced at %s #Binance", model.FormatOrderSide(side), model.TweetMarket(markets, order.Symbol), order.Price))
 					}
 				}
+
+				// has a stop loss been filled? then place a buy order double the order size *** if --dca is included ***
+				if side == model.SELL {
+					if strategy == model.STRATEGY_STOP_LOSS {
+						if order.Type == string(exchange.OrderTypeStopLoss) || order.Type == string(exchange.OrderTypeStopLossLimit) {
+							if model.ParseMetaData(order.ClientOrderId).Trail {
+								// do not mistakenly re-buy trailing profit orders that were filled
+							} else if flag.Exists("dca") {
+								var prec int
+								if prec, err = self.GetSizePrec(client, order.Symbol); err == nil {
+									size := 2 * order.GetSize()
+									_, _, err = self.Order(client,
+										model.BUY,
+										order.Symbol,
+										pricing.RoundToPrecision(size, prec),
+										0, model.MARKET, "",
+									)
+								}
+								if err != nil {
+									return new, errors.Append(err, "\t", string(data))
+								}
+							}
+						}
+					}
+				}
+
 				// has a buy order been filled? then place a sell order
 				if side == model.BUY {
 					var (
@@ -602,7 +603,6 @@ func (self *Binance) sell(
 													prec := precs.PrecFromSymbol(order.Symbol)
 													if prec != nil && prec.OCO {
 														if _, err = self.OCO(client,
-															model.SELL,
 															order.Symbol,
 															qty,
 															target1,
@@ -1035,7 +1035,7 @@ func (self *Binance) StopLoss(client interface{}, market string, size float64, p
 	return out, nil
 }
 
-func (self *Binance) OCO(client interface{}, side model.OrderSide, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
+func (self *Binance) OCO(client interface{}, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
 	var (
 		err  error
 		svc  *exchange.CreateOcoService
@@ -1047,13 +1047,7 @@ func (self *Binance) OCO(client interface{}, side model.OrderSide, market string
 		return nil, errors.New("invalid argument: client")
 	}
 
-	svc = binance.NewCreateOcoService().Symbol(market).Quantity(size).Price(price).StopPrice(stop)
-
-	if side == model.BUY {
-		svc.Side(exchange.SideTypeBuy)
-	} else if side == model.SELL {
-		svc.Side(exchange.SideTypeSell)
-	}
+	svc = binance.NewCreateOcoService().Symbol(market).Quantity(size).Price(price).StopPrice(stop).Side(exchange.SideTypeSell)
 
 	if meta1 != "" {
 		svc.StopClientOrderId(meta1)
@@ -1073,7 +1067,7 @@ func (self *Binance) OCO(client interface{}, side model.OrderSide, market string
 			// -2010 Filter failure: MAX_NUM_ALGO_ORDERS
 			if strings.Contains(err.Error(), "MAX_NUM_ALGO_ORDERS") {
 				var out []byte
-				_, out, err = self.Order(client, side, market, size, price, model.LIMIT, meta2)
+				_, out, err = self.Order(client, model.SELL, market, size, price, model.LIMIT, meta2)
 				if err != nil {
 					return nil, err
 				} else {

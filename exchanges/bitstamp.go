@@ -115,8 +115,8 @@ func (self *Bitstamp) GetInfo() *model.ExchangeInfo {
 	return self.ExchangeInfo
 }
 
-func (self *Bitstamp) GetClient(private, sandbox bool) (interface{}, error) {
-	if !private {
+func (self *Bitstamp) GetClient(permission model.Permission, sandbox bool) (interface{}, error) {
+	if permission != model.PRIVATE {
 		return exchange.New("", "", ""), nil
 	}
 
@@ -417,7 +417,7 @@ func (self *Bitstamp) Sell(
 		apiSecret  string
 		customerId string
 	)
-	if apiKey, apiSecret, customerId, err = promptForApiKeysEx("bitstamp"); err != nil {
+	if apiKey, apiSecret, customerId, err = promptForApiKeysEx("Bitstamp"); err != nil {
 		return err
 	}
 
@@ -680,7 +680,7 @@ func (self *Bitstamp) StopLoss(client interface{}, market string, size float64, 
 	return nil, errors.New("Not implemented")
 }
 
-func (self *Bitstamp) OCO(client interface{}, side model.OrderSide, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
+func (self *Bitstamp) OCO(client interface{}, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
 	return nil, errors.New("Not implemented")
 }
 
