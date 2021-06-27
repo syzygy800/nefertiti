@@ -12,15 +12,15 @@ import (
 	"strings"
 	"time"
 
+	filemutex "github.com/alexflint/go-filemutex"
+	"github.com/go-errors/errors"
+	ws "github.com/gorilla/websocket"
+	exchange "github.com/preichenberger/go-coinbase-exchange"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/notify"
 	"github.com/svanas/nefertiti/pricing"
 	"github.com/svanas/nefertiti/session"
-	filemutex "github.com/alexflint/go-filemutex"
-	"github.com/go-errors/errors"
-	ws "github.com/gorilla/websocket"
-	exchange "github.com/preichenberger/go-coinbase-exchange"
 )
 
 var (

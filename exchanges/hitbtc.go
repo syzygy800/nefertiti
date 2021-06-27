@@ -9,15 +9,15 @@ import (
 	"strings"
 	"time"
 
+	filemutex "github.com/alexflint/go-filemutex"
+	exchange "github.com/bitbandi/go-hitbtc"
+	"github.com/go-errors/errors"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/notify"
 	"github.com/svanas/nefertiti/pricing"
 	"github.com/svanas/nefertiti/session"
 	"github.com/svanas/nefertiti/uuid"
-	filemutex "github.com/alexflint/go-filemutex"
-	exchange "github.com/bitbandi/go-hitbtc"
-	"github.com/go-errors/errors"
 )
 
 var (

@@ -9,13 +9,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alexflint/go-filemutex"
+	"github.com/go-errors/errors"
+	exchange "github.com/svanas/nefertiti/bittrex"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/notify"
 	"github.com/svanas/nefertiti/pricing"
 	"github.com/svanas/nefertiti/session"
-	"github.com/alexflint/go-filemutex"
-	"github.com/go-errors/errors"
 )
 
 const (

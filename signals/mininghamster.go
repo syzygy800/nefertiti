@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
+	mininghamster "github.com/svanas/go-mining-hamster"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/passphrase"
-	mininghamster "github.com/svanas/go-mining-hamster"
 )
 
 type MiningHamster struct {

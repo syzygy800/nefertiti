@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
+	filemutex "github.com/alexflint/go-filemutex"
 	exchange "github.com/svanas/nefertiti/cexio"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/notify"
 	"github.com/svanas/nefertiti/pricing"
 	"github.com/svanas/nefertiti/session"
-	filemutex "github.com/alexflint/go-filemutex"
 )
 
 var (

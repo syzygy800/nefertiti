@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-errors/errors"
 	"github.com/svanas/nefertiti/exchanges"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/notify"
 	"github.com/svanas/nefertiti/pricing"
 	"github.com/svanas/nefertiti/signals"
-	"github.com/go-errors/errors"
 )
 
 type (

@@ -3,10 +3,10 @@ package notify
 import (
 	"errors"
 
+	"github.com/gregdel/pushover"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/passphrase"
-	"github.com/gregdel/pushover"
 )
 
 type Pushover struct {

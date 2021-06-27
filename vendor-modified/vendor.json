@@ -267,12 +267,6 @@
 			"revisionTime": "2013-10-20T00:18:33Z"
 		},
 		{
-			"checksumSHA1": "xTiNUiw7hSscCSh/33bo5oA+y4w=",
-			"path": "github.com/toorop/go-bittrex",
-			"revision": "48e6248b8c9b29d3eb8ce0359a0f794fc17000e5",
-			"revisionTime": "2017-08-31T13:23:33Z"
-		},
-		{
 			"checksumSHA1": "uVrl2uusMCI0K+07vazfTNncP5M=",
 			"path": "github.com/yanzay/log",
 			"revision": "87352bb235060cca8427c8f9fdd68c83b38ba461",

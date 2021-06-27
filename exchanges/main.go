@@ -4,10 +4,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-errors/errors"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/passphrase"
-	"github.com/go-errors/errors"
 )
 
 type Exchanges []model.Exchange
