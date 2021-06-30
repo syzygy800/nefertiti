@@ -51,7 +51,7 @@ func report(err error,
 	}
 
 	if service != nil {
-		err := service.SendMessage(msg, (exchange.GetInfo().Name + " - ERROR"))
+		err := service.SendMessage(msg, (exchange.GetInfo().Name + " - ERROR"), model.ONCE_PER_MINUTE)
 		if err != nil {
 			log.Printf("[ERROR] %v", err)
 		}
@@ -738,7 +738,7 @@ func (c *BuyCommand) Run(args []string) int {
 					msg := fmt.Sprintf("Listening to %s...", channel.GetName())
 					log.Println("[INFO] " + msg)
 					if service != nil {
-						service.SendMessage(msg, (exchange.GetInfo().Name + " - INFO"))
+						service.SendMessage(msg, (exchange.GetInfo().Name + " - INFO"), model.ALWAYS)
 					}
 					if err = c.ReturnSuccess(); err != nil {
 						return c.ReturnError(err)
@@ -898,7 +898,7 @@ Options:
                (optional, defaults to 5%)
   --pip      = range in where the market is suspected to move up and down.
                the bot will ignore supports outside of this range.
-               (optional, defaults to 30%)  
+               (optional, defaults to 30%)
   --dist     = distribution/distance between your orders.
                (optional, defaults to 2%)
   --top      = number of orders to place in your book.
@@ -921,7 +921,7 @@ Alternative Strategy:
 
 Alternative Strategy Options:
   --exchange = name, for example: Bittrex
-  --signals  = provider, for example: MiningHamster 
+  --signals  = provider, for example: MiningHamster
   --price    = price (in quote currency) that you will want to pay for an order
   --quote    = currency that is used as the reference, for example: BTC or USDT
   --min      = minimum price for a unit of quote currency.

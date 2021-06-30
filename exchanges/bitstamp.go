@@ -81,7 +81,7 @@ func (self *Bitstamp) info(msg string, level int64, service model.Notify) {
 	log.Printf("[INFO] %s %s", errors.FormatCaller(pc, file, line), msg)
 	if service != nil {
 		if notify.CanSend(level, notify.INFO) {
-			err := service.SendMessage(msg, "Bitstamp - INFO")
+			err := service.SendMessage(msg, "Bitstamp - INFO", model.ALWAYS)
 			if err != nil {
 				log.Printf("[ERROR] %v", err)
 			}
@@ -103,7 +103,7 @@ func (self *Bitstamp) error(err error, level int64, service model.Notify) {
 
 	if service != nil {
 		if notify.CanSend(level, notify.ERROR) {
-			err := service.SendMessage(msg, "Bitstamp - ERROR")
+			err := service.SendMessage(msg, "Bitstamp - ERROR", model.ONCE_PER_MINUTE)
 			if err != nil {
 				log.Printf("[ERROR] %v", err)
 			}
@@ -188,7 +188,7 @@ func (self *Bitstamp) listen(
 				side := order.Side()
 				if side != "" && service != nil {
 					if notify.CanSend(level, notify.CANCELLED) {
-						if err = service.SendMessage(string(data), fmt.Sprintf("Bitstamp - Done %s (Reason: Cancelled)", strings.Title(side))); err != nil {
+						if err = service.SendMessage(order, fmt.Sprintf("Bitstamp - Done %s (Reason: Cancelled)", strings.Title(side)), model.ALWAYS); err != nil {
 							log.Printf("[ERROR] %v", err)
 						}
 					}
@@ -210,7 +210,7 @@ func (self *Bitstamp) listen(
 			side := order.Side()
 			if side != "" && service != nil {
 				if notify.CanSend(level, notify.OPENED) || (level == notify.LEVEL_DEFAULT && side == exchange.SELL) {
-					if err = service.SendMessage(string(data), ("Bitstamp - Open " + strings.Title(side))); err != nil {
+					if err = service.SendMessage(order, ("Bitstamp - Open " + strings.Title(side)), model.ALWAYS); err != nil {
 						log.Printf("[ERROR] %v", err)
 					}
 				}
@@ -318,7 +318,7 @@ func (self *Bitstamp) sell(
 					self.error(err, level, service)
 				} else {
 					if service != nil {
-						if err = service.SendMessage(string(data), fmt.Sprintf("Bitstamp - Done %s (Reason: Filled %f qty)", strings.Title(side), order.Amount(client))); err != nil {
+						if err = service.SendMessage(order, fmt.Sprintf("Bitstamp - Done %s (Reason: Filled %f qty)", strings.Title(side), order.Amount(client)), model.ALWAYS); err != nil {
 							log.Printf("[ERROR] %v", err)
 						}
 					}

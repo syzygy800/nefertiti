@@ -128,7 +128,7 @@ func (self *HitBTC) error(err error, level int64, service model.Notify) {
 	if service != nil {
 		if notify.CanSend(level, notify.ERROR) {
 			if err.Error() != "502 Bad Gateway" {
-				err := service.SendMessage(msg, "HitBTC - ERROR")
+				err := service.SendMessage(msg, "HitBTC - ERROR", model.ONCE_PER_MINUTE)
 				if err != nil {
 					log.Printf("[ERROR] %v", err)
 				}
@@ -244,7 +244,7 @@ func (self *HitBTC) listen(
 				side := self.getOrderSide(&order)
 				if side != model.ORDER_SIDE_NONE {
 					if service != nil && notify.CanSend(level, notify.CANCELLED) {
-						if err = service.SendMessage(string(data), fmt.Sprintf("HitBTC - Done %s (Reason: Cancelled)", model.FormatOrderSide(side))); err != nil {
+						if err = service.SendMessage(order, fmt.Sprintf("HitBTC - Done %s (Reason: Cancelled)", model.FormatOrderSide(side)), model.ALWAYS); err != nil {
 							log.Printf("[ERROR] %v", err)
 						}
 					}
@@ -267,7 +267,7 @@ func (self *HitBTC) listen(
 				side := self.getOrderSide(&order)
 				if side != model.ORDER_SIDE_NONE {
 					if notify.CanSend(level, notify.OPENED) || (level == notify.LEVEL_DEFAULT && side == model.SELL) {
-						if err = service.SendMessage(string(data), ("HitBTC - Open " + model.FormatOrderSide(side))); err != nil {
+						if err = service.SendMessage(order, ("HitBTC - Open " + model.FormatOrderSide(side)), model.ALWAYS); err != nil {
 							log.Printf("[ERROR] %v", err)
 						}
 					}
@@ -317,7 +317,7 @@ func (self *HitBTC) sell(
 
 			if notify.CanSend(level, notify.FILLED) {
 				if service != nil {
-					if err = service.SendMessage(string(data), fmt.Sprintf("HitBTC - Done %s (Reason: Filled)", strings.Title(trade.Side))); err != nil {
+					if err = service.SendMessage(trade, fmt.Sprintf("HitBTC - Done %s (Reason: Filled)", strings.Title(trade.Side)), model.ALWAYS); err != nil {
 						log.Printf("[ERROR] %v", err)
 					}
 				}
@@ -926,10 +926,12 @@ func NewHitBTC() model.Exchange {
 			Name: "HitBTC",
 			URL:  "https://hitbtc.com/",
 			REST: model.Endpoint{
-				URI: "https://api.hitbtc.com/api/2",
+				URI:     "https://api.hitbtc.com/api/2",
+				Sandbox: "https://api.demo.hitbtc.com/api/2",
 			},
 			WebSocket: model.Endpoint{
-				URI: "wss://api.hitbtc.com/api/2/ws",
+				URI:     "wss://api.hitbtc.com/api/2/ws",
+				Sandbox: "wss://api.demo.hitbtc.com/api/2/ws",
 			},
 			Country: "Hong-Kong",
 		},

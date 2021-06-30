@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	exchange "github.com/Kucoin/kucoin-go-sdk"
 	filemutex "github.com/alexflint/go-filemutex"
 	"github.com/go-errors/errors"
 	"github.com/svanas/nefertiti/flag"
+	exchange "github.com/svanas/nefertiti/kucoin"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/notify"
 	"github.com/svanas/nefertiti/pricing"
@@ -109,7 +109,7 @@ func (self *Kucoin) error(err error, level int64, service model.Notify) {
 
 	if service != nil {
 		if notify.CanSend(level, notify.ERROR) {
-			err := service.SendMessage(msg, "Kucoin - ERROR")
+			err := service.SendMessage(msg, "Kucoin - ERROR", model.ONCE_PER_MINUTE)
 			if err != nil {
 				log.Printf("[ERROR] %v", err)
 			}
@@ -443,7 +443,7 @@ func (self *Kucoin) sell(
 								title = fmt.Sprintf("%s %.2f%%", title, perc)
 							}
 						}
-						if err = service.SendMessage(string(data), title); err != nil {
+						if err = service.SendMessage(order, title, model.ALWAYS); err != nil {
 							log.Printf("[ERROR] %v", err)
 						}
 					}
@@ -620,7 +620,7 @@ func (self *Kucoin) listen(
 				side := model.NewOrderSide(order.Side)
 				if side != model.ORDER_SIDE_NONE {
 					if service != nil && notify.CanSend(level, notify.CANCELLED) {
-						if err = service.SendMessage(string(data), fmt.Sprintf("Kucoin - Cancelled %s", model.FormatOrderSide(side))); err != nil {
+						if err = service.SendMessage(order, fmt.Sprintf("Kucoin - Cancelled %s", model.FormatOrderSide(side)), model.ALWAYS); err != nil {
 							log.Printf("[ERROR] %v", err)
 						}
 					}
@@ -643,7 +643,7 @@ func (self *Kucoin) listen(
 				side := model.NewOrderSide(order.Side)
 				if side != model.ORDER_SIDE_NONE {
 					if notify.CanSend(level, notify.OPENED) || (level == notify.LEVEL_DEFAULT && side == model.SELL) {
-						if err = service.SendMessage(string(data), ("Kucoin - Open " + model.FormatOrderSide(side))); err != nil {
+						if err = service.SendMessage(order, ("Kucoin - Open " + model.FormatOrderSide(side)), model.ALWAYS); err != nil {
 							log.Printf("[ERROR] %v", err)
 						}
 					}
@@ -752,7 +752,7 @@ func (self *Kucoin) Sell(
 									if strategy == model.STRATEGY_STOP_LOSS {
 										bought := pricing.Multiply(order.ParseStopPrice(), pricing.NewMult(mult, 2.0), prec)
 										if ticker >= pricing.Multiply(bought, mult, prec) {
-											if _, err = client.CancelOrder(order.Id); err == nil {
+											if _, err = client.CancelStopOrder(order.Id); err == nil {
 												_, _, err = self.Order(client,
 													model.SELL,
 													order.Symbol,
@@ -769,7 +769,7 @@ func (self *Kucoin) Sell(
 											price = pricing.NewMult(mult, 0.5) * (ticker / mult)
 											// is the distance bigger than 5%? then cancel the stop loss, and place a new one.
 											if order.ParseStopPrice() < pricing.RoundToPrecision(price, prec) {
-												if _, err = client.CancelOrder(order.Id); err == nil {
+												if _, err = client.CancelStopOrder(order.Id); err == nil {
 													_, err = self.StopLoss(client,
 														order.Symbol,
 														order.ParseSize(),
@@ -908,7 +908,7 @@ func (self *Kucoin) StopLoss(client interface{}, market string, size float64, pr
 		params["price"] = strconv.FormatFloat(price, 'f', -1, 64)
 	}
 
-	if resp, err = kucoin.CreateOrder(params); err != nil {
+	if resp, err = kucoin.CreateStopOrder(params); err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
 	if err = resp.ReadData(&order); err != nil {

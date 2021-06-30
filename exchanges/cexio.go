@@ -81,7 +81,7 @@ func (self *CexIo) info(msg string, level int64, service model.Notify) {
 	log.Printf("[INFO] %s:%d %s", filepath.Base(file), line, msg)
 	if service != nil {
 		if notify.CanSend(level, notify.INFO) {
-			service.SendMessage(msg, "CEX.IO - INFO")
+			service.SendMessage(msg, "CEX.IO - INFO", model.ALWAYS)
 		}
 	}
 }
@@ -92,7 +92,7 @@ func (self *CexIo) error(err error, level int64, service model.Notify) {
 	log.Printf("[ERROR] %s:%d %s", filepath.Base(file), line, strings.Replace(str, "\n\n", " ", -1))
 	if service != nil {
 		if notify.CanSend(level, notify.ERROR) {
-			service.SendMessage(str, "CEX.IO - ERROR")
+			service.SendMessage(str, "CEX.IO - ERROR", model.ONCE_PER_MINUTE)
 		}
 	}
 }
@@ -203,7 +203,7 @@ func (self *CexIo) listen(
 				side := order.Side()
 				if side != exchange.SIDE_UNKNOWN {
 					if service != nil && notify.CanSend(level, notify.CANCELLED) {
-						if err = service.SendMessage(string(data), fmt.Sprintf("CEX.IO - Done %s (Reason: Cancelled)", strings.Title(order.Type))); err != nil {
+						if err = service.SendMessage(order, fmt.Sprintf("CEX.IO - Done %s (Reason: Cancelled)", strings.Title(order.Type)), model.ALWAYS); err != nil {
 							log.Printf("[ERROR] %v", err)
 						}
 					}
@@ -226,7 +226,7 @@ func (self *CexIo) listen(
 				side := order.Side()
 				if side != exchange.SIDE_UNKNOWN {
 					if notify.CanSend(level, notify.OPENED) || (level == notify.LEVEL_DEFAULT && side == exchange.SELL) {
-						if err = service.SendMessage(string(data), ("CEX.IO - Open " + strings.Title(order.Type))); err != nil {
+						if err = service.SendMessage(order, ("CEX.IO - Open " + strings.Title(order.Type)), model.ALWAYS); err != nil {
 							log.Printf("[ERROR] %v", err)
 						}
 					}
@@ -276,7 +276,7 @@ func (self *CexIo) sell(
 			if side != exchange.SIDE_UNKNOWN {
 				if notify.CanSend(level, notify.FILLED) {
 					if service != nil {
-						if err = service.SendMessage(string(data), fmt.Sprintf("CEX.IO - Done %s (Reason: Filled %f qty)", strings.Title(order.Type), order.Amount)); err != nil {
+						if err = service.SendMessage(order, fmt.Sprintf("CEX.IO - Done %s (Reason: Filled %f qty)", strings.Title(order.Type), order.Amount), model.ALWAYS); err != nil {
 							log.Printf("[ERROR] %v", err)
 						}
 					}

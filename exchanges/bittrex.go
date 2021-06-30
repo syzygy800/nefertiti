@@ -210,7 +210,7 @@ func bittrexLogErr(err error, level int64, service model.Notify) {
 
 	if service != nil {
 		if notify.CanSend(level, notify.ERROR) {
-			err := service.SendMessage(msg, "Bittrex - ERROR")
+			err := service.SendMessage(msg, "Bittrex - ERROR", model.ONCE_PER_MINUTE)
 			if err != nil {
 				log.Printf("[ERROR] %v", err)
 			}
@@ -225,7 +225,7 @@ func bittrexLogErrEx(err error, order *exchange.Order, level int64, service mode
 
 	if service != nil {
 		if notify.CanSend(level, notify.ERROR) {
-			err := service.SendMessage(msg, "Bittrex - ERROR")
+			err := service.SendMessage(msg, "Bittrex - ERROR", model.ONCE_PER_MINUTE)
 			if err != nil {
 				log.Printf("[ERROR] %v", err)
 			}
@@ -380,7 +380,7 @@ func (self *Bittrex) listen(
 				side := bittrexOrderSide(&order)
 				if side != model.ORDER_SIDE_NONE {
 					if service != nil && notify.CanSend(level, notify.CANCELLED) {
-						if err = service.SendMessage(string(data), fmt.Sprintf("Bittrex - Done %s (Reason: Cancelled)", model.FormatOrderSide(side))); err != nil {
+						if err = service.SendMessage(order, fmt.Sprintf("Bittrex - Done %s (Reason: Cancelled)", model.FormatOrderSide(side)), model.ALWAYS); err != nil {
 							log.Printf("[ERROR] %v", err)
 						}
 					}
@@ -404,7 +404,7 @@ func (self *Bittrex) listen(
 				// [BUG] every now and then, Bittrex is sending out Open Sell notification(s) for previously sold order(s). Here we single those out.
 				if side != model.SELL || history.IndexByOrderIdEx(order.Id, exchange.SELL) == -1 {
 					if service != nil && (notify.CanSend(level, notify.OPENED) || (level == notify.LEVEL_DEFAULT && side == model.SELL)) {
-						if err = service.SendMessage(string(data), ("Bittrex - Open " + model.FormatOrderSide(side))); err != nil {
+						if err = service.SendMessage(order, ("Bittrex - Open " + model.FormatOrderSide(side)), model.ALWAYS); err != nil {
 							log.Printf("[ERROR] %v", err)
 						}
 					}
@@ -466,7 +466,7 @@ func (self *Bittrex) sell(
 								title = fmt.Sprintf("%s +%.2f%%", title, ((mult - 1) * 100))
 							}
 						}
-						if err = service.SendMessage(string(data), title); err != nil {
+						if err = service.SendMessage(order, title, model.ALWAYS); err != nil {
 							log.Printf("[ERROR] %v", err)
 						}
 					}
@@ -642,7 +642,7 @@ func (self *Bittrex) Sell(
 									log.Println("[INFO] " + msg)
 									if service != nil {
 										if notify.CanSend(level, notify.INFO) {
-											service.SendMessage(msg, "Bittrex - INFO")
+											service.SendMessage(msg, "Bittrex - INFO", model.ALWAYS)
 										}
 									}
 

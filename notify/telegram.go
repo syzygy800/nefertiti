@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"encoding/json"
 	"errors"
 	"strconv"
 
@@ -55,21 +56,42 @@ func (this *Telegram) PromptForKeys(interactive, verify bool) (ok bool, err erro
 	return this.appKey != "" && this.chatId != 0, nil
 }
 
-func (this *Telegram) SendMessage(message string, title string) error {
+func (this *Telegram) SendMessage(message interface{}, title string, frequency model.Frequency) error {
 	if this.appKey == "" {
 		return errors.New("missing argument: Telegram application key")
 	}
 	if this.chatId == 0 {
 		return errors.New("missing argument: Telegram chatId")
 	}
+
+	var (
+		err  error
+		body string
+	)
+	if body, err = func(message interface{}) (string, error) {
+		if str, ok := message.(string); ok {
+			return str, nil
+		} else {
+			data, err := json.Marshal(message)
+			if err != nil {
+				return "", err
+			} else {
+				return string(data), nil
+			}
+		}
+	}(message); err != nil {
+		return err
+	}
+
 	bot, err := tbot.NewServer(this.appKey)
 	if err != nil {
 		return err
 	}
+
 	if title == "" {
-		return bot.Send(this.chatId, message)
+		return bot.Send(this.chatId, body)
 	} else {
-		return bot.Send(this.chatId, (title + ": " + message))
+		return bot.Send(this.chatId, (title + ": " + body))
 	}
 }
 

@@ -27,7 +27,7 @@ func (c *NotifyCommand) Run(args []string) int {
 		return c.ReturnError(errors.New("Service not found or not initialized. Quitting."))
 	}
 
-	if err = service.SendMessage(flag.Get("msg").String(), flag.Get("title").String()); err != nil {
+	if err = service.SendMessage(flag.Get("msg").String(), flag.Get("title").String(), model.ALWAYS); err != nil {
 		return c.ReturnError(err)
 	}
 

@@ -205,7 +205,7 @@ func (self *Gdax) error(err error, level int64, service model.Notify) {
 	log.Printf("[ERROR] %s %s", errors.FormatCaller(pc, file, line), strings.Replace(str, "\n\n", " ", -1))
 	if service != nil {
 		if notify.CanSend(level, notify.ERROR) {
-			service.SendMessage(str, "Coinbase Pro - ERROR")
+			service.SendMessage(str, "Coinbase Pro - ERROR", model.ONCE_PER_MINUTE)
 		}
 	}
 }
@@ -433,7 +433,7 @@ func (self *Gdax) sell(
 				if mt != GDAX_MSG_RECEIVED && mt != GDAX_MSG_MATCH {
 					if mt.CanNotify(notify.Level(), model.NewOrderSide(msg.Side), NewGdaxMsgReason(msg.Reason)) {
 						if service != nil {
-							if err = service.SendMessage(string(data), msg.Title()); err != nil {
+							if err = service.SendMessage(msg, msg.Title(), model.ALWAYS); err != nil {
 								log.Printf("[ERROR] %v", err)
 							}
 						}
@@ -505,7 +505,7 @@ func (self *Gdax) sell(
 								log.Println("[INFO] " + string(raw))
 								if service != nil {
 									if notify.CanSend(notify.Level(), notify.INFO) {
-										service.SendMessage(string(raw), "Coinbase Pro - New Sell")
+										service.SendMessage(order, "Coinbase Pro - New Sell", model.ALWAYS)
 									}
 								}
 							}
@@ -588,7 +588,7 @@ func (self *Gdax) sell(
 											log.Println("[INFO] " + msg)
 											if service != nil {
 												if notify.CanSend(notify.Level(), notify.INFO) {
-													service.SendMessage(msg, "Coinbase Pro - INFO")
+													service.SendMessage(msg, "Coinbase Pro - INFO", model.ALWAYS)
 												}
 											}
 
@@ -613,7 +613,7 @@ func (self *Gdax) sell(
 													log.Println("[INFO] " + string(raw))
 													if service != nil {
 														if notify.CanSend(notify.Level(), notify.INFO) {
-															service.SendMessage(string(raw), "Coinbase Pro - New Buy")
+															service.SendMessage(order, "Coinbase Pro - New Buy", model.ALWAYS)
 														}
 													}
 												}

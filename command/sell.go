@@ -95,7 +95,7 @@ func (c *SellCommand) Run(args []string) int {
 		log.Println("[INFO] " + msg)
 		if service != nil {
 			if notify.CanSend(notify.Level(), notify.INFO) {
-				err := service.SendMessage(msg, fmt.Sprintf("%s - INFO", exchange.GetInfo().Name))
+				err := service.SendMessage(msg, fmt.Sprintf("%s - INFO", exchange.GetInfo().Name), model.ALWAYS)
 				if err != nil {
 					return err
 				}

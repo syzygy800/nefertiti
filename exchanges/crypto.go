@@ -142,7 +142,7 @@ func (self *CryptoDotCom) error(err error, level int64, service model.Notify) {
 
 	if service != nil {
 		if notify.CanSend(level, notify.ERROR) {
-			err := service.SendMessage(msg, "crypto.com - ERROR")
+			err := service.SendMessage(msg, "crypto.com - ERROR", model.ONCE_PER_MINUTE)
 			if err != nil {
 				log.Printf("[ERROR] %v", err)
 			}
@@ -313,7 +313,7 @@ func (self *CryptoDotCom) listen(
 
 				if service != nil {
 					if notify.CanSend(level, notify.CANCELLED) {
-						if err = service.SendMessage(string(data), fmt.Sprintf("crypto.com - Done %s (Reason: Cancelled)", order.SideMsg)); err != nil {
+						if err = service.SendMessage(order, fmt.Sprintf("crypto.com - Done %s (Reason: Cancelled)", order.SideMsg), model.ALWAYS); err != nil {
 							log.Printf("[ERROR] %v", err)
 						}
 					}
@@ -334,7 +334,7 @@ func (self *CryptoDotCom) listen(
 
 			if service != nil {
 				if notify.CanSend(level, notify.OPENED) || (level == notify.LEVEL_DEFAULT && order.GetSide() == exchange.SELL) {
-					if err = service.SendMessage(string(data), ("crypto.com - Open " + order.SideMsg)); err != nil {
+					if err = service.SendMessage(order, ("crypto.com - Open " + order.SideMsg), model.ALWAYS); err != nil {
 						log.Printf("[ERROR] %v", err)
 					}
 				}
@@ -392,7 +392,7 @@ func (self *CryptoDotCom) sell(
 		} else {
 			log.Println("[FILLED] " + string(data))
 			if notify.CanSend(level, notify.FILLED) && service != nil {
-				if err = service.SendMessage(string(data), fmt.Sprintf("crypto.com - Done %s (Reason: Filled)", trade.Type)); err != nil {
+				if err = service.SendMessage(trade, fmt.Sprintf("crypto.com - Done %s (Reason: Filled)", trade.Type), model.ALWAYS); err != nil {
 					log.Printf("[ERROR] %v", err)
 				}
 			}

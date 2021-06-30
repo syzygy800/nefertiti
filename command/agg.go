@@ -106,7 +106,7 @@ Options:
                (optional, defaults to 5%)
   --pip      = range in where the market is suspected to move up and down.
                the bot will ignore supports outside of this range.
-               (optional, defaults to 30%)  
+               (optional, defaults to 30%)
   --max      = maximum price that you will want to pay for the coins.
                (optional)
   --min      = minimum price that you will want to pay for the coins.

@@ -291,7 +291,7 @@ func (self *Binance) notify(err error, level int64, service model.Notify) {
 			//				}
 			//			}
 			// ---- END ---- svanas 2020-09-12 -----------------------------------------
-			err := service.SendMessage(msg, "Binance - ERROR")
+			err := service.SendMessage(msg, "Binance - ERROR", model.ONCE_PER_MINUTE)
 			if err != nil {
 				self.error(err)
 			}
@@ -403,7 +403,7 @@ func (self *Binance) listen(client *exchange.Client, service model.Notify, level
 				side := binanceOrderSide(order)
 				if side != model.ORDER_SIDE_NONE {
 					if notify.CanSend(level, notify.OPENED) || (level == notify.LEVEL_DEFAULT && side == model.SELL) {
-						if err = service.SendMessage(string(data), ("Binance - Open " + model.FormatOrderSide(side))); err != nil {
+						if err = service.SendMessage(order, ("Binance - Open " + model.FormatOrderSide(side)), model.ALWAYS); err != nil {
 							self.error(err)
 						}
 					}
@@ -481,7 +481,7 @@ func (self *Binance) sell(
 								}
 							}
 						}
-						if err = service.SendMessage(string(data), title); err != nil {
+						if err = service.SendMessage(order, title, model.ALWAYS); err != nil {
 							self.error(err)
 						}
 					}
