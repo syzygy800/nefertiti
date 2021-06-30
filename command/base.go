@@ -63,7 +63,7 @@ func (c *BaseCommand) Run(args []string) int {
 
 func (c *BaseCommand) Help() string {
 	text := `
-Usage: ./cryptotrader base [options]
+Usage: ./nefertiti base [options]
 
 The base command returns the base symbol for a given market pair.
 

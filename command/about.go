@@ -45,7 +45,7 @@ DISCLAIMER:
 }
 
 func (c *AboutCommand) Help() string {
-	return "Usage: ./cryptotrader about"
+	return "Usage: ./nefertiti about"
 }
 
 func (c *AboutCommand) Synopsis() string {

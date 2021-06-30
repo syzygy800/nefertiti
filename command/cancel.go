@@ -74,7 +74,7 @@ func (c *CancelCommand) Run(args []string) int {
 
 func (c *CancelCommand) Help() string {
 	text := `
-Usage: ./cryptotrader cancel [options]
+Usage: ./nefertiti cancel [options]
 
 The cancel command cancels all your buy or sell orders on a given market.
 

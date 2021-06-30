@@ -113,7 +113,7 @@ func (c *SellCommand) Run(args []string) int {
 
 func (c *SellCommand) Help() string {
 	text := `
-Usage: ./cryptotrader sell [options]
+Usage: ./nefertiti sell [options]
 
 The sell command listens for buy orders getting filled, and then opens new sell orders for them.
 

@@ -44,7 +44,7 @@ func (c *MarketsCommand) Run(args []string) int {
 
 func (c *MarketsCommand) Help() string {
 	text := `
-Usage: ./cryptotrader markets [options]
+Usage: ./nefertiti markets [options]
 
 The markets command returns a list of available currency pairs for trading.
 

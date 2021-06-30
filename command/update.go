@@ -64,7 +64,7 @@ func (c *UpdateCommand) Run(args []string) int {
 }
 
 func (c *UpdateCommand) Help() string {
-	return "Usage: ./cryptotrader update"
+	return "Usage: ./nefertiti update"
 }
 
 func (c *UpdateCommand) Synopsis() string {

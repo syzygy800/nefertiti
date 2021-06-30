@@ -103,7 +103,7 @@ func (c *BookCommand) Run(args []string) int {
 
 func (c *BookCommand) Help() string {
 	text := `
-Usage: ./cryptotrader book [options]
+Usage: ./nefertiti book [options]
 
 The book command returns a list of all public orders on a market.
 

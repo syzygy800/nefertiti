@@ -29,7 +29,7 @@ func (c *ExchangesCommand) Run(args []string) int {
 }
 
 func (c *ExchangesCommand) Help() string {
-	return "Usage: ./cryptotrader exchanges"
+	return "Usage: ./nefertiti exchanges"
 }
 
 func (c *ExchangesCommand) Synopsis() string {

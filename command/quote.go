@@ -63,7 +63,7 @@ func (c *QuoteCommand) Run(args []string) int {
 
 func (c *QuoteCommand) Help() string {
 	text := `
-Usage: ./cryptotrader quote [options]
+Usage: ./nefertiti quote [options]
 
 The quote command returns the quote symbol for a given market pair.
 

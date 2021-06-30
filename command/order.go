@@ -126,7 +126,7 @@ func (c *OrderCommand) Run(args []string) int {
 
 func (c *OrderCommand) Help() string {
 	text := `
-Usage: ./cryptotrader order [options]
+Usage: ./nefertiti order [options]
 
 The order command places an order with the specified exchange.
 

@@ -36,7 +36,7 @@ func (c *NotifyCommand) Run(args []string) int {
 
 func (c *NotifyCommand) Help() string {
 	text := `
-Usage: ./cryptotrader notify [options]
+Usage: ./nefertiti notify [options]
 
 The notify command sends a notification.
 

@@ -95,7 +95,7 @@ func (c *AggCommand) Run(args []string) int {
 
 func (c *AggCommand) Help() string {
 	text := `
-Usage: ./cryptotrader agg [options]
+Usage: ./nefertiti agg [options]
 
 The agg command calculates the aggregation level for a given market pair.
 

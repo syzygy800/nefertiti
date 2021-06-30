@@ -102,7 +102,7 @@ func (c *StopLossCommand) Run(args []string) int {
 
 func (c *StopLossCommand) Help() string {
 	text := `
-Usage: ./cryptotrader stoploss [options]
+Usage: ./nefertiti stoploss [options]
 
 The stoploss command places a stop-loss order with the specified exchange.
 

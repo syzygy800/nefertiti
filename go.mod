@@ -3,7 +3,6 @@ module github.com/svanas/nefertiti
 go 1.16
 
 require (
-	github.com/Kucoin/kucoin-go-sdk v1.2.8
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/alexflint/go-filemutex v1.1.0
 	github.com/armon/go-radix v1.0.0 // indirect
@@ -40,8 +39,6 @@ require (
 	golang.org/x/sys v0.0.0-20210525143221-35b2ab0089ea // indirect
 	golang.org/x/term v0.0.0-20210503060354-a79de5458b56 // indirect
 )
-
-replace github.com/Kucoin/kucoin-go-sdk => ./vendor-modified/github.com/Kucoin/kucoin-go-sdk
 
 replace github.com/bitbandi/go-hitbtc => ./vendor-modified/github.com/bitbandi/go-hitbtc
 

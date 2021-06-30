@@ -67,7 +67,7 @@ func (c *ListenCommand) Run(args []string) int {
 }
 
 func (c *ListenCommand) Help() string {
-	return "Usage: ./cryptotrader listen [options]"
+	return "Usage: ./nefertiti listen [options]"
 }
 
 func (c *ListenCommand) Synopsis() string {

@@ -882,7 +882,7 @@ func (c *BuyCommand) Run(args []string) int {
 
 func (c *BuyCommand) Help() string {
 	text := `
-Usage: ./cryptotrader buy [options]
+Usage: ./nefertiti buy [options]
 
 The buy command opens new limit buy orders on the specified exchange/market.
 
