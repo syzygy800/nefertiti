@@ -97,8 +97,6 @@ github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81P
 github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.7.0 h1:nwc3DEeHmmLAfoZucVR881uASk0Mfjw8xYJ99tb5CcY=
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
-github.com/svanas/go-binance v0.0.0-20210426082427-201a69b9b187 h1:zKll1qOMe29drDAQaLvk2l5Kvm8wd+1yXVXHp8RYDXc=
-github.com/svanas/go-binance v0.0.0-20210426082427-201a69b9b187/go.mod h1:54txJsj/EIFn1vERhmCUv5tB9IxX4yYEF2AtWfJJpaA=
 github.com/svanas/go-binance v0.0.0-20210702095236-450cfcbb9b00 h1:P60n4v+xq80c2yi7O1BmqreQdgFYVfZ0OraavrfZ2tI=
 github.com/svanas/go-binance v0.0.0-20210702095236-450cfcbb9b00/go.mod h1:54txJsj/EIFn1vERhmCUv5tB9IxX4yYEF2AtWfJJpaA=
 github.com/svanas/go-crypto-dot-com v0.0.0-20200621190630-a4cbac992669 h1:PG9dL/QYLHXif/qoqkFlPmdDePesjkwIf3t8NwbeMsw=

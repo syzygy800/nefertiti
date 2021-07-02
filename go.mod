@@ -6,7 +6,6 @@ require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/alexflint/go-filemutex v1.1.0
 	github.com/armon/go-radix v1.0.0 // indirect
-	github.com/bitbandi/go-hitbtc v0.0.0-20190201230334-2adae5a2f724
 	github.com/bitly/go-simplejson v0.5.0 // indirect
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
@@ -39,8 +38,6 @@ require (
 	golang.org/x/sys v0.0.0-20210525143221-35b2ab0089ea // indirect
 	golang.org/x/term v0.0.0-20210503060354-a79de5458b56 // indirect
 )
-
-replace github.com/bitbandi/go-hitbtc => ./vendor-modified/github.com/bitbandi/go-hitbtc
 
 replace github.com/go-errors/errors => ./vendor-modified/github.com/go-errors/errors
 
