@@ -2,7 +2,7 @@ package model
 
 import (
 	"github.com/svanas/nefertiti/flag"
-	"github.com/svanas/nefertiti/pricing"
+	"github.com/svanas/nefertiti/multiplier"
 )
 
 type Strategy int

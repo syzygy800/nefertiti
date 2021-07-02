@@ -31,7 +31,7 @@ require (
 	github.com/preichenberger/go-coinbase-exchange v0.0.0-20170804193904-a283500f7727
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/stretchr/testify v1.7.0 // indirect
-	github.com/svanas/go-binance v0.0.0-20210426082427-201a69b9b187
+	github.com/svanas/go-binance v0.0.0-20210702095236-450cfcbb9b00
 	github.com/svanas/go-crypto-dot-com v0.0.0-20200621190630-a4cbac992669
 	github.com/svanas/go-mining-hamster v0.0.0-20190102110438-73bc620cc6e9
 	github.com/yanzay/tbot v1.0.0

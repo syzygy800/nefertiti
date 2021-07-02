@@ -3,9 +3,9 @@ package aggregation
 import (
 	"math"
 
-	"bitbucket.com/svanas/cryptotrader/model"
-	"bitbucket.com/svanas/cryptotrader/precision"
 	"github.com/go-errors/errors"
+	"github.com/svanas/nefertiti/model"
+	"github.com/svanas/nefertiti/precision"
 )
 
 var (

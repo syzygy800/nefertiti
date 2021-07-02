@@ -16,9 +16,12 @@ import (
 	"github.com/go-errors/errors"
 	ws "github.com/gorilla/websocket"
 	exchange "github.com/preichenberger/go-coinbase-exchange"
+	"github.com/svanas/nefertiti/aggregation"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
+	"github.com/svanas/nefertiti/multiplier"
 	"github.com/svanas/nefertiti/notify"
+	"github.com/svanas/nefertiti/precision"
 	"github.com/svanas/nefertiti/pricing"
 	"github.com/svanas/nefertiti/session"
 )

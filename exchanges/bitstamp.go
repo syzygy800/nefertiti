@@ -11,10 +11,13 @@ import (
 
 	filemutex "github.com/alexflint/go-filemutex"
 	"github.com/go-errors/errors"
+	"github.com/svanas/nefertiti/aggregation"
 	exchange "github.com/svanas/nefertiti/bitstamp"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
+	"github.com/svanas/nefertiti/multiplier"
 	"github.com/svanas/nefertiti/notify"
+	"github.com/svanas/nefertiti/precision"
 	"github.com/svanas/nefertiti/pricing"
 	"github.com/svanas/nefertiti/session"
 )

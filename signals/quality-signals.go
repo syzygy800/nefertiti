@@ -14,7 +14,7 @@ import (
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/passphrase"
-	"github.com/svanas/nefertiti/pricing"
+	"github.com/svanas/nefertiti/precision"
 )
 
 // Possible values for risk_level are:

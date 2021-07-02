@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"bitbucket.com/svanas/cryptotrader/flag"
-	"bitbucket.com/svanas/cryptotrader/precision"
+	"github.com/svanas/nefertiti/flag"
+	"github.com/svanas/nefertiti/precision"
 )
 
 const (

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/svanas/nefertiti/pricing"
+	"github.com/svanas/nefertiti/multiplier"
 )
 
 type OrderSide int

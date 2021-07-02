@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/svanas/nefertiti/aggregation"
 	"github.com/svanas/nefertiti/exchanges"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"

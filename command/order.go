@@ -8,6 +8,7 @@ import (
 	"github.com/svanas/nefertiti/exchanges"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
+	"github.com/svanas/nefertiti/multiplier"
 	"github.com/svanas/nefertiti/pricing"
 )
 
