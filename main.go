@@ -53,49 +53,49 @@ func main() {
 	console.Args = os.Args[1:]
 	console.Commands = map[string]cli.CommandFactory{
 		"exchanges": func() (cli.Command, error) {
-			return &ctcommand.ExchangesCommand{&cm}, nil
+			return &ctcommand.ExchangesCommand{CommandMeta: &cm}, nil
 		},
 		"markets": func() (cli.Command, error) {
-			return &ctcommand.MarketsCommand{&cm}, nil
+			return &ctcommand.MarketsCommand{CommandMeta: &cm}, nil
 		},
 		"sell": func() (cli.Command, error) {
-			return &ctcommand.SellCommand{&cm}, nil
+			return &ctcommand.SellCommand{CommandMeta: &cm}, nil
 		},
 		"order": func() (cli.Command, error) {
-			return &ctcommand.OrderCommand{&cm}, nil
+			return &ctcommand.OrderCommand{CommandMeta: &cm}, nil
 		},
 		"book": func() (cli.Command, error) {
-			return &ctcommand.BookCommand{&cm}, nil
+			return &ctcommand.BookCommand{CommandMeta: &cm}, nil
 		},
 		"buy": func() (cli.Command, error) {
-			return &ctcommand.BuyCommand{&cm}, nil
+			return &ctcommand.BuyCommand{CommandMeta: &cm}, nil
 		},
 		"about": func() (cli.Command, error) {
-			return &ctcommand.AboutCommand{&cm}, nil
+			return &ctcommand.AboutCommand{CommandMeta: &cm}, nil
 		},
 		"update": func() (cli.Command, error) {
-			return &ctcommand.UpdateCommand{&cm}, nil
+			return &ctcommand.UpdateCommand{CommandMeta: &cm}, nil
 		},
 		"agg": func() (cli.Command, error) {
-			return &ctcommand.AggCommand{&cm}, nil
+			return &ctcommand.AggCommand{CommandMeta: &cm}, nil
 		},
 		"cancel": func() (cli.Command, error) {
-			return &ctcommand.CancelCommand{&cm}, nil
+			return &ctcommand.CancelCommand{CommandMeta: &cm}, nil
 		},
 		"base": func() (cli.Command, error) {
-			return &ctcommand.BaseCommand{&cm}, nil
+			return &ctcommand.BaseCommand{CommandMeta: &cm}, nil
 		},
 		"quote": func() (cli.Command, error) {
-			return &ctcommand.QuoteCommand{&cm}, nil
+			return &ctcommand.QuoteCommand{CommandMeta: &cm}, nil
 		},
 		"notify": func() (cli.Command, error) {
-			return &ctcommand.NotifyCommand{&cm}, nil
+			return &ctcommand.NotifyCommand{CommandMeta: &cm}, nil
 		},
 		"stoploss": func() (cli.Command, error) {
-			return &ctcommand.StopLossCommand{&cm}, nil
+			return &ctcommand.StopLossCommand{CommandMeta: &cm}, nil
 		},
 		"listen": func() (cli.Command, error) {
-			return &ctcommand.ListenCommand{&cm}, nil
+			return &ctcommand.ListenCommand{CommandMeta: &cm}, nil
 		},
 	}
 
