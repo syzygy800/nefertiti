@@ -352,7 +352,7 @@ func (self *Bitstamp) sell(
 			if sp, err = self.GetSizePrec(client, orders[i].Market(client)); err != nil {
 				return old, err
 			} else {
-				qty = pricing.FloorToPrecision(qty, sp)
+				qty = precision.Floor(qty, sp)
 			}
 
 			// get base currency and desired size, calculate price, place sell order
@@ -462,103 +462,109 @@ func (self *Bitstamp) Sell(
 	}
 
 	for {
+		// read the dynamic settings
 		var (
-			level int64   = notify.Level()
-			mult  float64 = model.GetMult()
+			mult  float64
+			level int64          = notify.Level()
+			strat model.Strategy = model.GetStrategy()
 		)
-		// listens to the transaction history, look for newly filled orders, automatically place new LIMIT SELL orders.
-		if transactions, err = self.sell(client, mult, hold, service, twitter, level, transactions, sandbox); err != nil {
+		if mult, err = strat.Mult(); err != nil {
 			self.error(err, level, service)
 		} else {
-			// listens to the open orders, look for cancelled orders, send a notification.
-			if open, err = self.listen(client, service, level, open, transactions); err != nil {
+			// listens to the transaction history, look for newly filled orders, automatically place new LIMIT SELL orders.
+			if transactions, err = self.sell(client, mult, hold, service, twitter, level, transactions, sandbox); err != nil {
 				self.error(err, level, service)
 			} else {
-				// follow up on the "aggressive" strategy
-				if model.GetStrategy() == model.STRATEGY_STANDARD && flag.Exists("dca") {
-					// we won't be re-buying *unless* your most recent (non-sold) sell is older than 14 days
-					const rebuyAfterDays = 14
+				// listens to the open orders, look for cancelled orders, send a notification.
+				if open, err = self.listen(client, service, level, open, transactions); err != nil {
+					self.error(err, level, service)
+				} else {
+					// follow up on the "aggressive" strategy
+					if model.GetStrategy() == model.STRATEGY_STANDARD && flag.Exists("dca") {
+						// we won't be re-buying *unless* your most recent (non-sold) sell is older than 14 days
+						const rebuyAfterDays = 14
 
-					var markets []exchange.Market
-					if markets, err = exchange.GetMarkets(client, true); err != nil {
-						self.error(err, level, service)
-					} else {
-						for _, market := range markets {
-							youngest := time.Time{} // January 1, year 1, 00:00:00.000000000 UTC
+						var markets []exchange.Market
+						if markets, err = exchange.GetMarkets(client, true); err != nil {
+							self.error(err, level, service)
+						} else {
+							for _, market := range markets {
+								youngest := time.Time{} // January 1, year 1, 00:00:00.000000000 UTC
 
-							for _, order := range open {
-								side := model.NewOrderSide(order.Side())
-								if side == model.SELL {
-									if order.MarketEx() == market.Name {
-										createdAt := order.GetDateTimeEx()
-										if youngest.IsZero() || youngest.Before(createdAt) {
-											youngest = createdAt
+								for _, order := range open {
+									side := model.NewOrderSide(order.Side())
+									if side == model.SELL {
+										if order.MarketEx() == market.Name {
+											createdAt := order.GetDateTimeEx()
+											if youngest.IsZero() || youngest.Before(createdAt) {
+												youngest = createdAt
+											}
 										}
 									}
 								}
-							}
 
-							if !youngest.IsZero() && time.Since(youngest).Hours() > 24*rebuyAfterDays {
-								// did we recently sell an "aggressive" order on this market? then prevent us from buying this pump.
-								var closed model.Orders
-								if closed, err = self.GetClosed(client, market.Name); err != nil {
-									self.error(err, level, service)
-								} else {
-									if time.Since(closed.Youngest(model.SELL, time.Now())).Hours() < 24*rebuyAfterDays {
-										// continue
+								if !youngest.IsZero() && time.Since(youngest).Hours() > 24*rebuyAfterDays {
+									// did we recently sell an "aggressive" order on this market? then prevent us from buying this pump.
+									var closed model.Orders
+									if closed, err = self.GetClosed(client, market.Name); err != nil {
+										self.error(err, level, service)
 									} else {
-										self.info(fmt.Sprintf(
-											"Re-buying %s because your latest activity on this market (at %s) is older than %d days.",
-											market.Name, youngest.Format(time.RFC1123), rebuyAfterDays,
-										), level, service)
-										var ticker float64
-										if ticker, err = self.GetTicker(client, market.Name); err != nil {
-											self.error(err, level, service)
+										if time.Since(closed.Youngest(model.SELL, time.Now())).Hours() < 24*rebuyAfterDays {
+											// continue
 										} else {
-											var precSize int
-											if precSize, err = self.GetSizePrec(client, market.Name); err != nil {
+											self.info(fmt.Sprintf(
+												"Re-buying %s because your latest activity on this market (at %s) is older than %d days.",
+												market.Name, youngest.Format(time.RFC1123), rebuyAfterDays,
+											), level, service)
+											var ticker float64
+											if ticker, err = self.GetTicker(client, market.Name); err != nil {
 												self.error(err, level, service)
 											} else {
-												orderType := model.MARKET
-												for {
-													var qty float64
-													if qty, err = exchange.GetMinOrderSize(client, market.Name, ticker, precSize); err != nil {
-														self.error(err, level, service)
-													} else {
-														if hold.HasMarket(market.Name) {
-															qty = qty * 5
-														}
-														if orderType == model.MARKET {
-															_, err = client.BuyMarketOrder(market.Name, pricing.RoundToPrecision(qty, precSize))
+												var precSize int
+												if precSize, err = self.GetSizePrec(client, market.Name); err != nil {
+													self.error(err, level, service)
+												} else {
+													orderType := model.MARKET
+													for {
+														var qty float64
+														if qty, err = exchange.GetMinOrderSize(client, market.Name, ticker, precSize); err != nil {
+															self.error(err, level, service)
 														} else {
-															var precPrice int
-															if precPrice, err = self.GetPricePrec(client, market.Name); err == nil {
-																ticker = ticker * 1.01
-																_, err = client.BuyLimitOrder(market.Name,
-																	pricing.RoundToPrecision(qty, precSize),
-																	pricing.RoundToPrecision(ticker, precPrice),
-																)
+															if hold.HasMarket(market.Name) {
+																qty = qty * 5
 															}
-														}
-														if err != nil {
-															// --- BEGIN --- svanas 2020-09-15 --- error: Minimum order size is ... -----------
-															if strings.Contains(err.Error(), "Minimum order size") {
-																lower, _ := strconv.ParseFloat(pricing.FormatPrecision(precSize), 64)
-																ticker = ticker - lower
-																continue
-															}
-															// --- BEGIN --- svanas 2021-03-26 --- error: Order could not be placed -----------
-															if strings.Contains(err.Error(), "Order could not be placed") {
-																if orderType == model.MARKET {
-																	orderType = model.LIMIT
-																	continue
+															if orderType == model.MARKET {
+																_, err = client.BuyMarketOrder(market.Name, precision.Round(qty, precSize))
+															} else {
+																var precPrice int
+																if precPrice, err = self.GetPricePrec(client, market.Name); err == nil {
+																	ticker = ticker * 1.01
+																	_, err = client.BuyLimitOrder(market.Name,
+																		precision.Round(qty, precSize),
+																		precision.Round(ticker, precPrice),
+																	)
 																}
 															}
-															// ---- END ---- svanas 2020-09-15 ------------------------------------------------
-															self.error(err, level, service)
+															if err != nil {
+																// --- BEGIN --- svanas 2020-09-15 --- error: Minimum order size is ... -----------
+																if strings.Contains(err.Error(), "Minimum order size") {
+																	lower, _ := strconv.ParseFloat(precision.Format(precSize), 64)
+																	ticker = ticker - lower
+																	continue
+																}
+																// --- BEGIN --- svanas 2021-03-26 --- error: Order could not be placed -----------
+																if strings.Contains(err.Error(), "Order could not be placed") {
+																	if orderType == model.MARKET {
+																		orderType = model.LIMIT
+																		continue
+																	}
+																}
+																// ---- END ---- svanas 2020-09-15 ------------------------------------------------
+																self.error(err, level, service)
+															}
 														}
+														break
 													}
-													break
 												}
 											}
 										}
@@ -567,59 +573,59 @@ func (self *Bitstamp) Sell(
 							}
 						}
 					}
-				}
-				// follow up on the trailing stop loss strategy
-				if model.GetStrategy() == model.STRATEGY_TRAILING_STOP_LOSS {
-					for _, order := range open {
-						side := model.NewOrderSide(order.Side())
-						// enumerate over limit sell orders
-						if side == model.SELL {
-							var market string
-							if market, err = order.Market(); err == nil {
-								// do not replace the limit orders that are merely used as a reference for the HODL strategy
-								if !hold.HasMarket(market) {
-									var ticker float64
-									if ticker, err = self.GetTicker(client, market); err == nil {
-										// is the ticker nearing the order price? then cancel the limit sell order, and place a new one above the ticker.
-										if ticker > (pricing.NewMult(mult, 0.75) * (order.Price / mult)) {
-											var prec int
-											if prec, err = self.GetPricePrec(client, market); err == nil {
-												price := pricing.Multiply(ticker, pricing.NewMult(mult, 0.5), prec)
-												if price > order.Price {
-													self.info(
-														fmt.Sprintf("Reopening %s (created at %s) because ticker is nearing limit sell price %f",
-															market, order.DateTime, order.Price,
-														),
-														level, service)
-													if err = client.CancelOrder(order.Id); err == nil {
-														time.Sleep(time.Second * 5) // give Bitstamp some time to credit your wallet before we re-open this order
-														_, err = client.SellLimitOrder(market, order.Amount, price)
-													}
-												}
-											}
-										} else {
-											// has this limit sell order been created after we started this instance of the sell bot?
-											var created *time.Time
-											if created, err = order.GetDateTime(); err == nil {
-												if created.Sub(start) > 0 {
-													stop := (order.Price / mult) - (((mult - 1) * 0.5) * (order.Price / mult))
-													// is the ticker below the stop loss price? then cancel the limit sell order, and place a market sell.
-													if ticker < stop {
+					// follow up on the trailing stop loss strategy
+					if model.GetStrategy() == model.STRATEGY_TRAILING_STOP_LOSS {
+						for _, order := range open {
+							side := model.NewOrderSide(order.Side())
+							// enumerate over limit sell orders
+							if side == model.SELL {
+								var market string
+								if market, err = order.Market(); err == nil {
+									// do not replace the limit orders that are merely used as a reference for the HODL strategy
+									if !hold.HasMarket(market) {
+										var ticker float64
+										if ticker, err = self.GetTicker(client, market); err == nil {
+											// is the ticker nearing the order price? then cancel the limit sell order, and place a new one above the ticker.
+											if ticker > (multiplier.Scale(mult, 0.75) * (order.Price / mult)) {
+												var prec int
+												if prec, err = self.GetPricePrec(client, market); err == nil {
+													price := pricing.Multiply(ticker, multiplier.Scale(mult, 0.5), prec)
+													if price > order.Price {
 														self.info(
-															fmt.Sprintf("Selling %s (created at %s) because ticker is below stop loss price %f",
-																market, order.DateTime, stop,
+															fmt.Sprintf("Reopening %s (created at %s) because ticker is nearing limit sell price %f",
+																market, order.DateTime, order.Price,
 															),
 															level, service)
 														if err = client.CancelOrder(order.Id); err == nil {
 															time.Sleep(time.Second * 5) // give Bitstamp some time to credit your wallet before we re-open this order
-															_, err = client.SellMarketOrder(market, order.Amount)
+															_, err = client.SellLimitOrder(market, order.Amount, price)
 														}
-													} else {
-														self.info(
-															fmt.Sprintf("Managing %s (created at %s). Currently placed at limit sell price %f",
-																market, order.DateTime, order.Price,
-															),
-															level, nil)
+													}
+												}
+											} else {
+												// has this limit sell order been created after we started this instance of the sell bot?
+												var created *time.Time
+												if created, err = order.GetDateTime(); err == nil {
+													if created.Sub(start) > 0 {
+														stop := (order.Price / mult) - (((mult - 1) * 0.5) * (order.Price / mult))
+														// is the ticker below the stop loss price? then cancel the limit sell order, and place a market sell.
+														if ticker < stop {
+															self.info(
+																fmt.Sprintf("Selling %s (created at %s) because ticker is below stop loss price %f",
+																	market, order.DateTime, stop,
+																),
+																level, service)
+															if err = client.CancelOrder(order.Id); err == nil {
+																time.Sleep(time.Second * 5) // give Bitstamp some time to credit your wallet before we re-open this order
+																_, err = client.SellMarketOrder(market, order.Amount)
+															}
+														} else {
+															self.info(
+																fmt.Sprintf("Managing %s (created at %s). Currently placed at limit sell price %f",
+																	market, order.DateTime, order.Price,
+																),
+																level, nil)
+														}
 													}
 												}
 											}
@@ -627,13 +633,13 @@ func (self *Bitstamp) Sell(
 									}
 								}
 							}
-						}
-						if err != nil {
-							var data []byte
-							if data, _ = json.Marshal(order); data == nil {
-								self.error(err, level, service)
-							} else {
-								self.error(errors.Append(err, "\t", string(data)), level, service)
+							if err != nil {
+								var data []byte
+								if data, _ = json.Marshal(order); data == nil {
+									self.error(err, level, service)
+								} else {
+									self.error(errors.Append(err, "\t", string(data)), level, service)
+								}
 							}
 						}
 					}
@@ -776,7 +782,7 @@ func (self *Bitstamp) Aggregate(client, book interface{}, market string, agg flo
 
 	var out model.Book
 	for _, e := range bids {
-		price := pricing.RoundToPrecision(pricing.RoundToNearest(e.Price(), agg), prec)
+		price := precision.Round(aggregation.Round(e.Price(), agg), prec)
 		entry := out.EntryByPrice(price)
 		if entry != nil {
 			entry.Size = entry.Size + e.Size()
@@ -891,7 +897,7 @@ func (self *Bitstamp) GetMaxSize(client interface{}, base, quote string, hold bo
 						if err == nil {
 							qty := (min / stats.Low)
 							if qty > out {
-								out = pricing.RoundToPrecision(qty, fn())
+								out = precision.Round(qty, fn())
 							}
 						}
 					}
@@ -983,7 +989,7 @@ func (self *Bitstamp) Buy(client interface{}, cancel bool, market string, calls 
 					if prec, err = self.GetSizePrec(client, market); err != nil {
 						return err
 					}
-					qty = pricing.CeilToPrecision((min / limit), prec)
+					qty = precision.Ceil((min / limit), prec)
 				}
 			}
 			// ---- END ---- svanas 2020-01-06 --------------------------------------

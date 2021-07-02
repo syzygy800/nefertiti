@@ -52,14 +52,9 @@ func (c *SellCommand) Run(args []string) int {
 		}
 	}
 
-	var mult float64 = pricing.FIVE_PERCENT
-	flg = flag.Get("mult")
-	if flg.Exists == false {
-		flag.Set("mult", strconv.FormatFloat(mult, 'f', -1, 64))
-	} else {
-		if mult, err = flg.Float64(); err != nil {
-			return c.ReturnError(fmt.Errorf("mult %v is invalid", flg))
-		}
+	var mult float64 = multiplier.FIVE_PERCENT
+	if mult, err = multiplier.Get(mult); err != nil {
+		return c.ReturnError(err)
 	}
 
 	var all []model.Market
@@ -124,6 +119,7 @@ Options:
   --notify   = [0|1|2|3] (see below)
   --mult     = multiplier, for example: 1.05 (aka 5 percent, optional)
   --hold     = name of the market not to sell, for example: BTC-EUR (optional)
+  --sweep    = if you have dust, try and sell it (optional, defaults to false)
 
 Strategy:
   0 = Standard. No trailing. No stop-loss. Recommended, default strategy.

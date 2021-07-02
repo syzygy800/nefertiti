@@ -113,7 +113,7 @@ func (c *Call) Deviate(exchange Exchange, client interface{}, kind OrderType, mu
 		if limit > 0 {
 			prec, err := exchange.GetPricePrec(client, c.Market)
 			if err == nil {
-				limit = pricing.RoundToPrecision((limit * mult), prec)
+				limit = precision.Round((limit * mult), prec)
 				return LIMIT, limit
 			}
 		}

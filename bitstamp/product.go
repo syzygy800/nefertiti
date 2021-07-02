@@ -65,5 +65,5 @@ func GetMinOrderSize(client *Client, market string, ticker float64, prec int) (f
 	if err != nil {
 		return 0, err
 	}
-	return pricing.RoundToPrecision((min / ticker), prec), nil
+	return precision.Round((min / ticker), prec), nil
 }

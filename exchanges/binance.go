@@ -445,7 +445,8 @@ func (self *Binance) sell(
 			return old, errors.Wrap(err, 1)
 		}
 		for _, order := range orders {
-			if order.Status == "FILLED" {
+			// get the orders that got filled during the last 90 days
+			if order.Status == "FILLED" && time.Since(order.GetTime()).Hours() < 24*90 {
 				new = append(new, order)
 			}
 		}
@@ -503,7 +504,7 @@ func (self *Binance) sell(
 									_, _, err = self.Order(client,
 										model.BUY,
 										order.Symbol,
-										pricing.RoundToPrecision(size, prec),
+										precision.Round(size, prec),
 										0, model.MARKET, "",
 									)
 								}
@@ -551,10 +552,10 @@ func (self *Binance) sell(
 							mult2 := mult1
 							if call != nil && call.HasTarget() {
 								if strategy == model.STRATEGY_STANDARD || strategy == model.STRATEGY_TRAILING_STOP_LOSS_QUICK || strategy == model.STRATEGY_STOP_LOSS {
-									mult2 = pricing.FloorToPrecision((call.ParseTarget() / bought), 2)
+									mult2 = precision.Floor((call.ParseTarget() / bought), 2)
 									// --- BEGIN --- svanas 2020-09-14 --- do not sell for the limit buy price -----
 									if mult2 <= 1.0 {
-										mult2 = pricing.CeilToPrecision((call.ParseTarget() / bought), 2)
+										mult2 = precision.Ceil((call.ParseTarget() / bought), 2)
 										if mult2 <= 1.0 {
 											mult2 = mult1
 										}
@@ -570,7 +571,7 @@ func (self *Binance) sell(
 										handled := false
 										target1 := pricing.Multiply(bought, mult1, prec)
 										if call != nil && call.HasTarget() {
-											target1 = pricing.RoundToPrecision(call.ParseTarget(), prec)
+											target1 = precision.Round(call.ParseTarget(), prec)
 										}
 										if strategy == model.STRATEGY_TRAILING_STOP_LOSS_QUICK || strategy == model.STRATEGY_STOP_LOSS {
 											if ticker >= target1 {
@@ -587,14 +588,14 @@ func (self *Binance) sell(
 										if !handled {
 											var stop float64
 											if strategy == model.STRATEGY_STOP_LOSS {
-												stop = ticker / pricing.NewMult(mult1, 2.0)
+												stop = ticker / multiplier.Scale(mult1, 2.0)
 											} else {
-												stop = ticker / pricing.NewMult(mult1, 0.5)
+												stop = ticker / multiplier.Scale(mult1, 0.5)
 											}
 											if call != nil && call.HasStop() {
 												stop = call.ParseStop()
 											}
-											stop = pricing.RoundToPrecision(stop, prec)
+											stop = precision.Round(stop, prec)
 											// non-trailing stop loss? place an OCO (aka One-Cancels-the-Other)
 											if strategy == model.STRATEGY_STOP_LOSS {
 												var precs exchange.Precs
@@ -708,7 +709,8 @@ func (self *Binance) Sell(
 			return errors.Wrap(err, 1)
 		}
 		for _, order := range orders {
-			if order.Status == "FILLED" {
+			// get the orders that got filled during the last 90 days
+			if order.Status == "FILLED" && time.Since(order.GetTime()).Hours() < 24*90 {
 				filled = append(filled, order)
 			}
 		}
@@ -721,136 +723,86 @@ func (self *Binance) Sell(
 	for {
 		// read the dynamic settings
 		var (
+			mult     float64
 			level    int64          = notify.Level()
 			strategy model.Strategy = model.GetStrategy()
 			quotes   []string       = flag.Get("quote").Split(",")
 		)
-		// listen to the filled orders, look for newly filled orders, automatically place new sell orders.
-		filled, err = self.sell(client, strategy, quotes, model.GetMult(), hold, service, twitter, level, filled, sandbox, debug)
-		if err != nil {
+		if mult, err = strategy.Mult(); err != nil {
 			self.notify(err, level, service)
 		} else {
-			// listen to the open orders, send a notification on newly opened orders.
-			open, err = self.listen(client, service, level, open)
-			if err != nil {
+			// listen to the filled orders, look for newly filled orders, automatically place new sell orders.
+			if filled, err = self.sell(client, strategy, quotes, mult, hold, service, twitter, level, filled, sandbox, debug); err != nil {
 				self.notify(err, level, service)
 			} else {
-				// listen to the open orders, follow up on the trailing stop loss strategy
-				if strategy == model.STRATEGY_TRAILING || strategy == model.STRATEGY_TRAILING_STOP_LOSS || strategy == model.STRATEGY_TRAILING_STOP_LOSS_QUICK || strategy == model.STRATEGY_STOP_LOSS {
-					cache := make(map[string]float64)
-					for _, order := range open {
-						// enumerate over stop loss orders
-						if order.Type == string(exchange.OrderTypeStopLoss) || order.Type == string(exchange.OrderTypeStopLossLimit) {
-							var prec int
-							if prec, err = self.GetPricePrec(client, order.Symbol); err == nil {
-								handled := false
-								if strategy == model.STRATEGY_TRAILING_STOP_LOSS_QUICK || strategy == model.STRATEGY_STOP_LOSS {
-									if !binanceOrderIsOCO(open, order) {
-										ticker, ok := cache[order.Symbol]
-										if !ok {
-											if ticker, err = self.GetTicker(client, order.Symbol); err == nil {
-												cache[order.Symbol] = ticker
+				// listen to the open orders, send a notification on newly opened orders.
+				if open, err = self.listen(client, service, level, open); err != nil {
+					self.notify(err, level, service)
+				} else {
+					// listen to the open orders, follow up on the trailing stop loss strategy
+					if strategy == model.STRATEGY_TRAILING || strategy == model.STRATEGY_TRAILING_STOP_LOSS || strategy == model.STRATEGY_TRAILING_STOP_LOSS_QUICK || strategy == model.STRATEGY_STOP_LOSS {
+						cache := make(map[string]float64)
+						for _, order := range open {
+							// enumerate over stop loss orders
+							if order.Type == string(exchange.OrderTypeStopLoss) || order.Type == string(exchange.OrderTypeStopLossLimit) {
+								var prec int
+								if prec, err = self.GetPricePrec(client, order.Symbol); err == nil {
+									handled := false
+									if strategy == model.STRATEGY_TRAILING_STOP_LOSS_QUICK || strategy == model.STRATEGY_STOP_LOSS {
+										if !binanceOrderIsOCO(open, order) {
+											ticker, ok := cache[order.Symbol]
+											if !ok {
+												if ticker, err = self.GetTicker(client, order.Symbol); err == nil {
+													cache[order.Symbol] = ticker
+												}
 											}
-										}
-										if ticker > 0 {
-											if model.HasMetaData(order.ClientOrderId) {
-												metadata := model.ParseMetaData(order.ClientOrderId)
-												if ticker >= pricing.Multiply(metadata.Price, metadata.Mult, prec) {
-													var data []byte
-													if data, err = json.Marshal(order); err == nil {
-														log.Println("[CANCELLED] " + string(data))
-													}
-													if _, err = client.NewCancelOrderService().Symbol(order.Symbol).OrderId(order.OrderId).Do(context.Background()); err == nil {
-														_, _, err = self.Order(client,
-															model.SELL,
-															order.Symbol,
-															order.GetSize(),
-															0, model.MARKET,
-															model.NewMetaData(metadata.Price, metadata.Mult).String(),
-														)
-														handled = true
+											if ticker > 0 {
+												if model.HasMetaData(order.ClientOrderId) {
+													metadata := model.ParseMetaData(order.ClientOrderId)
+													if ticker >= pricing.Multiply(metadata.Price, metadata.Mult, prec) {
+														var data []byte
+														if data, err = json.Marshal(order); err == nil {
+															log.Println("[CANCELLED] " + string(data))
+														}
+														if _, err = client.NewCancelOrderService().Symbol(order.Symbol).OrderId(order.OrderId).Do(context.Background()); err == nil {
+															_, _, err = self.Order(client,
+																model.SELL,
+																order.Symbol,
+																order.GetSize(),
+																0, model.MARKET,
+																model.NewMetaData(metadata.Price, metadata.Mult).String(),
+															)
+															handled = true
+														}
 													}
 												}
 											}
 										}
-									}
-								}
-								if !handled {
-									if model.HasMetaData(order.ClientOrderId) {
-										handled = !model.ParseMetaData(order.ClientOrderId).Trail
-									} else {
-										handled = strategy == model.STRATEGY_STOP_LOSS
 									}
 									if !handled {
-										ticker, ok := cache[order.Symbol]
-										if !ok {
-											if ticker, err = self.GetTicker(client, order.Symbol); err == nil {
-												cache[order.Symbol] = ticker
-											}
+										if model.HasMetaData(order.ClientOrderId) {
+											handled = !model.ParseMetaData(order.ClientOrderId).Trail
+										} else {
+											handled = strategy == model.STRATEGY_STOP_LOSS
 										}
-										if ticker > 0 {
-											var (
-												mult float64
-												stop float64
-											)
-											mult = model.GetOrderMult(order.ClientOrderId)
-											if strategy == model.STRATEGY_STOP_LOSS {
-												stop = ticker / pricing.NewMult(mult, 2.0)
-											} else {
-												stop = ticker / pricing.NewMult(mult, 0.5)
-											}
-											// is the distance bigger than mult? then cancel the stop loss, and place a new one.
-											if order.GetStopPrice() < pricing.RoundToPrecision(stop, prec) {
-												var data []byte
-												if data, err = json.Marshal(order); err == nil {
-													log.Println("[CANCELLED] " + string(data))
-												}
-												if _, err = client.NewCancelOrderService().Symbol(order.Symbol).OrderId(order.OrderId).Do(context.Background()); err == nil {
-													_, err = self.StopLoss(client,
-														order.Symbol,
-														order.GetSize(),
-														pricing.RoundToPrecision(stop, prec),
-														binanceOrderType(order),
-														model.ParseMetaData(order.ClientOrderId).String(),
-													)
+										if !handled {
+											ticker, ok := cache[order.Symbol]
+											if !ok {
+												if ticker, err = self.GetTicker(client, order.Symbol); err == nil {
+													cache[order.Symbol] = ticker
 												}
 											}
-										}
-									}
-								}
-							}
-							if err != nil {
-								var data []byte
-								if data, _ = binanceOrderToString(order); data == nil {
-									self.notify(err, level, service)
-								} else {
-									self.notify(errors.Append(err, "\t", string(data)), level, service)
-								}
-							}
-
-						}
-						// enumerate over limit sell orders
-						if order.Type == string(exchange.OrderTypeLimit) {
-							side := binanceOrderSide(order)
-							if side == model.SELL {
-								if strategy != model.STRATEGY_STOP_LOSS {
-									ticker, ok := cache[order.Symbol]
-									if !ok {
-										if ticker, err = self.GetTicker(client, order.Symbol); err == nil {
-											cache[order.Symbol] = ticker
-										}
-									}
-									if ticker > 0 {
-										var (
-											mult  float64 = model.GetOrderMult(order.ClientOrderId)
-											price float64 = pricing.NewMult(mult, 0.75) * (order.GetPrice() / mult)
-										)
-										// is the ticker nearing the price? then cancel the limit sell order, and place a stop loss order below the ticker.
-										if ticker > price {
-											var prec int
-											if prec, err = self.GetPricePrec(client, order.Symbol); err == nil {
-												price = pricing.NewMult(mult, 0.5) * (ticker / mult)
-												if ticker > pricing.RoundToPrecision(price, prec) { // <APIError> code=-2010, msg=Order would trigger immediately.
+											if ticker > 0 {
+												stop := func() float64 {
+													mult := model.GetOrderMult(order.ClientOrderId)
+													if strategy == model.STRATEGY_STOP_LOSS {
+														return ticker / multiplier.Scale(mult, 2.0)
+													} else {
+														return ticker / multiplier.Scale(mult, 0.5)
+													}
+												}()
+												// is the distance bigger than mult? then cancel the stop loss, and place a new one.
+												if order.GetStopPrice() < precision.Round(stop, prec) {
 													var data []byte
 													if data, err = json.Marshal(order); err == nil {
 														log.Println("[CANCELLED] " + string(data))
@@ -859,35 +811,86 @@ func (self *Binance) Sell(
 														_, err = self.StopLoss(client,
 															order.Symbol,
 															order.GetSize(),
-															pricing.RoundToPrecision(price, prec),
-															model.MARKET,
+															precision.Round(stop, prec),
+															binanceOrderType(order),
 															model.ParseMetaData(order.ClientOrderId).String(),
 														)
-														// --- BEGIN --- svanas 2018-12-01 --- reopen the above limit sell on an API error ---
-														if err != nil {
-															_, ok := err.(*exchange.BinanceError)
-															if ok {
-																self.warn(err)
-																_, _, err = self.Order(client,
-																	binanceOrderSide(order),
-																	order.Symbol,
-																	order.GetSize(),
-																	order.GetPrice(),
-																	model.LIMIT,
-																	model.ParseMetaData(order.ClientOrderId).String(),
-																)
-															}
-														}
-														// ---- END ---- svanas 2018-12-01 ---------------------------------------------------
 													}
 												}
 											}
-											if err != nil {
-												var data []byte
-												if data, _ = binanceOrderToString(order); data == nil {
-													self.notify(err, level, service)
-												} else {
-													self.notify(errors.Append(err, "\t", string(data)), level, service)
+										}
+									}
+								}
+								if err != nil {
+									var data []byte
+									if data, _ = binanceOrderToString(order); data == nil {
+										self.notify(err, level, service)
+									} else {
+										self.notify(errors.Append(err, "\t", string(data)), level, service)
+									}
+								}
+
+							}
+							// enumerate over limit sell orders
+							if order.Type == string(exchange.OrderTypeLimit) {
+								side := binanceOrderSide(order)
+								if side == model.SELL {
+									if strategy != model.STRATEGY_STOP_LOSS {
+										ticker, ok := cache[order.Symbol]
+										if !ok {
+											if ticker, err = self.GetTicker(client, order.Symbol); err == nil {
+												cache[order.Symbol] = ticker
+											}
+										}
+										if ticker > 0 {
+											var (
+												mult  float64 = model.GetOrderMult(order.ClientOrderId)
+												price float64 = multiplier.Scale(mult, 0.75) * (order.GetPrice() / mult)
+											)
+											// is the ticker nearing the price? then cancel the limit sell order, and place a stop loss order below the ticker.
+											if ticker > price {
+												var prec int
+												if prec, err = self.GetPricePrec(client, order.Symbol); err == nil {
+													price = multiplier.Scale(mult, 0.5) * (ticker / mult)
+													if ticker > precision.Round(price, prec) { // <APIError> code=-2010, msg=Order would trigger immediately.
+														var data []byte
+														if data, err = json.Marshal(order); err == nil {
+															log.Println("[CANCELLED] " + string(data))
+														}
+														if _, err = client.NewCancelOrderService().Symbol(order.Symbol).OrderId(order.OrderId).Do(context.Background()); err == nil {
+															_, err = self.StopLoss(client,
+																order.Symbol,
+																order.GetSize(),
+																precision.Round(price, prec),
+																model.MARKET,
+																model.ParseMetaData(order.ClientOrderId).String(),
+															)
+															// --- BEGIN --- svanas 2018-12-01 --- reopen the above limit sell on an API error ---
+															if err != nil {
+																_, ok := err.(*exchange.BinanceError)
+																if ok {
+																	self.warn(err)
+																	_, _, err = self.Order(client,
+																		binanceOrderSide(order),
+																		order.Symbol,
+																		order.GetSize(),
+																		order.GetPrice(),
+																		model.LIMIT,
+																		model.ParseMetaData(order.ClientOrderId).String(),
+																	)
+																}
+															}
+															// ---- END ---- svanas 2018-12-01 ---------------------------------------------------
+														}
+													}
+												}
+												if err != nil {
+													var data []byte
+													if data, _ = binanceOrderToString(order); data == nil {
+														self.notify(err, level, service)
+													} else {
+														self.notify(errors.Append(err, "\t", string(data)), level, service)
+													}
 												}
 											}
 										}
@@ -973,11 +976,11 @@ func (self *Binance) StopLoss(client interface{}, market string, size float64, p
 		limit := price
 		for true {
 			limit = limit * 0.99
-			if pricing.RoundToPrecision(limit, prec) < price {
+			if precision.Round(limit, prec) < price {
 				break
 			}
 		}
-		service.Type(exchange.OrderTypeStopLossLimit).TimeInForce(exchange.TimeInForceGTC).Price(strconv.FormatFloat(pricing.RoundToPrecision(limit, prec), 'f', -1, 64))
+		service.Type(exchange.OrderTypeStopLossLimit).TimeInForce(exchange.TimeInForceGTC).Price(strconv.FormatFloat(precision.Round(limit, prec), 'f', -1, 64))
 	}
 
 	if meta != "" {
@@ -1003,11 +1006,11 @@ func (self *Binance) StopLoss(client interface{}, market string, size float64, p
 					lower := price
 					for true {
 						lower = lower * 0.99
-						if pricing.RoundToPrecision(lower, prec) < price {
+						if precision.Round(lower, prec) < price {
 							break
 						}
 					}
-					return self.StopLoss(client, market, size, pricing.RoundToPrecision(lower, prec), kind, meta)
+					return self.StopLoss(client, market, size, precision.Round(lower, prec), kind, meta)
 				}
 			}
 			// -2010 Filter failure: MAX_NUM_ALGO_ORDERS
@@ -1083,11 +1086,11 @@ func (self *Binance) OCO(client interface{}, market string, size float64, price,
 				lower := stop
 				for true {
 					lower = lower * 0.99
-					if pricing.RoundToPrecision(lower, prec) < stop {
+					if precision.Round(lower, prec) < stop {
 						break
 					}
 				}
-				svc.StopLimitPrice(pricing.RoundToPrecision(lower, prec))
+				svc.StopLimitPrice(precision.Round(lower, prec))
 				resp, err = svc.Do(context.Background())
 			}
 		}
@@ -1119,7 +1122,8 @@ func (self *Binance) GetClosed(client interface{}, market string) (model.Orders,
 
 	var out model.Orders
 	for _, order := range orders {
-		if order.Status == "FILLED" {
+		// get the orders that got filled during the last 90 days
+		if order.Status == "FILLED" && time.Since(order.GetTime()).Hours() < 24*90 {
 			out = append(out, model.Order{
 				Side:      binanceOrderSide(order),
 				Market:    order.Symbol,
@@ -1196,7 +1200,7 @@ func (self *Binance) Aggregate(client, book interface{}, market string, agg floa
 
 	var out model.Book
 	for _, e := range bids {
-		price := pricing.RoundToPrecision(pricing.RoundToNearest(e.Price(), agg), prec)
+		price := precision.Round(aggregation.Round(e.Price(), agg), prec)
 		entry := out.EntryByPrice(price)
 		if entry != nil {
 			entry.Size = entry.Size + e.Quantity()
@@ -1406,7 +1410,7 @@ func (self *Binance) Buy(client interface{}, cancel bool, market string, calls m
 					if prec, err = self.GetSizePrec(client, market); err != nil {
 						return err
 					}
-					qty = pricing.CeilToPrecision((min / limit), prec)
+					qty = precision.Ceil((min / limit), prec)
 				}
 			}
 			// ---- END ---- svanas 2018-11-30 ------------------------------------------------------------
@@ -1447,7 +1451,10 @@ func (self *Binance) Buy(client interface{}, cancel bool, market string, calls m
 }
 
 func (self *Binance) IsLeveragedToken(name string) bool {
-	return (len(name) > 2 && strings.HasSuffix(strings.ToUpper(name), "UP")) || (len(name) > 4 && strings.HasSuffix(strings.ToUpper(name), "DOWN"))
+	return (len(name) > 2 && strings.HasSuffix(strings.ToUpper(name), "UP")) ||
+		(len(name) > 4 && strings.HasSuffix(strings.ToUpper(name), "DOWN")) ||
+		(len(name) > 4 && strings.HasSuffix(strings.ToUpper(name), "BEAR")) ||
+		(len(name) > 4 && strings.HasSuffix(strings.ToUpper(name), "BULL"))
 }
 
 func NewBinance() model.Exchange {

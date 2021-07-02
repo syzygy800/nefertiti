@@ -24,18 +24,19 @@ func GetStrategy() Strategy {
 	return Strategy(out)
 }
 
-func GetMult() float64 {
-	out := pricing.FIVE_PERCENT
-	flg := flag.Get("mult")
-	if flg.Exists {
-		out, _ = flg.Float64()
+func (strategy *Strategy) Mult() (float64, error) {
+	var (
+		err error
+		out float64 = multiplier.FIVE_PERCENT
+	)
+	if out, err = multiplier.Get(out); err != nil {
+		return out, err
 	}
 	if out > 0 {
-		strategy := GetStrategy()
 		// with the trailing strategies, --mult is the distance between the stop price and the ticker price
-		if strategy == STRATEGY_TRAILING || strategy == STRATEGY_TRAILING_STOP_LOSS || strategy == STRATEGY_TRAILING_STOP_LOSS_QUICK {
-			out = pricing.NewMult(out, 2)
+		if *strategy == STRATEGY_TRAILING || *strategy == STRATEGY_TRAILING_STOP_LOSS || *strategy == STRATEGY_TRAILING_STOP_LOSS_QUICK {
+			out = multiplier.Scale(out, 2)
 		}
 	}
-	return out
+	return out, nil
 }

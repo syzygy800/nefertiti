@@ -364,12 +364,12 @@ func (self *HitBTC) sell(
 					if prec, err = self.GetPricePrec(client, new[i].Symbol); err == nil {
 						if strategy == model.STRATEGY_TRAILING_STOP_LOSS {
 							if price, err = self.GetTicker(client, new[i].Symbol); err == nil {
-								price = pricing.NewMult(mult, 0.5) * (price / mult)
+								price = multiplier.Scale(mult, 0.5) * (price / mult)
 								_, err = self.StopLoss(
 									client,
 									new[i].Symbol,
 									qty,
-									pricing.RoundToPrecision(price, prec),
+									precision.Round(price, prec),
 									model.MARKET, "",
 								)
 							}
@@ -457,80 +457,49 @@ func (self *HitBTC) Sell(
 	for {
 		// read the dynamic settings
 		var (
+			mult     float64
 			level    int64          = notify.Level()
-			mult     float64        = model.GetMult()
 			strategy model.Strategy = model.GetStrategy()
 		)
-		// listens to the filled orders, look for newly filled orders, automatically place new sell orders.
-		filled, err = self.sell(client, strategy, mult, hold, service, twitter, level, filled, sandbox)
-		if err != nil {
+		if mult, err = strategy.Mult(); err != nil {
 			self.error(err, level, service)
 		} else {
-			// listens to the open orders, look for cancelled orders, send a notification.
-			opened, err = self.listen(client, service, level, opened, filled)
-			if err != nil {
+			// listens to the filled orders, look for newly filled orders, automatically place new sell orders.
+			if filled, err = self.sell(client, strategy, mult, hold, service, twitter, level, filled, sandbox); err != nil {
 				self.error(err, level, service)
 			} else {
-				// listens to the open orders, follow up on the trailing stop loss strategy
-				if strategy == model.STRATEGY_TRAILING || strategy == model.STRATEGY_TRAILING_STOP_LOSS {
-					for _, order := range opened {
-						// phase #2: enumerate over stop loss orders
-						if order.Type == exchange.ORDER_TYPE_STOP_MARKET || order.Type == exchange.ORDER_TYPE_STOP_LIMIT {
-							var ticker float64
-							if ticker, err = self.GetTicker(client, order.Symbol); err == nil {
-								var prec int
-								if prec, err = self.GetPricePrec(client, order.Symbol); err == nil {
-									var price float64
-									price = pricing.NewMult(mult, 0.5) * (ticker / mult)
-									// is the distance bigger than 5%? then cancel the stop loss, and place a new one.
-									if order.ParseStopPrice() < pricing.RoundToPrecision(price, prec) {
-										if _, err = client.CancelClientOrderId(order.ClientOrderId); err == nil {
-											for {
-												try := 0
-												if order.Type == exchange.ORDER_TYPE_STOP_LIMIT {
-													_, err = self.StopLoss(client, order.Symbol, order.Quantity, pricing.RoundToPrecision(price, prec), model.LIMIT, "")
-												} else {
-													_, err = self.StopLoss(client, order.Symbol, order.Quantity, pricing.RoundToPrecision(price, prec), model.MARKET, "")
-												}
-												if err == nil {
-													break
-												} else {
-													try++
-													if try >= 10 {
-														break
-													}
-												}
-											}
-										}
-									}
-								}
-							}
-							if err != nil {
-								var data []byte
-								if data, _ = json.Marshal(order); data == nil {
-									self.error(err, level, service)
-								} else {
-									self.error(errors.Append(err, "\t", string(data)), level, service)
-								}
-							}
-						}
-						// phase #1: enumerate over limit sell orders
-						if order.Type == exchange.ORDER_TYPE_LIMIT {
-							side := self.getOrderSide(&order)
-							if side == model.SELL {
+				// listens to the open orders, look for cancelled orders, send a notification.
+				if opened, err = self.listen(client, service, level, opened, filled); err != nil {
+					self.error(err, level, service)
+				} else {
+					// listens to the open orders, follow up on the trailing stop loss strategy
+					if strategy == model.STRATEGY_TRAILING || strategy == model.STRATEGY_TRAILING_STOP_LOSS {
+						for _, order := range opened {
+							// phase #2: enumerate over stop loss orders
+							if order.Type == exchange.ORDER_TYPE_STOP_MARKET || order.Type == exchange.ORDER_TYPE_STOP_LIMIT {
 								var ticker float64
 								if ticker, err = self.GetTicker(client, order.Symbol); err == nil {
-									var price float64
-									price = pricing.NewMult(mult, 0.75) * (order.ParsePrice() / mult)
-									// is the ticker nearing the price? then cancel the limit sell order, and place a stop loss order below the ticker.
-									if ticker > price {
-										if _, err = client.CancelClientOrderId(order.ClientOrderId); err == nil {
-											var prec int
-											if prec, err = self.GetPricePrec(client, order.Symbol); err == nil {
-												price = pricing.NewMult(mult, 0.5) * (ticker / mult)
-												_, err = self.StopLoss(client, order.Symbol, order.Quantity, pricing.RoundToPrecision(price, prec), model.MARKET, "")
-												if err != nil { // reopen the above limit sell on an error
-													_, _, _ = self.Order(client, self.getOrderSide(&order), order.Symbol, order.Quantity, order.ParsePrice(), model.LIMIT, "")
+									var prec int
+									if prec, err = self.GetPricePrec(client, order.Symbol); err == nil {
+										price := multiplier.Scale(mult, 0.5) * (ticker / mult)
+										// is the distance bigger than 5%? then cancel the stop loss, and place a new one.
+										if order.ParseStopPrice() < precision.Round(price, prec) {
+											if _, err = client.CancelClientOrderId(order.ClientOrderId); err == nil {
+												for {
+													try := 0
+													if order.Type == exchange.ORDER_TYPE_STOP_LIMIT {
+														_, err = self.StopLoss(client, order.Symbol, order.Quantity, precision.Round(price, prec), model.LIMIT, "")
+													} else {
+														_, err = self.StopLoss(client, order.Symbol, order.Quantity, precision.Round(price, prec), model.MARKET, "")
+													}
+													if err == nil {
+														break
+													} else {
+														try++
+														if try >= 10 {
+															break
+														}
+													}
 												}
 											}
 										}
@@ -542,6 +511,37 @@ func (self *HitBTC) Sell(
 										self.error(err, level, service)
 									} else {
 										self.error(errors.Append(err, "\t", string(data)), level, service)
+									}
+								}
+							}
+							// phase #1: enumerate over limit sell orders
+							if order.Type == exchange.ORDER_TYPE_LIMIT {
+								side := self.getOrderSide(&order)
+								if side == model.SELL {
+									var ticker float64
+									if ticker, err = self.GetTicker(client, order.Symbol); err == nil {
+										price := multiplier.Scale(mult, 0.75) * (order.ParsePrice() / mult)
+										// is the ticker nearing the price? then cancel the limit sell order, and place a stop loss order below the ticker.
+										if ticker > price {
+											if _, err = client.CancelClientOrderId(order.ClientOrderId); err == nil {
+												var prec int
+												if prec, err = self.GetPricePrec(client, order.Symbol); err == nil {
+													price = multiplier.Scale(mult, 0.5) * (ticker / mult)
+													_, err = self.StopLoss(client, order.Symbol, order.Quantity, precision.Round(price, prec), model.MARKET, "")
+													if err != nil { // reopen the above limit sell on an error
+														_, _, _ = self.Order(client, self.getOrderSide(&order), order.Symbol, order.Quantity, order.ParsePrice(), model.LIMIT, "")
+													}
+												}
+											}
+										}
+									}
+									if err != nil {
+										var data []byte
+										if data, _ = json.Marshal(order); data == nil {
+											self.error(err, level, service)
+										} else {
+											self.error(errors.Append(err, "\t", string(data)), level, service)
+										}
 									}
 								}
 							}
@@ -740,7 +740,7 @@ func (self *HitBTC) Aggregate(client, book interface{}, market string, agg float
 
 	var out model.Book
 	for _, e := range bids {
-		price := pricing.RoundToPrecision(pricing.RoundToNearest(e.Price, agg), prec)
+		price := precision.Round(aggregation.Round(e.Price, agg), prec)
 		entry := out.EntryByPrice(price)
 		if entry != nil {
 			entry.Size = entry.Size + e.Size

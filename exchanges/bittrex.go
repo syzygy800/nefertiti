@@ -485,7 +485,7 @@ func (self *Bittrex) sell(
 								_, _, err = self.Order(client,
 									model.BUY,
 									order.MarketName(),
-									pricing.RoundToPrecision(size, prec),
+									precision.Round(size, prec),
 									0, model.MARKET, "",
 								)
 							}
@@ -518,13 +518,13 @@ func (self *Bittrex) sell(
 							if qty > 0 {
 								tgt := pricing.Multiply(order.Price(), mult, prec)
 								if strategy == model.STRATEGY_STOP_LOSS {
-									stop := order.Price() / pricing.NewMult(mult, 2.0)
+									stop := order.Price() / multiplier.Scale(mult, 2.0)
 									_, err = self.OCO(
 										client,
 										order.MarketName(),
 										qty,
 										tgt,
-										pricing.RoundToPrecision(stop, prec),
+										precision.Round(stop, prec),
 										"", "",
 									)
 								} else {
@@ -609,62 +609,64 @@ func (self *Bittrex) Sell(
 	for {
 		// read the dynamic settings
 		var (
+			mult     float64
 			level    int64          = notify.Level()
-			mult     float64        = model.GetMult()
 			strategy model.Strategy = model.GetStrategy()
 		)
-		// listens to the order history, look for newly filled orders, automatically place new LIMIT SELL orders.
-		history, err = self.sell(client, strategy, mult, hold, service, twitter, level, history, sandbox)
-		if err != nil {
+		if mult, err = strategy.Mult(); err != nil {
 			bittrexLogErr(err, level, service)
 		} else {
-			// listens to the open orders, look for cancelled orders, send a notification.
-			open, err = self.listen(client, service, level, open, history)
-			if err != nil {
+			// listens to the order history, look for newly filled orders, automatically place new LIMIT SELL orders.
+			if history, err = self.sell(client, strategy, mult, hold, service, twitter, level, history, sandbox); err != nil {
 				bittrexLogErr(err, level, service)
 			} else {
-				// Effective 25-nov-2017, Bittrex will be removing orders that are older than 28 days. Here we will...
-				// 1. check for those every hour, and then
-				// 2. re-open those that are older than 21 days.
-				if time.Since(reopenedAt).Minutes() > 60 {
-					for _, order := range open {
-						side := bittrexOrderSide(&order)
-						if side != model.ORDER_SIDE_NONE {
-							var openedAt time.Time
-							if openedAt, err = time.Parse(exchange.TIME_FORMAT, order.CreatedAt); err != nil {
-								bittrexLogErrEx(errors.Wrap(err, 1), &order, level, service)
-							} else {
-								if time.Since(openedAt).Hours() >= float64(reopenAfterDays*24) {
-									msg := fmt.Sprintf(
-										"Cancelling (and reopening) limit %s %s (market: %s, price: %g, qty: %f, opened at %s) because it is older than %d days.",
-										model.OrderSideString[side], order.Id, order.MarketName(), order.Price(), order.Quantity, order.CreatedAt, reopenAfterDays,
-									)
-									log.Println("[INFO] " + msg)
-									if service != nil {
-										if notify.CanSend(level, notify.INFO) {
-											service.SendMessage(msg, "Bittrex - INFO", model.ALWAYS)
+				// listens to the open orders, look for cancelled orders, send a notification.
+				if open, err = self.listen(client, service, level, open, history); err != nil {
+					bittrexLogErr(err, level, service)
+				} else {
+					// Effective 25-nov-2017, Bittrex will be removing orders that are older than 28 days. Here we will...
+					// 1. check for those every hour, and then
+					// 2. re-open those that are older than 21 days.
+					if time.Since(reopenedAt).Minutes() > 60 {
+						for _, order := range open {
+							side := bittrexOrderSide(&order)
+							if side != model.ORDER_SIDE_NONE {
+								var openedAt time.Time
+								if openedAt, err = time.Parse(exchange.TIME_FORMAT, order.CreatedAt); err != nil {
+									bittrexLogErrEx(errors.Wrap(err, 1), &order, level, service)
+								} else {
+									if time.Since(openedAt).Hours() >= float64(reopenAfterDays*24) {
+										msg := fmt.Sprintf(
+											"Cancelling (and reopening) limit %s %s (market: %s, price: %g, qty: %f, opened at %s) because it is older than %d days.",
+											model.OrderSideString[side], order.Id, order.MarketName(), order.Price(), order.Quantity, order.CreatedAt, reopenAfterDays,
+										)
+										log.Println("[INFO] " + msg)
+										if service != nil {
+											if notify.CanSend(level, notify.INFO) {
+												service.SendMessage(msg, "Bittrex - INFO", model.ALWAYS)
+											}
 										}
-									}
 
-									var ocoTriggerPrice float64
-									if ocoTriggerPrice, err = bittrexCancelOrder(client, &order); err != nil {
-										bittrexLogErrEx(errors.Wrap(err, 1), &order, level, service)
-									}
+										var ocoTriggerPrice float64
+										if ocoTriggerPrice, err = bittrexCancelOrder(client, &order); err != nil {
+											bittrexLogErrEx(errors.Wrap(err, 1), &order, level, service)
+										}
 
-									if ocoTriggerPrice > 0 {
-										_, err = self.OCO(client, order.MarketName(), order.Quantity, order.Price(), ocoTriggerPrice, "", "")
-									} else {
-										_, _, err = self.Order(client, side, order.MarketName(), order.Quantity, order.Price(), model.LIMIT, "")
-									}
+										if ocoTriggerPrice > 0 {
+											_, err = self.OCO(client, order.MarketName(), order.Quantity, order.Price(), ocoTriggerPrice, "", "")
+										} else {
+											_, _, err = self.Order(client, side, order.MarketName(), order.Quantity, order.Price(), model.LIMIT, "")
+										}
 
-									if err != nil {
-										bittrexLogErrEx(errors.Wrap(err, 1), &order, level, service)
+										if err != nil {
+											bittrexLogErrEx(errors.Wrap(err, 1), &order, level, service)
+										}
 									}
 								}
 							}
 						}
+						reopenedAt = time.Now()
 					}
-					reopenedAt = time.Now()
 				}
 			}
 		}
@@ -869,7 +871,7 @@ func (self *Bittrex) Aggregate(client, book interface{}, market string, agg floa
 
 	var out model.Book
 	for _, e := range bids {
-		price := pricing.RoundToPrecision(pricing.RoundToNearest(e.Rate, agg), prec)
+		price := precision.Round(aggregation.Round(e.Rate, agg), prec)
 		entry := out.EntryByPrice(price)
 		if entry != nil {
 			entry.Size = entry.Size + e.Quantity

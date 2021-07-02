@@ -18,5 +18,5 @@ func (s *Stats) Avg(exchange Exchange, sandbox bool) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return pricing.RoundToPrecision(((s.High + s.Low) / 2), prec), nil
+	return precision.Round(((s.High + s.Low) / 2), prec), nil
 }

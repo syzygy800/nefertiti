@@ -372,74 +372,79 @@ func (self *CexIo) Sell(
 	for {
 		// read the dynamic settings
 		var (
-			level int64   = notify.Level()
-			mult  float64 = model.GetMult()
+			mult  float64
+			level int64          = notify.Level()
+			strat model.Strategy = model.GetStrategy()
 		)
-		// listen to the archived orders, look for newly filled orders, automatically place new LIMIT SELL orders.
-		if archive, err = self.sell(client, mult, hold, service, twitter, level, archive, sandbox); err != nil {
+		if mult, err = strat.Mult(); err != nil {
 			self.error(err, level, service)
 		} else {
-			// listen to the open orders, look for cancelled orders, send a notification.
-			if open, err = self.listen(client, service, level, open); err != nil {
+			// listen to the archived orders, look for newly filled orders, automatically place new LIMIT SELL orders.
+			if archive, err = self.sell(client, mult, hold, service, twitter, level, archive, sandbox); err != nil {
 				self.error(err, level, service)
 			} else {
-				// listens to the open orders, follow up on the trailing stop loss strategy
-				if model.GetStrategy() == model.STRATEGY_TRAILING_STOP_LOSS {
-					for _, order := range open {
-						side := order.Side()
-						// enumerate over limit sell orders
-						if side == exchange.SELL {
-							var market string
-							if market, err = self.encodePair(order.Symbol1, order.Symbol2); err == nil {
-								// do not replace the limit orders that are merely used as a reference for the HODL strategy
-								if !hold.HasMarket(market) {
-									var ticker float64
-									if ticker, err = self.GetTicker(client, market); err == nil {
-										// is the ticker nearing the order price? then cancel the limit sell order, and place a new one above the ticker.
-										if ticker > (pricing.NewMult(mult, 0.75) * (order.Price / mult)) {
-											var prec int
-											if prec, err = self.GetPricePrec(client, market); err == nil {
-												price := pricing.Multiply(ticker, pricing.NewMult(mult, 0.5), prec)
-												if price > order.Price {
-													var created time.Time
-													if created, err = order.GetTime(); err == nil {
-														self.info(
-															fmt.Sprintf("Reopening %s (created at %s) because ticker is nearing limit sell price %f",
-																market, created.String(), order.Price,
-															),
-															level, service)
-														if err = client.CancelOrder(order.Id); err == nil {
-															time.Sleep(time.Second * 5) // give CEX.IO some time to credit your wallet before we re-open this order
-															_, err = client.PlaceOrder(order.Symbol1, order.Symbol2, exchange.SELL, order.Amount, price)
+				// listen to the open orders, look for cancelled orders, send a notification.
+				if open, err = self.listen(client, service, level, open); err != nil {
+					self.error(err, level, service)
+				} else {
+					// listens to the open orders, follow up on the trailing stop loss strategy
+					if model.GetStrategy() == model.STRATEGY_TRAILING_STOP_LOSS {
+						for _, order := range open {
+							side := order.Side()
+							// enumerate over limit sell orders
+							if side == exchange.SELL {
+								var market string
+								if market, err = self.encodePair(order.Symbol1, order.Symbol2); err == nil {
+									// do not replace the limit orders that are merely used as a reference for the HODL strategy
+									if !hold.HasMarket(market) {
+										var ticker float64
+										if ticker, err = self.GetTicker(client, market); err == nil {
+											// is the ticker nearing the order price? then cancel the limit sell order, and place a new one above the ticker.
+											if ticker > (multiplier.Scale(mult, 0.75) * (order.Price / mult)) {
+												var prec int
+												if prec, err = self.GetPricePrec(client, market); err == nil {
+													price := pricing.Multiply(ticker, multiplier.Scale(mult, 0.5), prec)
+													if price > order.Price {
+														var created time.Time
+														if created, err = order.GetTime(); err == nil {
+															self.info(
+																fmt.Sprintf("Reopening %s (created at %s) because ticker is nearing limit sell price %f",
+																	market, created.String(), order.Price,
+																),
+																level, service)
+															if err = client.CancelOrder(order.Id); err == nil {
+																time.Sleep(time.Second * 5) // give CEX.IO some time to credit your wallet before we re-open this order
+																_, err = client.PlaceOrder(order.Symbol1, order.Symbol2, exchange.SELL, order.Amount, price)
+															}
 														}
 													}
 												}
-											}
-										} else {
-											// has this limit sell order been created after we started this instance of the sell bot?
-											var created time.Time
-											if created, err = order.GetTime(); err == nil {
-												if created.Sub(start) > 0 {
-													stop := (order.Price / mult) - (((mult - 1) * 0.5) * (order.Price / mult))
-													// is the ticker below the stop loss price? then cancel the limit sell order, and place a market sell.
-													if ticker < stop {
-														self.info(
-															fmt.Sprintf("Selling %s (created at %s) because ticker is below stop loss price %f",
-																market, created.String(), stop,
-															),
-															level, service)
-														if err = client.CancelOrder(order.Id); err == nil {
-															time.Sleep(time.Second * 5) // give CEX.IO some time to credit your wallet before we re-open this order
-															_, err = client.PlaceMarketOrder(
-																order.Symbol1, order.Symbol2, exchange.SELL, order.Amount,
-															)
+											} else {
+												// has this limit sell order been created after we started this instance of the sell bot?
+												var created time.Time
+												if created, err = order.GetTime(); err == nil {
+													if created.Sub(start) > 0 {
+														stop := (order.Price / mult) - (((mult - 1) * 0.5) * (order.Price / mult))
+														// is the ticker below the stop loss price? then cancel the limit sell order, and place a market sell.
+														if ticker < stop {
+															self.info(
+																fmt.Sprintf("Selling %s (created at %s) because ticker is below stop loss price %f",
+																	market, created.String(), stop,
+																),
+																level, service)
+															if err = client.CancelOrder(order.Id); err == nil {
+																time.Sleep(time.Second * 5) // give CEX.IO some time to credit your wallet before we re-open this order
+																_, err = client.PlaceMarketOrder(
+																	order.Symbol1, order.Symbol2, exchange.SELL, order.Amount,
+																)
+															}
+														} else {
+															self.info(
+																fmt.Sprintf("Managing %s (created at %s). Currently placed at limit sell price %f",
+																	market, created.String(), order.Price,
+																),
+																level, nil)
 														}
-													} else {
-														self.info(
-															fmt.Sprintf("Managing %s (created at %s). Currently placed at limit sell price %f",
-																market, created.String(), order.Price,
-															),
-															level, nil)
 													}
 												}
 											}
@@ -447,14 +452,14 @@ func (self *CexIo) Sell(
 									}
 								}
 							}
-						}
-						if err != nil {
-							msg := err.Error()
-							var data []byte
-							if data, err = json.Marshal(order); err == nil {
-								msg = msg + "\n\n" + string(data)
+							if err != nil {
+								msg := err.Error()
+								var data []byte
+								if data, err = json.Marshal(order); err == nil {
+									msg = msg + "\n\n" + string(data)
+								}
+								self.error(errors.New(msg), level, service)
 							}
-							self.error(errors.New(msg), level, service)
 						}
 					}
 				}
@@ -616,7 +621,7 @@ func (self *CexIo) Aggregate(client, book interface{}, market string, agg float6
 
 	var out model.Book
 	for _, e := range bids {
-		price := pricing.RoundToPrecision(pricing.RoundToNearest(e.Price(), agg), prec)
+		price := precision.Round(aggregation.Round(e.Price(), agg), prec)
 		entry := out.EntryByPrice(price)
 		if entry != nil {
 			entry.Size = entry.Size + e.Size()

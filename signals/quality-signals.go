@@ -312,7 +312,7 @@ func (self *CryptoQualitySignals) GetCalls(exchange model.Exchange, market strin
 	for _, signal := range self.cache {
 		if strings.EqualFold(signal.Market(exchange), market) {
 			if signal.Buy(exchange, risk_level, debug) {
-				price := pricing.RoundToPrecision(signal.Price(), prec)
+				price := precision.Round(signal.Price(), prec)
 				if out == nil || out.IndexByPrice(price) == -1 {
 					out = append(out, model.Call{
 						Buy: &model.Buy{

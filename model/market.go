@@ -80,7 +80,7 @@ func GetSizeMin(hold bool, asset string) float64 {
 func GetSizeMax(hold bool, def float64, prec func() int) float64 {
 	if hold {
 		// when we hodl, we then sell 20% of the purchased amount
-		return pricing.RoundToPrecision((def * 0.20), prec())
+		return precision.Round((def * 0.20), prec())
 	}
 	return def
 }

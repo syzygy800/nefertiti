@@ -165,8 +165,8 @@ func buy(
 		magg = agg
 		mdip = dip
 		if magg == 0 {
-			if magg, mdip, err = model.GetAggEx(exchange, client, market, ticker, avg, dip, pip, max, min, int(top), strict); err != nil {
-				if errors.Is(err, model.EOrderBookTooThin) {
+			if magg, mdip, err = aggregation.GetEx(exchange, client, market, ticker, avg, dip, pip, max, min, int(top), strict); err != nil {
+				if errors.Is(err, aggregation.EOrderBookTooThin) {
 					if len(enumerable) > 1 {
 						report(err, market, nil, service, exchange)
 						continue
@@ -199,7 +199,7 @@ func buy(
 			if prec, err = exchange.GetSizePrec(client, market); err != nil {
 				return err, market
 			}
-			mqty = pricing.RoundToPrecision(price/ticker, prec)
+			mqty = precision.Round(price/ticker, prec)
 		}
 
 		// ignore orders that are more expensive than ticker
@@ -298,7 +298,7 @@ func buy(
 		// we need at least one support
 		if len(book2) == 0 {
 			if len(enumerable) > 1 {
-				report(model.EOrderBookTooThin, market, nil, service, exchange)
+				report(aggregation.EOrderBookTooThin, market, nil, service, exchange)
 				continue
 			} else {
 				return errors.Errorf("Not enough supports. Please update your %s aggregation.", market), market
@@ -341,7 +341,7 @@ func buy(
 			if prec, err = exchange.GetSizePrec(client, market); err != nil {
 				return err, market
 			}
-			mqty = pricing.RoundToPrecision((mqty * (1 + (float64(hasOpenSell) * 0.2))), prec)
+			mqty = precision.Round((mqty * (1 + (float64(hasOpenSell) * 0.2))), prec)
 		}
 
 		// for BTC and ETH, there is a minimum size (otherwise, we would never be hodl'ing)
@@ -480,7 +480,7 @@ func buySignals(
 				return old, err
 			}
 
-			size := pricing.RoundToPrecision(price/ticker, prec)
+			size := precision.Round(price/ticker, prec)
 			if flag.Exists("dca") {
 				hasOpenSell := 0
 				var opened model.Orders
@@ -492,7 +492,7 @@ func buySignals(
 						hasOpenSell++
 					}
 				}
-				size = pricing.RoundToPrecision((size * (1 + (float64(hasOpenSell) * 0.2))), prec)
+				size = precision.Round((size * (1 + (float64(hasOpenSell) * 0.2))), prec)
 			}
 
 			var calls model.Calls
@@ -823,12 +823,9 @@ func (c *BuyCommand) Run(args []string) int {
 		}
 	}
 
-	var mult float64 = pricing.FIVE_PERCENT
-	flg = flag.Get("mult")
-	if flg.Exists {
-		if mult, err = flg.Float64(); err != nil {
-			return c.ReturnError(errors.Errorf("mult %v is invalid", flg))
-		}
+	var mult float64 = multiplier.FIVE_PERCENT
+	if mult, err = multiplier.Get(mult); err != nil {
+		return c.ReturnError(err)
 	}
 
 	var dist int64 = 2

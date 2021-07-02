@@ -1,27 +1,40 @@
-package model
+package aggregation
 
 import (
 	"math"
 
+	"bitbucket.com/svanas/cryptotrader/model"
+	"bitbucket.com/svanas/cryptotrader/precision"
 	"github.com/go-errors/errors"
-	"github.com/svanas/nefertiti/pricing"
 )
 
 var (
 	EOrderBookTooThin = errors.New("Cannot find any supports. Order book is too thin. Please reconsider this market.")
 )
 
+// rounds [input] to to nearest multiple of [agg]
+func Round(input, agg float64) float64 {
+	return float64(int64(((input / agg) + 0.5))) * agg
+}
+
 // returns (agg, dip, error)
-func GetAgg(exchange Exchange, market string, dip, pip, max, min float64, top int, strict, sandbox bool) (float64, float64, error) {
+func Get(
+	exchange model.Exchange,
+	market string,
+	dip, pip float64,
+	max, min float64,
+	top int,
+	strict, sandbox bool,
+) (float64, float64, error) {
 	var (
 		err    error
 		client interface{}
 		ticker float64
-		stats  *Stats  // 24-hour statistics
-		avg    float64 // 24-hour average
+		stats  *model.Stats // 24-hour statistics
+		avg    float64      // 24-hour average
 	)
 
-	if client, err = exchange.GetClient(BOOK, sandbox); err != nil {
+	if client, err = exchange.GetClient(model.BOOK, sandbox); err != nil {
 		return 0, dip, err
 	}
 
@@ -37,12 +50,12 @@ func GetAgg(exchange Exchange, market string, dip, pip, max, min float64, top in
 		return 0, dip, err
 	}
 
-	return GetAggEx(exchange, client, market, ticker, avg, dip, pip, max, min, top, strict)
+	return GetEx(exchange, client, market, ticker, avg, dip, pip, max, min, top, strict)
 }
 
 // returns (agg, dip, error)
-func GetAggEx(
-	exchange Exchange,
+func GetEx(
+	exchange model.Exchange,
 	client interface{},
 	market string,
 	ticker float64,
@@ -65,12 +78,12 @@ func GetAggEx(
 		return b
 	}
 
-	if book, err = exchange.GetBook(client, market, BOOK_SIDE_BIDS); err != nil {
+	if book, err = exchange.GetBook(client, market, model.BOOK_SIDE_BIDS); err != nil {
 		return 0, dip, err
 	}
 
 	for cnt := Max(top, 4); cnt > 0; cnt-- {
-		if out, err = getAgg(exchange, client, market, ticker, avg, book, dip, pip, max, min, cnt); err == nil {
+		if out, err = get(exchange, client, market, ticker, avg, book, dip, pip, max, min, cnt); err == nil {
 			return out, dip, err
 		}
 	}
@@ -80,7 +93,7 @@ func GetAggEx(
 		if n > 0 {
 			for i := n; i >= 0; i-- {
 				for cnt := Max(top, 4); cnt >= top; cnt-- {
-					if out, err = getAgg(exchange, client, market, ticker, avg, book, i, pip, max, min, cnt); err == nil {
+					if out, err = get(exchange, client, market, ticker, avg, book, i, pip, max, min, cnt); err == nil {
 						return out, i, err
 					}
 				}
@@ -95,8 +108,8 @@ func GetAggEx(
 	}
 }
 
-func getAgg(
-	exchange Exchange,
+func get(
+	exchange model.Exchange,
 	client interface{},
 	market string,
 	ticker float64,
@@ -123,9 +136,9 @@ func getAgg(
 
 	for {
 		for _, step := range steps {
-			agg = pricing.RoundToPrecision(agg*step, 8)
+			agg = precision.Round(agg*step, 8)
 
-			var book2 Book
+			var book2 model.Book
 			if book2, err = exchange.Aggregate(client, book1, market, agg); err != nil {
 				return 0, err
 			}

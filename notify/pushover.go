@@ -87,19 +87,18 @@ func (this *Pushover) SendMessage(message interface{}, title string, frequency m
 	}
 
 	var (
-		err       error
-		body      string
-		monospace bool
+		err  error
+		body string
 	)
-	if body, monospace, err = func(message interface{}) (string, bool, error) { // -> (string, monospace, error)
+	if body, err = func(message interface{}) (string, error) {
 		if str, ok := message.(string); ok {
-			return str, false, nil
+			return str, nil
 		} else {
 			data, err := json.MarshalIndent(message, "", "  ")
 			if err != nil {
-				return "", false, err
+				return "", err
 			} else {
-				return string(data), true, nil
+				return string(data), nil
 			}
 		}
 	}(message); err != nil {
@@ -119,9 +118,7 @@ func (this *Pushover) SendMessage(message interface{}, title string, frequency m
 
 	app := pushover.New(this.appKey)
 	rec := pushover.NewRecipient(this.userKey)
-
 	msg := pushover.NewMessageWithTitle(body, title)
-	msg.Monospace = monospace
 
 	_, err = app.SendMessage(msg, rec)
 	if err != nil {

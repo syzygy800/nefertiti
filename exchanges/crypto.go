@@ -418,7 +418,7 @@ func (self *CryptoDotCom) sell(
 			if qty > new[i].Volume {
 				var prec int
 				if prec, err = self.GetSizePrec(client, new[i].Symbol); err == nil {
-					qty = pricing.FloorToPrecision(qty, prec)
+					qty = precision.Floor(qty, prec)
 				}
 			}
 
@@ -528,17 +528,23 @@ func (self *CryptoDotCom) Sell(
 	}
 
 	for {
+		// read the dynamic settings
 		var (
-			level int64   = notify.Level()
-			mult  float64 = model.GetMult()
+			mult  float64
+			level int64          = notify.Level()
+			strat model.Strategy = model.GetStrategy()
 		)
-		// listen to the filled orders, look for newly filled orders, automatically place new LIMIT SELL orders.
-		if filled, err = self.sell(client, quotes, mult, hold, service, level, filled); err != nil {
+		if mult, err = strat.Mult(); err != nil {
 			self.error(err, level, service)
 		} else {
-			// listen to the opened orders, look for cancelled orders, send a notification.
-			if opened, err = self.listen(client, quotes, service, level, opened, filled); err != nil {
+			// listen to the filled orders, look for newly filled orders, automatically place new LIMIT SELL orders.
+			if filled, err = self.sell(client, quotes, mult, hold, service, level, filled); err != nil {
 				self.error(err, level, service)
+			} else {
+				// listen to the opened orders, look for cancelled orders, send a notification.
+				if opened, err = self.listen(client, quotes, service, level, opened, filled); err != nil {
+					self.error(err, level, service)
+				}
 			}
 		}
 	}
@@ -679,7 +685,7 @@ func (self *CryptoDotCom) Aggregate(client, book interface{}, market string, agg
 
 	var out model.Book
 	for _, e := range bids {
-		price := pricing.RoundToPrecision(pricing.RoundToNearest(e.Price(), agg), prec)
+		price := precision.Round(aggregation.Round(e.Price(), agg), prec)
 		entry := out.EntryByPrice(price)
 		if entry != nil {
 			entry.Size = entry.Size + e.Size()

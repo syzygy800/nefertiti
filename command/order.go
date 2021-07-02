@@ -95,16 +95,15 @@ func (c *OrderCommand) Run(args []string) int {
 	}
 
 	var mult float64 = 1.0
-	flg = flag.Get("mult")
-	if flg.Exists {
-		if mult, err = flg.Float64(); err != nil {
-			return c.ReturnError(fmt.Errorf("mult %v is invalid", flg))
-		}
+	if mult, err = multiplier.Get(mult); err != nil {
+		return c.ReturnError(err)
+	} else if mult != 1.0 {
 		var prec int
 		if prec, err = exchange.GetPricePrec(client, market); err != nil {
 			return c.ReturnError(err)
+		} else {
+			price = pricing.Multiply(price, mult, prec)
 		}
-		price = pricing.Multiply(price, mult, prec)
 	}
 
 	var out []byte

@@ -222,9 +222,10 @@ func GetOrderMult(meta string) float64 {
 			}
 		}
 	}
-	out := GetMult()
+	strat := GetStrategy()
+	out, _ := strat.Mult()
 	if out == 0 {
-		out = pricing.FIVE_PERCENT
+		out = multiplier.FIVE_PERCENT
 	}
 	return out
 }
