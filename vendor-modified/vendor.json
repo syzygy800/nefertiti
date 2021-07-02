@@ -3,12 +3,6 @@
 	"ignore": "test",
 	"package": [
 		{
-			"checksumSHA1": "Pab6HW6BVyOY282SL09mJ2gns3A=",
-			"path": "github.com/Kucoin/kucoin-go-sdk",
-			"revision": "cc686920c5de9d473168ed65658a9d50d655b126",
-			"revisionTime": "2019-03-21T03:57:29Z"
-		},
-		{
 			"checksumSHA1": "J/tKuBZg28ednXA1gAmaRPdfZjY=",
 			"path": "github.com/alexflint/go-filemutex",
 			"revision": "d358565f3c3f5334209f1e80693e4f621650c489",
