@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
+	github.com/adshao/go-binance/v2 v2.2.2 // indirect
 	github.com/alexflint/go-filemutex v1.1.0
 	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/bitly/go-simplejson v0.5.0 // indirect
@@ -31,6 +32,7 @@ require (
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/stretchr/testify v1.7.0 // indirect
 	github.com/svanas/go-binance v0.0.0-20210702095236-450cfcbb9b00
+	github.com/svanas/go-coinbasepro v0.0.0-20210706151135-3ac97ad777f0 // indirect
 	github.com/svanas/go-crypto-dot-com v0.0.0-20200621190630-a4cbac992669
 	github.com/svanas/go-mining-hamster v0.0.0-20190102110438-73bc620cc6e9
 	github.com/yanzay/tbot v1.0.0

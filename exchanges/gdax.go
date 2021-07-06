@@ -12,19 +12,19 @@ import (
 	"strings"
 	"time"
 
-	"bitbucket.com/svanas/cryptotrader/aggregation"
-	"bitbucket.com/svanas/cryptotrader/flag"
-	"bitbucket.com/svanas/cryptotrader/gdax"
-	"bitbucket.com/svanas/cryptotrader/model"
-	"bitbucket.com/svanas/cryptotrader/multiplier"
-	"bitbucket.com/svanas/cryptotrader/notify"
-	"bitbucket.com/svanas/cryptotrader/precision"
-	"bitbucket.com/svanas/cryptotrader/pricing"
-	"bitbucket.com/svanas/cryptotrader/session"
 	filemutex "github.com/alexflint/go-filemutex"
 	"github.com/go-errors/errors"
 	ws "github.com/gorilla/websocket"
 	exchange "github.com/svanas/go-coinbasepro"
+	"github.com/svanas/nefertiti/aggregation"
+	"github.com/svanas/nefertiti/flag"
+	"github.com/svanas/nefertiti/gdax"
+	"github.com/svanas/nefertiti/model"
+	"github.com/svanas/nefertiti/multiplier"
+	"github.com/svanas/nefertiti/notify"
+	"github.com/svanas/nefertiti/precision"
+	"github.com/svanas/nefertiti/pricing"
+	"github.com/svanas/nefertiti/session"
 )
 
 var (
