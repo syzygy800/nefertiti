@@ -168,7 +168,7 @@ func get(
 				}
 			}
 
-			// ignore orders that are more expensive than 24h high minus 5%
+			// ignore orders that are more expensive than 24h average minus 5%
 			if dip > 0 {
 				i = 0
 				for i < len(book2) {

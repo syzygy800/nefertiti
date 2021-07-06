@@ -12,18 +12,19 @@ import (
 	"strings"
 	"time"
 
+	"bitbucket.com/svanas/cryptotrader/aggregation"
+	"bitbucket.com/svanas/cryptotrader/flag"
+	"bitbucket.com/svanas/cryptotrader/gdax"
+	"bitbucket.com/svanas/cryptotrader/model"
+	"bitbucket.com/svanas/cryptotrader/multiplier"
+	"bitbucket.com/svanas/cryptotrader/notify"
+	"bitbucket.com/svanas/cryptotrader/precision"
+	"bitbucket.com/svanas/cryptotrader/pricing"
+	"bitbucket.com/svanas/cryptotrader/session"
 	filemutex "github.com/alexflint/go-filemutex"
 	"github.com/go-errors/errors"
 	ws "github.com/gorilla/websocket"
-	exchange "github.com/preichenberger/go-coinbase-exchange"
-	"github.com/svanas/nefertiti/aggregation"
-	"github.com/svanas/nefertiti/flag"
-	"github.com/svanas/nefertiti/model"
-	"github.com/svanas/nefertiti/multiplier"
-	"github.com/svanas/nefertiti/notify"
-	"github.com/svanas/nefertiti/precision"
-	"github.com/svanas/nefertiti/pricing"
-	"github.com/svanas/nefertiti/session"
+	exchange "github.com/svanas/go-coinbasepro"
 )
 
 var (
@@ -79,127 +80,25 @@ func init() {
 	}
 }
 
-type GdaxMsgType int
-
-const (
-	GDAX_MSG_UNKNOWN GdaxMsgType = iota
-	GDAX_MSG_RECEIVED
-	GDAX_MSG_OPEN
-	GDAX_MSG_DONE
-	GDAX_MSG_MATCH
-	GDAX_MSG_CHANGE
-	GDAX_MSG_ACTIVATE
-	GDAX_MSG_HEARTBEAT
-	GDAX_MSG_ERROR
-)
-
-var GdaxMsgTypeString = map[GdaxMsgType]string{
-	GDAX_MSG_UNKNOWN:   "",
-	GDAX_MSG_RECEIVED:  "received",
-	GDAX_MSG_OPEN:      "open",
-	GDAX_MSG_DONE:      "done",
-	GDAX_MSG_MATCH:     "match",
-	GDAX_MSG_CHANGE:    "change",
-	GDAX_MSG_ACTIVATE:  "activate",
-	GDAX_MSG_HEARTBEAT: "heartbeat",
-	GDAX_MSG_ERROR:     "error",
-}
-
-func (mt *GdaxMsgType) String() string {
-	return GdaxMsgTypeString[*mt]
-}
-
-func (mt *GdaxMsgType) CanNotify(level int64, side model.OrderSide, reason GdaxMsgReason) bool {
-	switch level {
+func canNotify(msg *gdax.Message) bool {
+	switch notify.Level() {
 	case notify.LEVEL_NOTHING:
 		return false
 	case notify.LEVEL_ERRORS:
-		return *mt == GDAX_MSG_ERROR
+		return msg.GetType() == gdax.MESSAGE_ERROR
 	case notify.LEVEL_VERBOSE:
 		return true
 	}
-	return (*mt == GDAX_MSG_ERROR) ||
-		(*mt == GDAX_MSG_ACTIVATE) ||
-		(*mt == GDAX_MSG_OPEN && side == model.SELL) ||
-		(*mt == GDAX_MSG_DONE && reason == GDAX_REASON_FILLED)
-}
-
-func NewGdaxMsgType(data string) GdaxMsgType {
-	for mt := range GdaxMsgTypeString {
-		if mt.String() == data {
-			return mt
-		}
-	}
-	return GDAX_MSG_UNKNOWN
-}
-
-type GdaxMsgReason int
-
-const (
-	GDAX_REASON_UNKNOWN GdaxMsgReason = iota
-	GDAX_REASON_FILLED
-	GDAX_REASON_CANCELED
-)
-
-var GdaxMsgReasonString = map[GdaxMsgReason]string{
-	GDAX_REASON_UNKNOWN:  "",
-	GDAX_REASON_FILLED:   "filled",
-	GDAX_REASON_CANCELED: "canceled",
-}
-
-func (mr *GdaxMsgReason) String() string {
-	return GdaxMsgReasonString[*mr]
-}
-
-func NewGdaxMsgReason(data string) GdaxMsgReason {
-	for mr := range GdaxMsgReasonString {
-		if mr.String() == data {
-			return mr
-		}
-	}
-	return GDAX_REASON_UNKNOWN
-}
-
-type GdaxMessage struct {
-	*exchange.Message
-	UserId string `json:"user_id"`
-}
-
-func (msg *GdaxMessage) Title() string {
-	var out string
-	out = "Coinbase Pro - " + strings.Title(msg.Type) + " " + strings.Title(msg.Side)
-	mt := NewGdaxMsgType(msg.Type)
-	if mt == GDAX_MSG_DONE {
-		if msg.Reason != "" {
-			out = out + " (Reason: " + strings.Title(msg.Reason) + ")"
-		}
-	}
-	return out
-}
-
-type gdaxProduct struct {
-	Id             string `json:"id"`
-	BaseCurrency   string `json:"base_currency"`
-	QuoteCurrency  string `json:"quote_currency"`
-	BaseMinSize    string `json:"base_min_size"`
-	BaseMaxSize    string `json:"base_max_size"`
-	BaseIncrement  string `json:"base_increment"`
-	QuoteIncrement string `json:"quote_increment"`
-	LimitOnly      bool   `json:"limit_only"`
-}
-
-func (product *gdaxProduct) getMinOrderSize() (float64, error) {
-	out, err := strconv.ParseFloat(product.BaseMinSize, 64)
-	if err != nil {
-		return 0, errors.Wrap(err, 1)
-	} else {
-		return out, nil
-	}
+	mt := msg.GetType()
+	return (mt == gdax.MESSAGE_ERROR) ||
+		(mt == gdax.MESSAGE_ACTIVATE) ||
+		(mt == gdax.MESSAGE_OPEN && model.NewOrderSide(msg.Side) == model.SELL) ||
+		(mt == gdax.MESSAGE_DONE && msg.GetReason() == gdax.REASON_FILLED)
 }
 
 type Gdax struct {
 	*model.ExchangeInfo
-	products []gdaxProduct
+	products []exchange.Product
 }
 
 func (self *Gdax) error(err error, level int64, service model.Notify) {
@@ -213,18 +112,18 @@ func (self *Gdax) error(err error, level int64, service model.Notify) {
 	}
 }
 
-func (self *Gdax) getMinOrderSize(client *exchange.Client, market string) (float64, error) {
+func (self *Gdax) getMinOrderSize(client *gdax.Client, market string) (float64, error) {
 	cached := true
 	for {
-		products, err := self.GetProducts(client, cached)
+		products, err := self.getProducts(client, cached)
 
 		if err != nil {
 			return 0, err
 		}
 
 		for _, product := range products {
-			if product.Id == market {
-				out, err := product.getMinOrderSize()
+			if product.ID == market {
+				out, err := gdax.GetMinOrderSize(&product)
 				if err != nil {
 					return 0, err
 				} else {
@@ -245,9 +144,21 @@ func (self *Gdax) GetInfo() *model.ExchangeInfo {
 	return self.ExchangeInfo
 }
 
+func (self *Gdax) getClient(apiKey, apiSecret, apiPassphrase string, sandbox bool) *gdax.Client {
+	client := gdax.New(sandbox)
+
+	client.UpdateConfig(&exchange.ClientConfig{
+		Key:        apiKey,
+		Passphrase: apiPassphrase,
+		Secret:     apiSecret,
+	})
+
+	return client
+}
+
 func (self *Gdax) GetClient(permission model.Permission, sandbox bool) (interface{}, error) {
 	if permission != model.PRIVATE {
-		return exchange.NewClient("", "", "", sandbox), nil
+		return gdax.New(sandbox), nil
 	}
 
 	var (
@@ -260,53 +171,27 @@ func (self *Gdax) GetClient(permission model.Permission, sandbox bool) (interfac
 		return nil, err
 	}
 
-	return exchange.NewClient(apiSecret, apiKey, apiPassphrase, sandbox), nil
+	return self.getClient(apiKey, apiSecret, apiPassphrase, sandbox), nil
 }
 
-func (self *Gdax) getProducts(client interface{}) ([]gdaxProduct, error) {
-	gdaxClient, ok := client.(*exchange.Client)
-	if !ok {
-		return nil, errors.New("invalid argument: client")
-	}
-	var output []gdaxProduct
-	_, err := gdaxClient.Request("GET", "/products", nil, &output)
-	if err != nil {
-		return nil, errors.Wrap(err, 1)
-	}
-	return output, nil
-}
-
-func (self *Gdax) GetProducts(client interface{}, cached bool) ([]gdaxProduct, error) {
+func (self *Gdax) getProducts(client interface{}, cached bool) ([]exchange.Product, error) {
 	if self.products == nil || cached == false {
+		gdaxClient, ok := client.(*gdax.Client)
+		if !ok {
+			return nil, errors.New("invalid argument: client")
+		}
 		var err error
-		if self.products, err = self.getProducts(client); err != nil {
+		if self.products, err = gdaxClient.GetProducts(); err != nil {
 			return nil, err
 		}
 	}
 	return self.products, nil
 }
 
-type gdaxMe struct {
-	Id string `json:"id"`
-}
-
-func (self *Gdax) getMe(client interface{}) (*gdaxMe, error) {
-	gdax, ok := client.(*exchange.Client)
-	if !ok {
-		return nil, errors.New("invalid argument: client")
-	}
-	var out gdaxMe
-	_, err := gdax.Request("GET", "/users/self", nil, &out)
-	if err != nil {
-		return nil, errors.Wrap(err, 1)
-	}
-	return &out, nil
-}
-
 func (self *Gdax) GetMarkets(cached, sandbox bool) ([]model.Market, error) {
 	var out []model.Market
 
-	products, err := self.GetProducts(exchange.NewClient("", "", "", sandbox), cached)
+	products, err := self.getProducts(gdax.New(sandbox), cached)
 
 	if err != nil {
 		return nil, err
@@ -314,7 +199,7 @@ func (self *Gdax) GetMarkets(cached, sandbox bool) ([]model.Market, error) {
 
 	for _, product := range products {
 		out = append(out, model.Market{
-			Name:  product.Id,
+			Name:  product.ID,
 			Base:  product.BaseCurrency,
 			Quote: product.QuoteCurrency,
 		})
@@ -420,56 +305,56 @@ func (self *Gdax) sell(
 				}
 			}
 		} else {
-			msg := GdaxMessage{}
+			msg := gdax.Message{}
 			if err = json.Unmarshal(data, &msg); err != nil {
 				self.error(errors.Errorf("%s. Message: %s", err.Error(), string(data)), notify.Level(), service)
 				return err
 			}
-			if NewGdaxMsgType(msg.Type) == GDAX_MSG_ERROR {
+			if msg.GetType() == gdax.MESSAGE_ERROR {
 				self.error(errors.Errorf("%s. Reason: %s", msg.Message.Message, msg.Reason), notify.Level(), service)
 				return err
 			}
-			if msg.UserId == gdaxUserId {
+			if msg.UserID == gdaxUserId {
 				log.Printf("[INFO] %s", string(data))
-				mt := NewGdaxMsgType(msg.Type)
+				mt := msg.GetType()
 				// send a notification if type != ["received"|"match"]
-				if mt != GDAX_MSG_RECEIVED && mt != GDAX_MSG_MATCH {
-					if mt.CanNotify(notify.Level(), model.NewOrderSide(msg.Side), NewGdaxMsgReason(msg.Reason)) {
+				if mt != gdax.MESSAGE_RECEIVED && mt != gdax.MESSAGE_MATCH {
+					if canNotify(&msg) {
 						if service != nil {
 							if err = service.SendMessage(msg, msg.Title(), model.ALWAYS); err != nil {
 								log.Printf("[ERROR] %v", err)
 							}
 						}
 						if twitter != nil {
-							if mt == GDAX_MSG_DONE && NewGdaxMsgReason(msg.Reason) == GDAX_REASON_FILLED {
-								notify.Tweet(twitter, fmt.Sprintf("Done %s. %s priced at %f #CoinbasePro", strings.Title(msg.Side), model.TweetMarket(markets, msg.ProductId), msg.Price))
+							if mt == gdax.MESSAGE_DONE && msg.GetReason() == gdax.REASON_FILLED {
+								notify.Tweet(twitter, fmt.Sprintf("Done %s. %s priced at %s #CoinbasePro", strings.Title(msg.Side), model.TweetMarket(markets, msg.ProductID), msg.Price))
 							}
 						}
 					}
 				}
 				// has a buy order been filled? then place a sell order
-				if mt == GDAX_MSG_DONE {
-					mr := NewGdaxMsgReason(msg.Reason)
-					if mr == GDAX_REASON_FILLED {
+				if mt == gdax.MESSAGE_DONE {
+					mr := msg.GetReason()
+					if mr == gdax.REASON_FILLED {
 						side := model.NewOrderSide(msg.Side)
 						if side == model.BUY {
-							client := exchange.NewClient(apiSecret, apiKey, apiPassphrase, sandbox)
+							client := self.getClient(apiKey, apiSecret, apiPassphrase, sandbox)
 
-							price := msg.Price
+							price := gdax.ParseFloat(msg.Price)
 							if price == 0 {
-								if price, err = self.GetTicker(client, msg.ProductId); err != nil {
+								if price, err = self.GetTicker(client, msg.ProductID); err != nil {
 									self.error(err, notify.Level(), service)
 								}
 							}
 
-							var old exchange.Order
-							if old, err = client.GetOrder(msg.OrderId); err != nil {
+							var old *gdax.Order
+							if old, err = client.GetOrder(msg.OrderID); err != nil {
 								self.error(errors.Wrap(err, 1), notify.Level(), service)
 							}
 
-							qty := old.Size
+							qty := old.GetSize()
 							if qty == 0 {
-								if qty, err = self.getMinOrderSize(client, msg.ProductId); err != nil {
+								if qty, err = self.getMinOrderSize(client, msg.ProductID); err != nil {
 									self.error(err, notify.Level(), service)
 								}
 								qty = qty * 5
@@ -479,9 +364,9 @@ func (self *Gdax) sell(
 								base  string
 								quote string
 							)
-							if base, quote, err = model.ParseMarket(markets, msg.ProductId); err != nil {
+							if base, quote, err = model.ParseMarket(markets, msg.ProductID); err != nil {
 								if markets, err = self.GetMarkets(false, sandbox); err == nil {
-									base, quote, err = model.ParseMarket(markets, msg.ProductId)
+									base, quote, err = model.ParseMarket(markets, msg.ProductID)
 								}
 								if err != nil {
 									self.error(err, notify.Level(), service)
@@ -489,7 +374,7 @@ func (self *Gdax) sell(
 							}
 
 							var prec int
-							if prec, err = self.GetPricePrec(client, msg.ProductId); err != nil {
+							if prec, err = self.GetPricePrec(client, msg.ProductID); err != nil {
 								self.error(err, notify.Level(), service)
 							}
 
@@ -502,13 +387,16 @@ func (self *Gdax) sell(
 							}
 
 							// by default, we will sell at a 5% profit
-							order := exchange.Order{
-								Type:      model.OrderTypeString[model.LIMIT],
-								Side:      model.OrderSideString[model.SELL],
-								Size:      self.GetMaxSize(client, base, quote, hold.HasMarket(msg.ProductId), qty),
-								Price:     pricing.Multiply(price, mult, prec),
-								ProductId: msg.ProductId,
-							}
+
+							order := (&gdax.Order{
+								Order: &exchange.Order{
+									Type:      model.OrderTypeString[model.LIMIT],
+									Side:      model.OrderSideString[model.SELL],
+									ProductID: msg.ProductID,
+								},
+							}).
+								SetSize(self.GetMaxSize(client, base, quote, hold.HasMarket(msg.ProductID), qty)).
+								SetPrice(pricing.Multiply(price, mult, prec))
 
 							// log the newly created SELL order
 							var raw []byte
@@ -521,7 +409,7 @@ func (self *Gdax) sell(
 								}
 							}
 
-							if _, err = client.CreateOrder(&order); err != nil {
+							if _, err = client.CreateOrder(order); err != nil {
 								self.error(errors.Wrap(err, 1), notify.Level(), service)
 							}
 						}
@@ -533,16 +421,16 @@ func (self *Gdax) sell(
 		if time.Since(lastInterval).Minutes() > intervalMinutes {
 			var (
 				cursor   *exchange.Cursor
-				orders   []exchange.Order
-				strategy model.Strategy   = model.GetStrategy()
-				client   *exchange.Client = exchange.NewClient(apiSecret, apiKey, apiPassphrase, sandbox)
+				orders   []gdax.Order
+				strategy model.Strategy = model.GetStrategy()
+				client   *gdax.Client   = self.getClient(apiKey, apiSecret, apiPassphrase, sandbox)
 			)
 
 			// follow up on the "aggressive" strategy
 			if strategy == model.STRATEGY_STANDARD && flag.Exists("dca") {
 				// we won't be re-buying *unless* your most recent (non-sold) sell is older than 14 days
 				const rebuyAfterDays = 14
-				var open []exchange.Order
+				var open []gdax.Order
 
 				cursor = client.ListOrders(exchange.ListOrdersParams{Status: "open"})
 				for cursor.HasMore {
@@ -558,8 +446,8 @@ func (self *Gdax) sell(
 				if err != nil {
 					self.error(errors.Wrap(err, 1), notify.Level(), service)
 				} else {
-					var products []gdaxProduct
-					if products, err = self.GetProducts(client, true); err != nil {
+					var products []exchange.Product
+					if products, err = self.getProducts(client, true); err != nil {
 						self.error(err, notify.Level(), service)
 					} else {
 						for _, product := range products {
@@ -571,7 +459,7 @@ func (self *Gdax) sell(
 								for _, order := range open {
 									side := model.NewOrderSide(order.Side)
 									if side == model.SELL {
-										if order.ProductId == product.Id {
+										if order.ProductID == product.ID {
 											createdAt := order.CreatedAt.Time()
 											if youngest.IsZero() || youngest.Before(createdAt) {
 												youngest = createdAt
@@ -583,7 +471,7 @@ func (self *Gdax) sell(
 								if !youngest.IsZero() && time.Since(youngest).Hours() > 24*rebuyAfterDays {
 									// did we recently sell an "aggressive" order on this market? then prevent us from buying this pump.
 									var closed model.Orders
-									if closed, err = self.GetClosed(client, product.Id); err != nil {
+									if closed, err = self.GetClosed(client, product.ID); err != nil {
 										self.error(err, notify.Level(), service)
 									} else {
 										if time.Since(closed.Youngest(model.SELL, time.Now())).Hours() < 24*rebuyAfterDays {
@@ -591,7 +479,7 @@ func (self *Gdax) sell(
 										} else {
 											msg := fmt.Sprintf(
 												"Re-buying %s because your latest activity on this market (at %s) is older than %d days.",
-												product.Id, youngest.Format(time.RFC1123), rebuyAfterDays,
+												product.ID, youngest.Format(time.RFC1123), rebuyAfterDays,
 											)
 
 											log.Println("[INFO] " + msg)
@@ -602,19 +490,20 @@ func (self *Gdax) sell(
 											}
 
 											var qty float64
-											if qty, err = product.getMinOrderSize(); err != nil {
+											if qty, err = gdax.GetMinOrderSize(&product); err != nil {
 												self.error(err, notify.Level(), service)
 											} else {
-												if hold.HasMarket(product.Id) {
+												if hold.HasMarket(product.ID) {
 													qty = qty * 5
 												}
 
-												order := exchange.Order{
-													Type:      model.OrderTypeString[model.MARKET],
-													Side:      model.OrderSideString[model.BUY],
-													Size:      qty,
-													ProductId: product.Id,
-												}
+												order := (&gdax.Order{
+													Order: &exchange.Order{
+														Type:      model.OrderTypeString[model.MARKET],
+														Side:      model.OrderSideString[model.BUY],
+														ProductID: product.ID,
+													},
+												}).SetSize(qty)
 
 												// log the newly created BUY order
 												var raw []byte
@@ -627,7 +516,7 @@ func (self *Gdax) sell(
 													}
 												}
 
-												if _, err = client.CreateOrder(&order); err != nil {
+												if _, err = client.CreateOrder(order); err != nil {
 													self.error(errors.Wrap(err, 1), notify.Level(), service)
 												}
 											}
@@ -656,25 +545,25 @@ func (self *Gdax) sell(
 						} else {
 							for _, order := range orders {
 								// do not replace the limit orders that are merely used as a reference for the HODL strategy
-								if !hold.HasMarket(order.ProductId) {
+								if !hold.HasMarket(order.ProductID) {
 									// replace limit sell (not limit buy) orders
 									side := model.NewOrderSide(order.Side)
 									if side == model.SELL {
-										ticker, ok := cache[order.ProductId]
+										ticker, ok := cache[order.ProductID]
 										if !ok {
-											if ticker, err = self.GetTicker(client, order.ProductId); err == nil {
-												cache[order.ProductId] = ticker
+											if ticker, err = self.GetTicker(client, order.ProductID); err == nil {
+												cache[order.ProductID] = ticker
 											}
 										}
 										if ticker > 0 {
-											price := multiplier.Scale(mult, 0.75) * (order.Price / mult)
+											price := multiplier.Scale(mult, 0.75) * (order.GetPrice() / mult)
 											// is the ticker nearing the price? then cancel the limit sell order, and place a stop loss order below the ticker.
 											if ticker > price {
-												if err = client.CancelOrder(order.Id); err == nil {
+												if err = client.CancelOrder(order.ID); err == nil {
 													var prec int
-													if prec, err = self.GetPricePrec(client, order.ProductId); err == nil {
+													if prec, err = self.GetPricePrec(client, order.ProductID); err == nil {
 														price = multiplier.Scale(mult, 0.5) * (ticker / mult)
-														_, err = self.StopLoss(client, order.ProductId, order.Size, precision.Round(price, prec), model.LIMIT, "")
+														_, err = self.StopLoss(client, order.ProductID, order.GetSize(), precision.Round(price, prec), model.LIMIT, "")
 														// is this market in limit-only mode?
 														if err != nil {
 															log.Printf("[ERROR] %v\n", err)
@@ -707,20 +596,20 @@ func (self *Gdax) sell(
 							for _, order := range orders {
 								// replace stop loss (not stop entry) orders
 								if order.Stop == "loss" {
-									ticker, ok := cache[order.ProductId]
+									ticker, ok := cache[order.ProductID]
 									if !ok {
-										if ticker, err = self.GetTicker(client, order.ProductId); err == nil {
-											cache[order.ProductId] = ticker
+										if ticker, err = self.GetTicker(client, order.ProductID); err == nil {
+											cache[order.ProductID] = ticker
 										}
 									}
 									if ticker > 0 {
 										var prec int
-										if prec, err = self.GetPricePrec(client, order.ProductId); err == nil {
+										if prec, err = self.GetPricePrec(client, order.ProductID); err == nil {
 											price := multiplier.Scale(mult, 0.5) * (ticker / mult)
 											// is the distance bigger than 5%? then cancel the stop loss, and place a new one.
-											if order.StopPrice < precision.Round(price, prec) {
-												if err = client.CancelOrder(order.Id); err == nil {
-													_, err = self.StopLoss(client, order.ProductId, order.Size, precision.Round(price, prec), model.LIMIT, "")
+											if order.GetStopPrice() < precision.Round(price, prec) {
+												if err = client.CancelOrder(order.ID); err == nil {
+													_, err = self.StopLoss(client, order.ProductID, order.GetSize(), precision.Round(price, prec), model.LIMIT, "")
 												}
 											}
 										}
@@ -772,12 +661,12 @@ func (self *Gdax) Sell(
 	apiUserId = flag.Get("api-user-id").String()
 	if apiUserId == "" {
 		// get the GDAX user ID
-		client := exchange.NewClient(apiSecret, apiKey, apiPassphrase, sandbox)
-		var me *gdaxMe
-		if me, err = self.getMe(client); err != nil {
-			return err
+		client := self.getClient(apiKey, apiSecret, apiPassphrase, sandbox)
+		var me *gdax.Me
+		if me, err = client.GetMe(); err != nil {
+			return errors.Wrap(err, 1)
 		}
-		apiUserId = me.Id
+		apiUserId = me.ID
 	}
 
 	var service model.Notify = nil
@@ -804,21 +693,21 @@ func (self *Gdax) Order(
 	kind model.OrderType,
 	meta string,
 ) (oid []byte, raw []byte, err error) {
-	gdax, ok := client.(*exchange.Client)
+	gdaxClient, ok := client.(*gdax.Client)
 	if !ok {
 		return nil, nil, errors.New("invalid argument: client")
 	}
 
-	order := exchange.Order{
-		Type:      model.OrderTypeString[model.LIMIT],
-		Side:      model.OrderSideString[side],
-		Size:      size,
-		Price:     price,
-		ProductId: market,
-	}
+	order := (&gdax.Order{
+		Order: &exchange.Order{
+			Type:      model.OrderTypeString[model.LIMIT],
+			Side:      model.OrderSideString[side],
+			ProductID: market,
+		},
+	}).SetSize(size).SetPrice(price)
 
-	var saved exchange.Order
-	if saved, err = gdax.CreateOrder(&order); err != nil {
+	var saved *gdax.Order
+	if saved, err = gdaxClient.CreateOrder(order); err != nil {
 		return nil, nil, errors.Wrap(err, 1)
 	}
 
@@ -827,29 +716,29 @@ func (self *Gdax) Order(
 		return nil, nil, errors.Wrap(err, 1)
 	}
 
-	return []byte(saved.Id), out, nil
+	return []byte(saved.ID), out, nil
 }
 
 func (self *Gdax) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType, meta string) ([]byte, error) {
 	var err error
 
-	gdaxClient, ok := client.(*exchange.Client)
+	gdaxClient, ok := client.(*gdax.Client)
 	if !ok {
 		return nil, errors.New("invalid argument: client")
 	}
 
-	order := exchange.Order{
-		Type:      model.OrderTypeString[kind],
-		Side:      model.OrderSideString[model.SELL],
-		Size:      size,
-		ProductId: market,
-		Stop:      "loss",
-		StopPrice: price,
-	}
+	order := (&gdax.Order{
+		Order: &exchange.Order{
+			Type:      model.OrderTypeString[kind],
+			Side:      model.OrderSideString[model.SELL],
+			ProductID: market,
+			Stop:      "loss",
+		},
+	}).SetSize(size).SetStopPrice(price)
 
 	if kind == model.LIMIT {
 		var prec int
-		if prec, err = self.GetPricePrec(client, order.ProductId); err != nil {
+		if prec, err = self.GetPricePrec(client, order.ProductID); err != nil {
 			return nil, err
 		}
 		limit := price
@@ -859,11 +748,11 @@ func (self *Gdax) StopLoss(client interface{}, market string, size float64, pric
 				break
 			}
 		}
-		order.Price = precision.Round(limit, prec)
+		order.SetPrice(precision.Round(limit, prec))
 	}
 
-	var saved exchange.Order
-	if saved, err = gdaxClient.CreateOrder(&order); err != nil {
+	var saved *gdax.Order
+	if saved, err = gdaxClient.CreateOrder(order); err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
 
@@ -880,20 +769,20 @@ func (self *Gdax) OCO(client interface{}, market string, size float64, price, st
 }
 
 func (self *Gdax) GetClosed(client interface{}, market string) (model.Orders, error) {
-	var err error
-
-	gdaxClient, ok := client.(*exchange.Client)
+	gdaxClient, ok := client.(*gdax.Client)
 	if !ok {
 		return nil, errors.New("invalid argument: client")
 	}
 
-	params := exchange.ListFillsParams{
-		ProductId: market,
-	}
-	cursor := gdaxClient.ListFills(params)
+	cursor := gdaxClient.ListFills(exchange.ListFillsParams{
+		ProductID: market,
+	})
 
-	var out model.Orders
-	var fills []exchange.Fill
+	var (
+		err   error
+		out   model.Orders
+		fills []exchange.Fill
+	)
 	for cursor.HasMore {
 		if err = cursor.NextPage(&fills); err != nil {
 			return nil, errors.Wrap(err, 1)
@@ -901,9 +790,9 @@ func (self *Gdax) GetClosed(client interface{}, market string) (model.Orders, er
 		for _, fill := range fills {
 			out = append(out, model.Order{
 				Side:      model.NewOrderSide(fill.Side),
-				Market:    fill.ProductId,
-				Size:      fill.Size,
-				Price:     fill.Price,
+				Market:    fill.ProductID,
+				Size:      gdax.ParseFloat(fill.Size),
+				Price:     gdax.ParseFloat(fill.Price),
 				CreatedAt: fill.CreatedAt.Time(),
 			})
 		}
@@ -913,31 +802,31 @@ func (self *Gdax) GetClosed(client interface{}, market string) (model.Orders, er
 }
 
 func (self *Gdax) GetOpened(client interface{}, market string) (model.Orders, error) {
-	var err error
-
-	gdaxClient, ok := client.(*exchange.Client)
+	gdaxClient, ok := client.(*gdax.Client)
 	if !ok {
 		return nil, errors.New("invalid argument: client")
 	}
 
-	params := exchange.ListOrdersParams{
+	cursor := gdaxClient.ListOrders(exchange.ListOrdersParams{
 		Status: "open",
-	}
-	cursor := gdaxClient.ListOrders(params)
+	})
 
-	var out model.Orders
-	var orders []exchange.Order
+	var (
+		err    error
+		out    model.Orders
+		orders []gdax.Order
+	)
 	for cursor.HasMore {
 		if err = cursor.NextPage(&orders); err != nil {
 			return nil, errors.Wrap(err, 1)
 		}
 		for _, order := range orders {
-			if order.ProductId == market {
+			if order.ProductID == market {
 				out = append(out, model.Order{
 					Side:      model.NewOrderSide(order.Side),
-					Market:    order.ProductId,
-					Size:      order.Size,
-					Price:     order.Price,
+					Market:    order.ProductID,
+					Size:      order.GetSize(),
+					Price:     order.GetPrice(),
 					CreatedAt: order.CreatedAt.Time(),
 				})
 			}
@@ -948,14 +837,15 @@ func (self *Gdax) GetOpened(client interface{}, market string) (model.Orders, er
 }
 
 func (self *Gdax) GetBook(client interface{}, market string, side model.BookSide) (interface{}, error) {
-	var err error
-
-	gdaxClient, ok := client.(*exchange.Client)
+	gdaxClient, ok := client.(*gdax.Client)
 	if !ok {
 		return nil, errors.New("invalid argument: client")
 	}
 
-	var book exchange.Book
+	var (
+		err  error
+		book exchange.Book
+	)
 	if book, err = gdaxClient.GetBook(market, 3); err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
@@ -983,17 +873,17 @@ func (self *Gdax) Aggregate(client, book interface{}, market string, agg float64
 
 	var out model.Book
 	for _, e := range bids {
-		price := precision.Round(aggregation.Round(e.Price, agg), prec)
+		price := precision.Round(aggregation.Round(gdax.ParseFloat(e.Price), agg), prec)
 		entry := out.EntryByPrice(price)
 		if entry != nil {
-			entry.Size = entry.Size + e.Size
+			entry.Size = entry.Size + gdax.ParseFloat(e.Size)
 		} else {
 			entry = &model.BookEntry{
 				Buy: &model.Buy{
 					Market: market,
 					Price:  price,
 				},
-				Size: e.Size,
+				Size: gdax.ParseFloat(e.Size),
 			}
 			out = append(out, *entry)
 		}
@@ -1004,49 +894,51 @@ func (self *Gdax) Aggregate(client, book interface{}, market string, agg float64
 }
 
 func (self *Gdax) GetTicker(client interface{}, market string) (float64, error) {
-	var err error
-
-	gdax, ok := client.(*exchange.Client)
+	gdaxClient, ok := client.(*gdax.Client)
 	if !ok {
 		return 0, errors.New("invalid argument: client")
 	}
 
-	var ticker exchange.Ticker
-	if ticker, err = gdax.GetTicker(market); err != nil {
+	var (
+		err    error
+		ticker exchange.Ticker
+	)
+	if ticker, err = gdaxClient.GetTicker(market); err != nil {
 		return 0, err
 	}
 
-	return ticker.Price, nil
+	return gdax.ParseFloat(ticker.Price), nil
 }
 
 func (self *Gdax) Get24h(client interface{}, market string) (*model.Stats, error) {
-	var err error
-
-	gdaxClient, ok := client.(*exchange.Client)
+	gdaxClient, ok := client.(*gdax.Client)
 	if !ok {
 		return nil, errors.New("invalid argument: client")
 	}
 
-	var gdaxStats exchange.Stats
+	var (
+		err       error
+		gdaxStats exchange.Stats
+	)
 	if gdaxStats, err = gdaxClient.GetStats(market); err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
 
 	return &model.Stats{
 		Market:    market,
-		High:      gdaxStats.High,
-		Low:       gdaxStats.Low,
+		High:      gdax.ParseFloat(gdaxStats.High),
+		Low:       gdax.ParseFloat(gdaxStats.Low),
 		BtcVolume: 0,
 	}, nil
 }
 
 func (self *Gdax) GetPricePrec(client interface{}, market string) (int, error) {
-	products, err := self.GetProducts(client, true)
+	products, err := self.getProducts(client, true)
 	if err != nil {
 		return 0, err
 	}
 	for _, p := range products {
-		if p.Id == market {
+		if p.ID == market {
 			return getPrecFromStr(p.QuoteIncrement, 0), nil
 		}
 	}
@@ -1054,12 +946,12 @@ func (self *Gdax) GetPricePrec(client interface{}, market string) (int, error) {
 }
 
 func (self *Gdax) GetSizePrec(client interface{}, market string) (int, error) {
-	products, err := self.GetProducts(client, true)
+	products, err := self.getProducts(client, true)
 	if err != nil {
 		return 8, err
 	}
 	for _, p := range products {
-		if p.Id == market {
+		if p.ID == market {
 			return getPrecFromStr(p.BaseIncrement, 8), nil
 		}
 	}
@@ -1081,7 +973,7 @@ func (self *Gdax) GetMaxSize(client interface{}, base, quote string, hold bool, 
 	out := model.GetSizeMax(hold, def, fn)
 
 	if hold {
-		gdaxClient, ok := client.(*exchange.Client)
+		gdaxClient, ok := client.(*gdax.Client)
 		if ok {
 			min, err := self.getMinOrderSize(gdaxClient, market)
 			if err == nil {
@@ -1096,27 +988,27 @@ func (self *Gdax) GetMaxSize(client interface{}, base, quote string, hold bool, 
 }
 
 func (self *Gdax) Cancel(client interface{}, market string, side model.OrderSide) error {
-	var err error
-
-	gdaxClient, ok := client.(*exchange.Client)
+	gdaxClient, ok := client.(*gdax.Client)
 	if !ok {
 		return errors.New("invalid argument: client")
 	}
 
-	params := exchange.ListOrdersParams{
+	cursor := gdaxClient.ListOrders(exchange.ListOrdersParams{
 		Status: "open",
-	}
-	cursor := gdaxClient.ListOrders(params)
+	})
 
-	var orders []exchange.Order
+	var (
+		err    error
+		orders []exchange.Order
+	)
 	for cursor.HasMore {
 		if err = cursor.NextPage(&orders); err != nil {
 			return errors.Wrap(err, 1)
 		}
 		for _, order := range orders {
-			if order.ProductId == market {
+			if order.ProductID == market {
 				if ((side == model.BUY) && (order.Side == model.OrderSideString[model.BUY])) || ((side == model.SELL) && (order.Side == model.OrderSideString[model.SELL])) {
-					if err = gdaxClient.CancelOrder(order.Id); err != nil {
+					if err = gdaxClient.CancelOrder(order.ID); err != nil {
 						return errors.Wrap(err, 1)
 					}
 				}
@@ -1130,31 +1022,30 @@ func (self *Gdax) Cancel(client interface{}, market string, side model.OrderSide
 func (self *Gdax) Buy(client interface{}, cancel bool, market string, calls model.Calls, size, deviation float64, kind model.OrderType) error {
 	var err error
 
-	gdaxClient, ok := client.(*exchange.Client)
+	gdaxClient, ok := client.(*gdax.Client)
 	if !ok {
 		return errors.New("invalid argument: client")
 	}
 
 	// step #1: delete the buy order(s) that are open in your book
 	if cancel {
-		params := exchange.ListOrdersParams{
+		cursor := gdaxClient.ListOrders(exchange.ListOrdersParams{
 			Status: "open",
-		}
-		cursor := gdaxClient.ListOrders(params)
-		var orders []exchange.Order
+		})
+		var orders []gdax.Order
 		for cursor.HasMore {
 			if err = cursor.NextPage(&orders); err != nil {
 				return errors.Wrap(err, 1)
 			}
 			for _, order := range orders {
-				if order.ProductId == market {
+				if order.ProductID == market {
 					if order.Side == model.OrderSideString[model.BUY] {
 						// do not cancel orders that we're about to re-place
-						index := calls.IndexByPrice(order.Price)
-						if index > -1 && order.Size == size {
+						index := calls.IndexByPrice(order.GetPrice())
+						if index > -1 && order.GetSize() == size {
 							calls[index].Skip = true
 						} else {
-							if err = gdaxClient.CancelOrder(order.Id); err != nil {
+							if err = gdaxClient.CancelOrder(order.ID); err != nil {
 								return errors.Wrap(err, 1)
 							}
 						}
@@ -1171,14 +1062,14 @@ func (self *Gdax) Buy(client interface{}, cancel bool, market string, calls mode
 			if deviation != 1.0 {
 				kind, limit = call.Deviate(self, client, kind, deviation)
 			}
-			order := exchange.Order{
-				Type:      model.OrderTypeString[model.LIMIT],
-				Side:      model.OrderSideString[model.BUY],
-				Size:      size,
-				Price:     limit,
-				ProductId: market,
-			}
-			if _, err = gdaxClient.CreateOrder(&order); err != nil {
+			order := (&gdax.Order{
+				Order: &exchange.Order{
+					Type:      model.OrderTypeString[model.LIMIT],
+					Side:      model.OrderSideString[model.BUY],
+					ProductID: market,
+				},
+			}).SetSize(size).SetPrice(limit)
+			if _, err = gdaxClient.CreateOrder(order); err != nil {
 				var raw []byte
 				if raw, _ = json.Marshal(order); raw == nil {
 					return errors.Wrap(err, 1)
@@ -1203,8 +1094,8 @@ func NewGdax() model.Exchange {
 			Name: "Coinbase Pro",
 			URL:  "https://pro.coinbase.com",
 			REST: model.Endpoint{
-				URI:     "https://api.pro.coinbase.com",
-				Sandbox: "https://api-public.sandbox.pro.coinbase.com",
+				URI:     gdax.BASE_URL,
+				Sandbox: gdax.BASE_URL_SANDBOX,
 			},
 			WebSocket: model.Endpoint{
 				URI:     "wss://ws-feed.pro.coinbase.com",
@@ -1227,12 +1118,12 @@ func (self *Gdax) newSubscribePublic(sandbox bool) (*gdaxSubscribePublic, error)
 		ProductIDs: []string{},
 		Channels:   []string{"user", "heartbeat"},
 	}
-	products, err := self.GetProducts(exchange.NewClient("", "", "", sandbox), false)
+	products, err := self.getProducts(gdax.New(sandbox), false)
 	if err != nil {
 		return nil, err
 	}
 	for _, product := range products {
-		out.ProductIDs = append(out.ProductIDs, product.Id)
+		out.ProductIDs = append(out.ProductIDs, product.ID)
 	}
 	return &out, nil
 }

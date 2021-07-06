@@ -11,18 +11,19 @@ import (
 	"strings"
 	"time"
 
+	"bitbucket.com/svanas/cryptotrader/aggregation"
+	"bitbucket.com/svanas/cryptotrader/binance"
+	"bitbucket.com/svanas/cryptotrader/flag"
+	"bitbucket.com/svanas/cryptotrader/model"
+	"bitbucket.com/svanas/cryptotrader/multiplier"
+	"bitbucket.com/svanas/cryptotrader/notify"
+	"bitbucket.com/svanas/cryptotrader/precision"
+	"bitbucket.com/svanas/cryptotrader/pricing"
+	"bitbucket.com/svanas/cryptotrader/session"
+	"bitbucket.com/svanas/cryptotrader/uuid"
+	exchange "github.com/adshao/go-binance/v2"
 	filemutex "github.com/alexflint/go-filemutex"
 	"github.com/go-errors/errors"
-	exchange "github.com/svanas/go-binance"
-	"github.com/svanas/nefertiti/aggregation"
-	"github.com/svanas/nefertiti/flag"
-	"github.com/svanas/nefertiti/model"
-	"github.com/svanas/nefertiti/multiplier"
-	"github.com/svanas/nefertiti/notify"
-	"github.com/svanas/nefertiti/precision"
-	"github.com/svanas/nefertiti/pricing"
-	"github.com/svanas/nefertiti/session"
-	"github.com/svanas/nefertiti/uuid"
 )
 
 var (
@@ -37,7 +38,7 @@ const (
 //-------------------- globals -------------------
 
 func init() {
-	exchange.BeforeRequest = func(client *exchange.Client, endpoint string, weight int) error {
+	binance.BeforeRequest = func(client *binance.Client, weight int) error {
 		var err error
 
 		if binanceMutex == nil {
@@ -57,7 +58,7 @@ func init() {
 
 		if lastRequest != nil {
 			var rps float64
-			if rps, err = client.GetRequestsPerSecond(weight); err != nil {
+			if rps, err = binance.GetRequestsPerSecond(client, weight); err != nil {
 				return err
 			}
 			elapsed := time.Since(*lastRequest)
@@ -70,13 +71,9 @@ func init() {
 			}
 		}
 
-		if flag.Debug() {
-			log.Println("[DEBUG] GET " + endpoint)
-		}
-
 		return nil
 	}
-	exchange.AfterRequest = func() {
+	binance.AfterRequest = func() {
 		defer func() {
 			binanceMutex.Unlock()
 		}()
@@ -84,67 +81,55 @@ func init() {
 	}
 }
 
-func isBinanceError(err error) (*exchange.BinanceError, bool) {
-	var (
-		ok      bool
-		wrapped *errors.Error
-		binance *exchange.BinanceError
-	)
-
-	wrapped, ok = err.(*errors.Error)
+func isBinanceError(err error) (*binance.BinanceError, bool) {
+	wrapped, ok := err.(*errors.Error)
 	if ok {
 		return isBinanceError(wrapped.Err)
 	}
-
-	binance, ok = err.(*exchange.BinanceError)
-	if ok {
-		return binance, true
-	}
-
-	return nil, false
+	return binance.IsBinanceError(err)
 }
 
-func binanceOrderSide(order *exchange.Order) model.OrderSide {
-	if order.Side == string(exchange.SideTypeBuy) {
+func binanceOrderSide(order *binance.Order) model.OrderSide {
+	if order.Side == exchange.SideTypeBuy {
 		return model.BUY
 	} else {
-		if order.Side == string(exchange.SideTypeSell) {
+		if order.Side == exchange.SideTypeSell {
 			return model.SELL
 		}
 	}
 	return model.ORDER_SIDE_NONE
 }
 
-func binanceOrderType(order *exchange.Order) model.OrderType {
-	if order.Type == string(exchange.OrderTypeLimit) || order.Type == string(exchange.OrderTypeStopLossLimit) {
+func binanceOrderType(order *binance.Order) model.OrderType {
+	if order.Type == exchange.OrderTypeLimit || order.Type == exchange.OrderTypeStopLossLimit {
 		return model.LIMIT
 	} else {
-		if order.Type == string(exchange.OrderTypeMarket) || order.Type == string(exchange.OrderTypeStopLoss) {
+		if order.Type == exchange.OrderTypeMarket || order.Type == exchange.OrderTypeStopLoss {
 			return model.MARKET
 		}
 	}
 	return model.ORDER_TYPE_NONE
 }
 
-func binanceOrderIndex(orders []*exchange.Order, orderId int64) int {
+func binanceOrderIndex(orders []binance.Order, orderId int64) int {
 	for i, o := range orders {
-		if o.OrderId == orderId {
+		if o.OrderID == orderId {
 			return i
 		}
 	}
 	return -1
 }
 
-func binanceOrderIsOCO(orders []*exchange.Order, order1 *exchange.Order) bool {
-	if order1.Type == string(exchange.OrderTypeStopLoss) || order1.Type == string(exchange.OrderTypeStopLossLimit) || order1.Type == string(exchange.OrderTypeLimitMaker) {
+func binanceOrderIsOCO(orders []binance.Order, order1 *binance.Order) bool {
+	if order1.Type == exchange.OrderTypeStopLoss || order1.Type == exchange.OrderTypeStopLossLimit || order1.Type == exchange.OrderTypeLimitMaker {
 		for _, order2 := range orders {
-			if order2.OrderId != order1.OrderId {
+			if order2.OrderID != order1.OrderID {
 				if order2.Side == order1.Side && order2.Symbol == order1.Symbol && order2.OrigQuantity == order1.OrigQuantity {
-					if order2.Type == string(exchange.OrderTypeStopLoss) || order2.Type == string(exchange.OrderTypeStopLossLimit) {
-						return order1.Type == string(exchange.OrderTypeLimitMaker)
+					if order2.Type == exchange.OrderTypeStopLoss || order2.Type == exchange.OrderTypeStopLossLimit {
+						return order1.Type == exchange.OrderTypeLimitMaker
 					}
-					if order2.Type == string(exchange.OrderTypeLimitMaker) {
-						return order1.Type == string(exchange.OrderTypeStopLoss) || order1.Type == string(exchange.OrderTypeStopLossLimit)
+					if order2.Type == exchange.OrderTypeLimitMaker {
+						return order1.Type == exchange.OrderTypeStopLoss || order1.Type == exchange.OrderTypeStopLossLimit
 					}
 				}
 			}
@@ -156,7 +141,7 @@ func binanceOrderIsOCO(orders []*exchange.Order, order1 *exchange.Order) bool {
 //---------------- BinanceOrderEx ----------------
 
 type BinanceOrderEx struct {
-	*exchange.Order
+	*binance.Order
 }
 
 func (order *BinanceOrderEx) MarshalJSON() ([]byte, error) {
@@ -164,7 +149,7 @@ func (order *BinanceOrderEx) MarshalJSON() ([]byte, error) {
 		Alias BinanceOrderEx
 	)
 
-	omd := model.ParseMetaData(order.ClientOrderId)
+	omd := model.ParseMetaData(order.ClientOrderID)
 	if omd.Price > 0 && omd.Mult > 0 {
 		return json.Marshal(&struct {
 			*Alias
@@ -178,7 +163,7 @@ func (order *BinanceOrderEx) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct{ *Alias }{Alias: (*Alias)(order)})
 }
 
-func getBinanceOrderEx(order *exchange.Order) (*BinanceOrderEx, error) {
+func getBinanceOrderEx(order *binance.Order) (*BinanceOrderEx, error) {
 	var (
 		err error
 		buf []byte
@@ -193,7 +178,7 @@ func getBinanceOrderEx(order *exchange.Order) (*BinanceOrderEx, error) {
 	return &out, nil
 }
 
-func binanceOrderToString(order *exchange.Order) ([]byte, error) {
+func binanceOrderToString(order *binance.Order) ([]byte, error) {
 	var (
 		err error
 		out []byte
@@ -230,11 +215,11 @@ func (self *Binance) baseURL(sandbox bool) string {
 		if cluster, err := flg.Int64(); err == nil {
 			switch cluster {
 			case 1:
-				output = exchange.BASE_URL_1
+				output = binance.BASE_URL_1
 			case 2:
-				output = exchange.BASE_URL_2
+				output = binance.BASE_URL_2
 			case 3:
-				output = exchange.BASE_URL_3
+				output = binance.BASE_URL_3
 			}
 		}
 	}
@@ -302,8 +287,8 @@ func (self *Binance) notify(err error, level int64, service model.Notify) {
 	}
 }
 
-func (self *Binance) getMinTrade(client *exchange.Client, market string, cached bool) (float64, error) {
-	precs, err := exchange.GetPrecs(client, cached)
+func (self *Binance) getMinTrade(client *binance.Client, market string, cached bool) (float64, error) {
+	precs, err := binance.GetPrecs(client, cached)
 	if err != nil {
 		return 0, errors.Wrap(err, 1)
 	}
@@ -322,7 +307,7 @@ func (self *Binance) GetInfo() *model.ExchangeInfo {
 
 func (self *Binance) GetClient(permission model.Permission, sandbox bool) (interface{}, error) {
 	if permission != model.PRIVATE {
-		return exchange.NewClient(self.baseURL(sandbox), "", ""), nil
+		return binance.New(self.baseURL(sandbox), "", ""), nil
 	}
 
 	apiKey, apiSecret, err := promptForApiKeys("Binance")
@@ -330,24 +315,24 @@ func (self *Binance) GetClient(permission model.Permission, sandbox bool) (inter
 		return nil, err
 	}
 
-	return exchange.NewClient(self.baseURL(sandbox), apiKey, apiSecret), nil
+	return binance.New(self.baseURL(sandbox), apiKey, apiSecret), nil
 }
 
 func (self *Binance) GetMarkets(cached, sandbox bool) ([]model.Market, error) {
 	var out []model.Market
 
-	precs, err := exchange.GetPrecs(exchange.NewClient(self.baseURL(sandbox), "", ""), cached)
+	precs, err := binance.GetPrecs(binance.New(self.baseURL(sandbox), "", ""), cached)
 
 	if err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
 
 	for _, prec := range precs {
-		if prec.Status == string(exchange.SymbolStatusTrading) {
+		if prec.Symbol.Status == string(exchange.SymbolStatusTypeTrading) {
 			out = append(out, model.Market{
-				Name:  prec.Symbol,
-				Base:  prec.Base,
-				Quote: prec.Quote,
+				Name:  prec.Symbol.Symbol,
+				Base:  prec.Symbol.BaseAsset,
+				Quote: prec.Symbol.QuoteAsset,
 			})
 		}
 	}
@@ -383,27 +368,27 @@ func (self *Binance) FormatMarket(base, quote string) string {
 }
 
 // listens to the open orders, send a notification on newly opened orders.
-func (self *Binance) listen(client *exchange.Client, service model.Notify, level int64, old []*exchange.Order) ([]*exchange.Order, error) {
+func (self *Binance) listen(client *binance.Client, service model.Notify, level int64, old []binance.Order) ([]binance.Order, error) {
 	var err error
 
 	// get my open orders
-	var new []*exchange.Order
-	if new, err = client.NewListOpenOrdersService().Do(context.Background()); err != nil {
+	var new []binance.Order
+	if new, err = client.OpenOrders(); err != nil {
 		return old, errors.Wrap(err, 1)
 	}
 
 	// look for new orders
 	for _, order := range new {
-		if binanceOrderIndex(old, order.OrderId) == -1 {
+		if binanceOrderIndex(old, order.OrderID) == -1 {
 			var data []byte
-			if data, err = binanceOrderToString(order); err != nil {
+			if data, err = binanceOrderToString(&order); err != nil {
 				return new, err
 			}
 
 			log.Println("[OPEN] " + string(data))
 
 			if service != nil {
-				side := binanceOrderSide(order)
+				side := binanceOrderSide(&order)
 				if side != model.ORDER_SIDE_NONE {
 					if notify.CanSend(level, notify.OPENED) || (level == notify.LEVEL_DEFAULT && side == model.SELL) {
 						if err = service.SendMessage(order, ("Binance - Open " + model.FormatOrderSide(side)), model.ALWAYS); err != nil {
@@ -420,7 +405,7 @@ func (self *Binance) listen(client *exchange.Client, service model.Notify, level
 
 // listens to the filled orders, look for newly filled orders, automatically place new sell orders.
 func (self *Binance) sell(
-	client *exchange.Client,
+	client *binance.Client,
 	strategy model.Strategy,
 	quotes []string,
 	mult1 float64,
@@ -428,28 +413,28 @@ func (self *Binance) sell(
 	service model.Notify,
 	twitter *notify.TwitterKeys,
 	level int64,
-	old []*exchange.Order,
+	old []binance.Order,
 	sandbox bool,
 	debug bool,
-) ([]*exchange.Order, error) {
+) ([]binance.Order, error) {
 	var err error
 
 	// get my filled orders
 	var (
-		new     []*exchange.Order
+		new     []binance.Order
 		markets []model.Market
 	)
 	if markets, err = self.GetMarketsEx(true, sandbox, quotes); err != nil {
 		return old, err
 	}
 	for _, market := range markets {
-		var orders []*exchange.Order
-		if orders, err = client.NewListOrdersService().Symbol(market.Name).Do(context.Background()); err != nil {
+		var orders []binance.Order
+		if orders, err = client.Orders(market.Name); err != nil {
 			return old, errors.Wrap(err, 1)
 		}
 		for _, order := range orders {
 			// get the orders that got filled during the last 90 days
-			if order.Status == "FILLED" && time.Since(order.GetTime()).Hours() < 24*90 {
+			if order.Status == exchange.OrderStatusTypeFilled && time.Since(order.GetTime()).Hours() < 24*90 {
 				new = append(new, order)
 			}
 		}
@@ -457,24 +442,24 @@ func (self *Binance) sell(
 
 	// look for newly filled orders
 	for _, order := range new {
-		if binanceOrderIndex(old, order.OrderId) == -1 {
+		if binanceOrderIndex(old, order.OrderID) == -1 {
 			var data []byte
-			if data, err = binanceOrderToString(order); err != nil {
+			if data, err = binanceOrderToString(&order); err != nil {
 				return new, err
 			}
 
 			log.Println("[FILLED] " + string(data))
 
-			side := binanceOrderSide(order)
+			side := binanceOrderSide(&order)
 			if side != model.ORDER_SIDE_NONE {
 				// send notification(s)
 				if notify.CanSend(level, notify.FILLED) {
 					if service != nil {
 						title := fmt.Sprintf("Binance - Done %s", model.FormatOrderSide(side))
 						if side == model.SELL {
-							if model.HasMetaData(order.ClientOrderId) {
-								metadata := model.ParseMetaData(order.ClientOrderId)
-								if binanceOrderType(order) == model.MARKET {
+							if model.HasMetaData(order.ClientOrderID) {
+								metadata := model.ParseMetaData(order.ClientOrderID)
+								if binanceOrderType(&order) == model.MARKET {
 									title = fmt.Sprintf("%s %.2f%%", title, ((metadata.Mult - 1) * 100))
 								} else {
 									old := metadata.Price
@@ -497,8 +482,8 @@ func (self *Binance) sell(
 				// has a stop loss been filled? then place a buy order double the order size *** if --dca is included ***
 				if side == model.SELL {
 					if strategy == model.STRATEGY_STOP_LOSS {
-						if order.Type == string(exchange.OrderTypeStopLoss) || order.Type == string(exchange.OrderTypeStopLossLimit) {
-							if model.ParseMetaData(order.ClientOrderId).Trail {
+						if order.Type == exchange.OrderTypeStopLoss || order.Type == exchange.OrderTypeStopLossLimit {
+							if model.ParseMetaData(order.ClientOrderID).Trail {
 								// do not mistakenly re-buy trailing profit orders that were filled
 							} else if flag.Exists("dca") {
 								var prec int
@@ -525,7 +510,7 @@ func (self *Binance) sell(
 						temp string
 						call *model.Call
 					)
-					temp = session.GetTempFileName(order.ClientOrderId, ".binance")
+					temp = session.GetTempFileName(order.ClientOrderID, ".binance")
 					if call, err = model.File2Call(temp); err == nil {
 						defer func() {
 							os.Remove(temp)
@@ -601,11 +586,11 @@ func (self *Binance) sell(
 											stop = precision.Round(stop, prec)
 											// non-trailing stop loss? place an OCO (aka One-Cancels-the-Other)
 											if strategy == model.STRATEGY_STOP_LOSS {
-												var precs exchange.Precs
-												precs, err = exchange.GetPrecs(client, true)
+												var precs binance.Precs
+												precs, err = binance.GetPrecs(client, true)
 												if err == nil {
 													prec := precs.PrecFromSymbol(order.Symbol)
-													if prec != nil && prec.OCO {
+													if prec != nil && prec.Symbol.OcoAllowed {
 														if _, err = self.OCO(client,
 															order.Symbol,
 															qty,
@@ -683,18 +668,18 @@ func (self *Binance) Sell(
 		}
 	}
 
-	client := exchange.NewClient(self.baseURL(sandbox), apiKey, apiSecret)
+	client := binance.New(self.baseURL(sandbox), apiKey, apiSecret)
 
 	// get my open orders
-	var open []*exchange.Order
-	if open, err = client.NewListOpenOrdersService().Do(context.Background()); err != nil {
+	var open []binance.Order
+	if open, err = client.OpenOrders(); err != nil {
 		return errors.Wrap(err, 1)
 	}
 
 	// get my filled orders
 	var (
 		quotes  []string = []string{model.BTC}
-		filled  []*exchange.Order
+		filled  []binance.Order
 		markets []model.Market
 	)
 	flg := flag.Get("quote")
@@ -707,13 +692,13 @@ func (self *Binance) Sell(
 		return err
 	}
 	for _, market := range markets {
-		var orders []*exchange.Order
-		if orders, err = client.NewListOrdersService().Symbol(market.Name).Do(context.Background()); err != nil {
+		var orders []binance.Order
+		if orders, err = client.Orders(market.Name); err != nil {
 			return errors.Wrap(err, 1)
 		}
 		for _, order := range orders {
 			// get the orders that got filled during the last 90 days
-			if order.Status == "FILLED" && time.Since(order.GetTime()).Hours() < 24*90 {
+			if order.Status == exchange.OrderStatusTypeFilled && time.Since(order.GetTime()).Hours() < 24*90 {
 				filled = append(filled, order)
 			}
 		}
@@ -747,12 +732,12 @@ func (self *Binance) Sell(
 						cache := make(map[string]float64)
 						for _, order := range open {
 							// enumerate over stop loss orders
-							if order.Type == string(exchange.OrderTypeStopLoss) || order.Type == string(exchange.OrderTypeStopLossLimit) {
+							if order.Type == exchange.OrderTypeStopLoss || order.Type == exchange.OrderTypeStopLossLimit {
 								var prec int
 								if prec, err = self.GetPricePrec(client, order.Symbol); err == nil {
 									handled := false
 									if strategy == model.STRATEGY_TRAILING_STOP_LOSS_QUICK || strategy == model.STRATEGY_STOP_LOSS {
-										if !binanceOrderIsOCO(open, order) {
+										if !binanceOrderIsOCO(open, &order) {
 											ticker, ok := cache[order.Symbol]
 											if !ok {
 												if ticker, err = self.GetTicker(client, order.Symbol); err == nil {
@@ -760,14 +745,14 @@ func (self *Binance) Sell(
 												}
 											}
 											if ticker > 0 {
-												if model.HasMetaData(order.ClientOrderId) {
-													metadata := model.ParseMetaData(order.ClientOrderId)
+												if model.HasMetaData(order.ClientOrderID) {
+													metadata := model.ParseMetaData(order.ClientOrderID)
 													if ticker >= pricing.Multiply(metadata.Price, metadata.Mult, prec) {
 														var data []byte
 														if data, err = json.Marshal(order); err == nil {
 															log.Println("[CANCELLED] " + string(data))
 														}
-														if _, err = client.NewCancelOrderService().Symbol(order.Symbol).OrderId(order.OrderId).Do(context.Background()); err == nil {
+														if err = client.CancelOrder(order.Symbol, order.OrderID); err == nil {
 															_, _, err = self.Order(client,
 																model.SELL,
 																order.Symbol,
@@ -783,8 +768,8 @@ func (self *Binance) Sell(
 										}
 									}
 									if !handled {
-										if model.HasMetaData(order.ClientOrderId) {
-											handled = !model.ParseMetaData(order.ClientOrderId).Trail
+										if model.HasMetaData(order.ClientOrderID) {
+											handled = !model.ParseMetaData(order.ClientOrderID).Trail
 										} else {
 											handled = strategy == model.STRATEGY_STOP_LOSS
 										}
@@ -797,7 +782,7 @@ func (self *Binance) Sell(
 											}
 											if ticker > 0 {
 												stop := func() float64 {
-													mult := model.GetOrderMult(order.ClientOrderId)
+													mult := model.GetOrderMult(order.ClientOrderID)
 													if strategy == model.STRATEGY_STOP_LOSS {
 														return ticker / multiplier.Scale(mult, 2.0)
 													} else {
@@ -810,13 +795,13 @@ func (self *Binance) Sell(
 													if data, err = json.Marshal(order); err == nil {
 														log.Println("[CANCELLED] " + string(data))
 													}
-													if _, err = client.NewCancelOrderService().Symbol(order.Symbol).OrderId(order.OrderId).Do(context.Background()); err == nil {
+													if err = client.CancelOrder(order.Symbol, order.OrderID); err == nil {
 														_, err = self.StopLoss(client,
 															order.Symbol,
 															order.GetSize(),
 															precision.Round(stop, prec),
-															binanceOrderType(order),
-															model.ParseMetaData(order.ClientOrderId).String(),
+															binanceOrderType(&order),
+															model.ParseMetaData(order.ClientOrderID).String(),
 														)
 													}
 												}
@@ -826,7 +811,7 @@ func (self *Binance) Sell(
 								}
 								if err != nil {
 									var data []byte
-									if data, _ = binanceOrderToString(order); data == nil {
+									if data, _ = binanceOrderToString(&order); data == nil {
 										self.notify(err, level, service)
 									} else {
 										self.notify(errors.Append(err, "\t", string(data)), level, service)
@@ -835,8 +820,8 @@ func (self *Binance) Sell(
 
 							}
 							// enumerate over limit sell orders
-							if order.Type == string(exchange.OrderTypeLimit) {
-								side := binanceOrderSide(order)
+							if order.Type == exchange.OrderTypeLimit {
+								side := binanceOrderSide(&order)
 								if side == model.SELL {
 									if strategy != model.STRATEGY_STOP_LOSS {
 										ticker, ok := cache[order.Symbol]
@@ -847,7 +832,7 @@ func (self *Binance) Sell(
 										}
 										if ticker > 0 {
 											var (
-												mult  float64 = model.GetOrderMult(order.ClientOrderId)
+												mult  float64 = model.GetOrderMult(order.ClientOrderID)
 												price float64 = multiplier.Scale(mult, 0.75) * (order.GetPrice() / mult)
 											)
 											// is the ticker nearing the price? then cancel the limit sell order, and place a stop loss order below the ticker.
@@ -860,26 +845,26 @@ func (self *Binance) Sell(
 														if data, err = json.Marshal(order); err == nil {
 															log.Println("[CANCELLED] " + string(data))
 														}
-														if _, err = client.NewCancelOrderService().Symbol(order.Symbol).OrderId(order.OrderId).Do(context.Background()); err == nil {
+														if err = client.CancelOrder(order.Symbol, order.OrderID); err == nil {
 															_, err = self.StopLoss(client,
 																order.Symbol,
 																order.GetSize(),
 																precision.Round(price, prec),
 																model.MARKET,
-																model.ParseMetaData(order.ClientOrderId).String(),
+																model.ParseMetaData(order.ClientOrderID).String(),
 															)
 															// --- BEGIN --- svanas 2018-12-01 --- reopen the above limit sell on an API error ---
 															if err != nil {
-																_, ok := err.(*exchange.BinanceError)
+																_, ok := err.(*binance.BinanceError)
 																if ok {
 																	self.warn(err)
 																	_, _, err = self.Order(client,
-																		binanceOrderSide(order),
+																		binanceOrderSide(&order),
 																		order.Symbol,
 																		order.GetSize(),
 																		order.GetPrice(),
 																		model.LIMIT,
-																		model.ParseMetaData(order.ClientOrderId).String(),
+																		model.ParseMetaData(order.ClientOrderID).String(),
 																	)
 																}
 															}
@@ -889,7 +874,7 @@ func (self *Binance) Sell(
 												}
 												if err != nil {
 													var data []byte
-													if data, _ = binanceOrderToString(order); data == nil {
+													if data, _ = binanceOrderToString(&order); data == nil {
 														self.notify(err, level, service)
 													} else {
 														self.notify(errors.Append(err, "\t", string(data)), level, service)
@@ -917,24 +902,24 @@ func (self *Binance) Order(
 	kind model.OrderType,
 	meta string,
 ) (oid []byte, raw []byte, err error) {
-	binance, ok := client.(*exchange.Client)
+	binanceClient, ok := client.(*binance.Client)
 	if !ok {
 		return nil, nil, errors.New("invalid argument: client")
 	}
 
-	var service *exchange.CreateOrderService
-	service = binance.NewCreateOrderService().Symbol(market).Quantity(strconv.FormatFloat(size, 'f', -1, 64))
+	var service *binance.CreateOrderService
+	service = binanceClient.NewCreateOrderService().Symbol(market).Quantity(size)
 
 	if meta != "" {
-		service.NewClientOrderId(meta)
+		service.NewClientOrderID(meta)
 	} else {
-		service.NewClientOrderId(self.getBrokerId())
+		service.NewClientOrderID(self.getBrokerId())
 	}
 
 	if kind == model.MARKET {
 		service.Type(exchange.OrderTypeMarket)
 	} else {
-		service.Type(exchange.OrderTypeLimit).TimeInForce(exchange.TimeInForceGTC).Price(strconv.FormatFloat(price, 'f', -1, 64))
+		service.Type(exchange.OrderTypeLimit).TimeInForce(exchange.TimeInForceTypeGTC).Price(price)
 	}
 
 	if side == model.BUY {
@@ -953,21 +938,19 @@ func (self *Binance) Order(
 		return nil, nil, errors.Wrap(err, 1)
 	}
 
-	return []byte(order.ClientOrderId), out, nil
+	return []byte(order.ClientOrderID), out, nil
 }
 
 func (self *Binance) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType, meta string) ([]byte, error) {
 	var err error
 
-	binance, ok := client.(*exchange.Client)
+	binanceClient, ok := client.(*binance.Client)
 	if !ok {
 		return nil, errors.New("invalid argument: client")
 	}
 
-	var service *exchange.CreateOrderService
-	service = binance.NewCreateOrderService()
-
-	service.Symbol(market).Side(exchange.SideTypeSell).Quantity(strconv.FormatFloat(size, 'f', -1, 64)).StopPrice(strconv.FormatFloat(price, 'f', -1, 64))
+	var service *binance.CreateOrderService
+	service = binanceClient.NewCreateOrderService().Symbol(market).Side(exchange.SideTypeSell).Quantity(size).StopPrice(price)
 
 	if kind == model.MARKET {
 		service.Type(exchange.OrderTypeStopLoss)
@@ -983,19 +966,19 @@ func (self *Binance) StopLoss(client interface{}, market string, size float64, p
 				break
 			}
 		}
-		service.Type(exchange.OrderTypeStopLossLimit).TimeInForce(exchange.TimeInForceGTC).Price(strconv.FormatFloat(precision.Round(limit, prec), 'f', -1, 64))
+		service.Type(exchange.OrderTypeStopLossLimit).TimeInForce(exchange.TimeInForceTypeGTC).Price(precision.Round(limit, prec))
 	}
 
 	if meta != "" {
-		service.NewClientOrderId(meta)
+		service.NewClientOrderID(meta)
 	} else {
-		service.NewClientOrderId(self.getBrokerId())
+		service.NewClientOrderID(self.getBrokerId())
 	}
 
 	var order *exchange.CreateOrderResponse
 	if order, err = service.Do(context.Background()); err != nil {
 		// --- BEGIN --- svanas 2019-02-07 ------------------------------------
-		_, ok := err.(*exchange.BinanceError)
+		_, ok := err.(*binance.BinanceError)
 		if ok {
 			self.warn(err)
 			// -1013 stop loss orders are not supported for this symbol
@@ -1044,30 +1027,30 @@ func (self *Binance) StopLoss(client interface{}, market string, size float64, p
 func (self *Binance) OCO(client interface{}, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
 	var (
 		err  error
-		svc  *exchange.CreateOcoService
-		resp *exchange.CreateOcoOrdersResponse
+		svc  *binance.CreateOCOService
+		resp *exchange.CreateOCOResponse
 	)
 
-	binance, ok := client.(*exchange.Client)
+	binanceClient, ok := client.(*binance.Client)
 	if !ok {
 		return nil, errors.New("invalid argument: client")
 	}
 
-	svc = binance.NewCreateOcoService().Symbol(market).Quantity(size).Price(price).StopPrice(stop).Side(exchange.SideTypeSell)
+	svc = binanceClient.NewCreateOCOService().Symbol(market).Quantity(size).Price(price).StopPrice(stop).Side(exchange.SideTypeSell)
 
 	if meta1 != "" {
-		svc.StopClientOrderId(meta1)
+		svc.StopClientOrderID(meta1)
 	} else {
-		svc.StopClientOrderId(self.getBrokerId())
+		svc.StopClientOrderID(self.getBrokerId())
 	}
 	if meta2 != "" {
-		svc.LimitClientOrderId(meta2)
+		svc.LimitClientOrderID(meta2)
 	} else {
-		svc.LimitClientOrderId(self.getBrokerId())
+		svc.LimitClientOrderID(self.getBrokerId())
 	}
 
 	if resp, err = svc.Do(context.Background()); err != nil {
-		_, ok := err.(*exchange.BinanceError)
+		_, ok := err.(*binance.BinanceError)
 		if ok {
 			self.warn(err)
 			// -2010 Filter failure: MAX_NUM_ALGO_ORDERS
@@ -1113,22 +1096,22 @@ func (self *Binance) OCO(client interface{}, market string, size float64, price,
 func (self *Binance) GetClosed(client interface{}, market string) (model.Orders, error) {
 	var err error
 
-	binance, ok := client.(*exchange.Client)
+	binanceClient, ok := client.(*binance.Client)
 	if !ok {
 		return nil, errors.New("invalid argument: client")
 	}
 
-	var orders []*exchange.Order
-	if orders, err = binance.NewListOrdersService().Symbol(market).Do(context.Background()); err != nil {
+	var orders []binance.Order
+	if orders, err = binanceClient.Orders(market); err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
 
 	var out model.Orders
 	for _, order := range orders {
 		// get the orders that got filled during the last 90 days
-		if order.Status == "FILLED" && time.Since(order.GetTime()).Hours() < 24*90 {
+		if order.Status == exchange.OrderStatusTypeFilled && time.Since(order.GetTime()).Hours() < 24*90 {
 			out = append(out, model.Order{
-				Side:      binanceOrderSide(order),
+				Side:      binanceOrderSide(&order),
 				Market:    order.Symbol,
 				Size:      order.GetSize(),
 				Price:     order.GetPrice(),
@@ -1143,20 +1126,20 @@ func (self *Binance) GetClosed(client interface{}, market string) (model.Orders,
 func (self *Binance) GetOpened(client interface{}, market string) (model.Orders, error) {
 	var err error
 
-	binance, ok := client.(*exchange.Client)
+	binanceClient, ok := client.(*binance.Client)
 	if !ok {
 		return nil, errors.New("invalid argument: client")
 	}
 
-	var orders []*exchange.Order
-	if orders, err = binance.NewListOpenOrdersService().Symbol(market).Do(context.Background()); err != nil {
+	var orders []binance.Order
+	if orders, err = binanceClient.OpenOrdersEx(market); err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
 
 	var out model.Orders
 	for _, order := range orders {
 		out = append(out, model.Order{
-			Side:      binanceOrderSide(order),
+			Side:      binanceOrderSide(&order),
 			Market:    order.Symbol,
 			Size:      order.GetSize(),
 			Price:     order.GetPrice(),
@@ -1170,17 +1153,17 @@ func (self *Binance) GetOpened(client interface{}, market string) (model.Orders,
 func (self *Binance) GetBook(client interface{}, market string, side model.BookSide) (interface{}, error) {
 	var err error
 
-	binance, ok := client.(*exchange.Client)
+	binanceClient, ok := client.(*binance.Client)
 	if !ok {
 		return nil, errors.New("invalid argument: client")
 	}
 
 	var book *exchange.DepthResponse
-	if book, err = binance.NewDepthService().Symbol(market).Limit(1000).Do(context.Background()); err != nil {
+	if book, err = binanceClient.Depth(market, 1000); err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
 
-	var out []exchange.BookEntry
+	var out []binance.BookEntry
 	if side == model.BOOK_SIDE_ASKS {
 		out = book.Asks
 	} else {
@@ -1191,7 +1174,7 @@ func (self *Binance) GetBook(client interface{}, market string, side model.BookS
 }
 
 func (self *Binance) Aggregate(client, book interface{}, market string, agg float64) (model.Book, error) {
-	bids, ok := book.([]exchange.BookEntry)
+	bids, ok := book.([]binance.BookEntry)
 	if !ok {
 		return nil, errors.New("invalid argument: book")
 	}
@@ -1203,17 +1186,24 @@ func (self *Binance) Aggregate(client, book interface{}, market string, agg floa
 
 	var out model.Book
 	for _, e := range bids {
-		price := precision.Round(aggregation.Round(e.Price(), agg), prec)
+		var (
+			price float64
+			qty   float64
+		)
+		if price, qty, err = e.Parse(); err != nil {
+			return nil, err
+		}
+		price = precision.Round(aggregation.Round(price, agg), prec)
 		entry := out.EntryByPrice(price)
 		if entry != nil {
-			entry.Size = entry.Size + e.Quantity()
+			entry.Size = entry.Size + qty
 		} else {
 			entry = &model.BookEntry{
 				Buy: &model.Buy{
 					Market: market,
 					Price:  price,
 				},
-				Size: e.Quantity(),
+				Size: qty,
 			}
 			out = append(out, *entry)
 		}
@@ -1225,13 +1215,13 @@ func (self *Binance) Aggregate(client, book interface{}, market string, agg floa
 func (self *Binance) GetTicker(client interface{}, market string) (float64, error) {
 	var err error
 
-	binance, ok := client.(*exchange.Client)
+	binanceClient, ok := client.(*binance.Client)
 	if !ok {
 		return 0, errors.New("invalid argument: client")
 	}
 
 	var ticker *exchange.PriceChangeStats
-	if ticker, err = binance.NewPriceChangeStatsService().Symbol(market).Do(context.Background()); err != nil {
+	if ticker, err = binanceClient.Ticker(market); err != nil {
 		return 0, errors.Wrap(err, 1)
 	}
 
@@ -1246,13 +1236,13 @@ func (self *Binance) GetTicker(client interface{}, market string) (float64, erro
 func (self *Binance) Get24h(client interface{}, market string) (*model.Stats, error) {
 	var err error
 
-	binance, ok := client.(*exchange.Client)
+	binanceClient, ok := client.(*binance.Client)
 	if !ok {
 		return nil, errors.New("invalid argument: client")
 	}
 
 	var stats *exchange.PriceChangeStats
-	if stats, err = binance.NewPriceChangeStatsService().Symbol(market).Do(context.Background()); err != nil {
+	if stats, err = binanceClient.Ticker(market); err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
 
@@ -1280,11 +1270,11 @@ func (self *Binance) Get24h(client interface{}, market string) (*model.Stats, er
 }
 
 func (self *Binance) GetPricePrec(client interface{}, market string) (int, error) {
-	binance, ok := client.(*exchange.Client)
+	binanceClient, ok := client.(*binance.Client)
 	if !ok {
 		return 0, errors.New("invalid argument: client")
 	}
-	precs, err := exchange.GetPrecs(binance, true)
+	precs, err := binance.GetPrecs(binanceClient, true)
 	if err != nil {
 		return 0, errors.Wrap(err, 1)
 	}
@@ -1296,11 +1286,11 @@ func (self *Binance) GetPricePrec(client interface{}, market string) (int, error
 }
 
 func (self *Binance) GetSizePrec(client interface{}, market string) (int, error) {
-	binance, ok := client.(*exchange.Client)
+	binanceClient, ok := client.(*binance.Client)
 	if !ok {
 		return 0, errors.New("invalid argument: client")
 	}
-	precs, err := exchange.GetPrecs(binance, true)
+	precs, err := binance.GetPrecs(binanceClient, true)
 	if err != nil {
 		return 0, errors.Wrap(err, 1)
 	}
@@ -1331,22 +1321,22 @@ func (self *Binance) GetMaxSize(client interface{}, base, quote string, hold boo
 func (self *Binance) Cancel(client interface{}, market string, side model.OrderSide) error {
 	var err error
 
-	binance, ok := client.(*exchange.Client)
+	binanceClient, ok := client.(*binance.Client)
 	if !ok {
 		return errors.New("invalid argument: client")
 	}
 
-	var orders []*exchange.Order
-	if orders, err = binance.NewListOpenOrdersService().Symbol(market).Do(context.Background()); err != nil {
+	var orders []binance.Order
+	if orders, err = binanceClient.OpenOrdersEx(market); err != nil {
 		return errors.Wrap(err, 1)
 	}
 
 	for _, order := range orders {
-		if binanceOrderSide(order) == side {
-			if _, err = binance.NewCancelOrderService().Symbol(market).OrderId(order.OrderId).Do(context.Background()); err != nil {
+		if binanceOrderSide(&order) == side {
+			if err = binanceClient.CancelOrder(market, order.OrderID); err != nil {
 				return errors.Wrap(err, 1)
 			}
-			tmp := session.GetTempFileName(order.ClientOrderId, ".binance")
+			tmp := session.GetTempFileName(order.ClientOrderID, ".binance")
 			if _, err = os.Stat(tmp); err == nil {
 				os.Remove(tmp)
 			}
@@ -1359,26 +1349,26 @@ func (self *Binance) Cancel(client interface{}, market string, side model.OrderS
 func (self *Binance) Buy(client interface{}, cancel bool, market string, calls model.Calls, size, deviation float64, kind model.OrderType) error {
 	var err error
 
-	binance, ok := client.(*exchange.Client)
+	binanceClient, ok := client.(*binance.Client)
 	if !ok {
 		return errors.New("invalid argument: client")
 	}
 
 	// step #1: delete the buy order(s) that are open in your book
 	if cancel {
-		var orders []*exchange.Order
-		if orders, err = binance.NewListOpenOrdersService().Symbol(market).Do(context.Background()); err != nil {
+		var orders []binance.Order
+		if orders, err = binanceClient.OpenOrdersEx(market); err != nil {
 			return errors.Wrap(err, 1)
 		}
 		for _, order := range orders {
-			side := binanceOrderSide(order)
+			side := binanceOrderSide(&order)
 			if side == model.BUY {
 				// do not cancel orders that we're about to re-place
 				index := calls.IndexByPrice(order.GetPrice())
 				if index > -1 {
 					calls[index].Skip = true
 				} else {
-					if _, err = binance.NewCancelOrderService().Symbol(market).OrderId(order.OrderId).Do(context.Background()); err != nil {
+					if err = binanceClient.CancelOrder(market, order.OrderID); err != nil {
 						return errors.Wrap(err, 1)
 					}
 				}
@@ -1399,7 +1389,7 @@ func (self *Binance) Buy(client interface{}, cancel bool, market string, calls m
 				kind, limit = call.Deviate(self, client, kind, deviation)
 			}
 			// --- BEGIN --- svanas 2018-11-30 --- <APIError> code=-1013, msg=Filter failure: MIN_NOTIONAL.
-			if min, err = self.getMinTrade(binance, market, true); err != nil {
+			if min, err = self.getMinTrade(binanceClient, market, true); err != nil {
 				return err
 			}
 			if min > 0 {
@@ -1467,8 +1457,8 @@ func NewBinance() model.Exchange {
 			Name: "Binance",
 			URL:  "https://www.binance.com/",
 			REST: model.Endpoint{
-				URI:     exchange.BASE_URL,
-				Sandbox: "https://testnet.binance.vision/api",
+				URI:     binance.BASE_URL,
+				Sandbox: "https://testnet.binance.vision",
 			},
 			WebSocket: model.Endpoint{
 				URI:     "wss://stream.binance.com:9443",
@@ -1486,8 +1476,8 @@ func NewBinanceUS() model.Exchange {
 			Name: "BinanceUS",
 			URL:  "https://www.binance.us/",
 			REST: model.Endpoint{
-				URI:     exchange.BASE_URL_US,
-				Sandbox: "https://testnet.binance.vision/api",
+				URI:     binance.BASE_URL_US,
+				Sandbox: "https://testnet.binance.vision",
 			},
 			WebSocket: model.Endpoint{
 				URI:     "wss://stream.binance.us:9443",
