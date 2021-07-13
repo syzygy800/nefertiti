@@ -17,6 +17,7 @@ import (
 	"github.com/svanas/nefertiti/aggregation"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
+	"github.com/svanas/nefertiti/multiplier"
 	"github.com/svanas/nefertiti/notify"
 	"github.com/svanas/nefertiti/precision"
 	"github.com/svanas/nefertiti/pricing"

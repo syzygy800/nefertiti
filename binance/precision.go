@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"bitbucket.com/svanas/cryptotrader/precision"
 	exchange "github.com/adshao/go-binance/v2"
+	"github.com/svanas/nefertiti/precision"
 )
 
 type (

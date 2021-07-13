@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/svanas/nefertiti/flag"
-	"github.com/svanas/nefertiti/precision"
 )
 
 const (

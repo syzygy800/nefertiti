@@ -1,9 +1,6 @@
 package exchanges
 
 import (
-	"strconv"
-	"strings"
-
 	"github.com/go-errors/errors"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"

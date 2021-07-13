@@ -23,7 +23,6 @@ import (
 	"github.com/svanas/nefertiti/precision"
 	"github.com/svanas/nefertiti/pricing"
 	"github.com/svanas/nefertiti/session"
-	"github.com/svanas/nefertiti/uuid"
 )
 
 var (

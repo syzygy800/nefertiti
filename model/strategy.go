@@ -1,8 +1,9 @@
 package model
 
 import (
+	"fmt"
+
 	"github.com/svanas/nefertiti/flag"
-	"github.com/svanas/nefertiti/multiplier"
 )
 
 type Strategy int
