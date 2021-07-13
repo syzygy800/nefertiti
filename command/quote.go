@@ -1,7 +1,6 @@
 package command
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -17,46 +16,27 @@ type (
 )
 
 func (c *QuoteCommand) Run(args []string) int {
-	var (
-		err error
-		flg *flag.Flag
-	)
-
-	sandbox := false
-	flg = flag.Get("sandbox")
-	if flg.Exists {
-		sandbox = flg.String() == "Y"
-	}
-
-	flg = flag.Get("exchange")
-	if flg.Exists == false {
-		return c.ReturnError(errors.New("missing argument: exchange"))
-	}
-	exchange := exchanges.New().FindByName(flg.String())
-	if exchange == nil {
-		return c.ReturnError(fmt.Errorf("exchange %v does not exist", flg))
-	}
-
-	var markets []model.Market
-	if markets, err = exchange.GetMarkets(true, sandbox); err != nil {
+	exchange, err := exchanges.GetExchange()
+	if err != nil {
 		return c.ReturnError(err)
 	}
 
-	flg = flag.Get("market")
-	if flg.Exists == false {
-		return c.ReturnError(errors.New("missing argument: market"))
-	}
-	market := flg.String()
-	if model.HasMarket(markets, market) == false {
-		return c.ReturnError(fmt.Errorf("market %s does not exist", market))
-	}
-
-	var out string
-	if out, err = model.GetQuoteCurr(markets, market); err != nil {
+	markets, err := exchange.GetMarkets(true, flag.Sandbox())
+	if err != nil {
 		return c.ReturnError(err)
 	}
 
-	fmt.Println(strings.ToUpper(out))
+	market, err := model.GetMarket(exchange)
+	if err != nil {
+		return c.ReturnError(err)
+	}
+
+	quote, err := model.GetQuoteCurr(markets, market)
+	if err != nil {
+		return c.ReturnError(err)
+	}
+
+	fmt.Println(strings.ToUpper(quote))
 
 	return 0
 }

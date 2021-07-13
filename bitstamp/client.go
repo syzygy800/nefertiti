@@ -46,15 +46,17 @@ type Client struct {
 	URL        string
 	Key        string
 	Secret     string
-	CustomerId string
+	httpClient *http.Client
 }
 
-func New(apiKey, apiSecret, customerId string) *Client {
+func New(apiKey, apiSecret string) *Client {
 	return &Client{
-		URL:        Endpoint,
-		Key:        apiKey,
-		Secret:     apiSecret,
-		CustomerId: customerId,
+		URL:    Endpoint,
+		Key:    apiKey,
+		Secret: apiSecret,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
 	}
 }
 
@@ -97,7 +99,7 @@ func (client *Client) get(path string) ([]byte, error) {
 	endpoint.Path += path
 
 	var resp *http.Response
-	if resp, err = http.Get(endpoint.String()); err != nil {
+	if resp, err = client.httpClient.Get(endpoint.String()); err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
 	defer resp.Body.Close()
@@ -138,14 +140,6 @@ func (client *Client) post(path string, values url.Values) ([]byte, error) {
 
 	// set the endpoint for this request
 	endpoint.Path += path
-
-	// v1 authentication (deprecated)
-	// nonce := strconv.FormatInt(time.Now().UnixNano(), 10)
-	// mac := hmac.New(sha256.New, []byte(client.Secret))
-	// mac.Write([]byte(nonce + client.CustomerId + client.Key))
-	// values.Set("key", client.Key)
-	// values.Set("signature", strings.ToUpper(hex.EncodeToString(mac.Sum(nil))))
-	// values.Set("nonce", nonce)
 
 	// encode the url.Values in the body
 	var payload string
@@ -204,7 +198,7 @@ func (client *Client) post(path string, values url.Values) ([]byte, error) {
 
 	// submit the http request
 	var resp *http.Response
-	if resp, err = http.DefaultClient.Do(req); err != nil {
+	if resp, err = client.httpClient.Do(req); err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
 	defer resp.Body.Close()

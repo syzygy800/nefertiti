@@ -29,6 +29,7 @@ func (self *Client) Orders(symbol string) ([]Order, error) {
 	defer AfterRequest()
 	BeforeRequest(self, WEIGHT_ALL_ORDERS)
 	if orders, err = self.inner.NewListOrdersService().Symbol(symbol).Do(context.Background()); err != nil {
+		self.handleError(err)
 		return nil, err
 	}
 	for _, unwrapped := range orders {
@@ -51,6 +52,7 @@ func (self *Client) OpenOrders() ([]Order, error) {
 	defer AfterRequest()
 	BeforeRequest(self, WEIGHT_OPEN_ORDERS_WITHOUT_SYMBOL)
 	if orders, err = self.inner.NewListOpenOrdersService().Do(context.Background()); err != nil {
+		self.handleError(err)
 		return nil, err
 	}
 	for _, unwrapped := range orders {
@@ -73,6 +75,7 @@ func (self *Client) OpenOrdersEx(symbol string) ([]Order, error) {
 	defer AfterRequest()
 	BeforeRequest(self, WEIGHT_OPEN_ORDERS_WITH_SYMBOL)
 	if orders, err = self.inner.NewListOpenOrdersService().Symbol(symbol).Do(context.Background()); err != nil {
+		self.handleError(err)
 		return nil, err
 	}
 	for _, unwrapped := range orders {
@@ -90,6 +93,7 @@ func (self *Client) CancelOrder(symbol string, orderID int64) error {
 	defer AfterRequest()
 	BeforeRequest(self, WEIGHT_CANCEL_ORDER)
 	_, err := self.inner.NewCancelOrderService().Symbol(symbol).OrderID(orderID).Do(context.Background())
+	self.handleError(err)
 	return err
 }
 
@@ -99,6 +103,22 @@ func (self *Client) NewCreateOrderService() *CreateOrderService {
 
 func (self *Client) NewCreateOCOService() *CreateOCOService {
 	return &CreateOCOService{client: self, inner: self.inner.NewCreateOCOService()}
+}
+
+func (self *Client) handleError(err error) {
+	if err == nil {
+		return
+	}
+	binanceError, ok := IsBinanceError(err)
+	if ok {
+		if binanceError.Code == -1021 {
+			// Timestamp for this request is outside of the recvWindow.
+			if offset, err := self.inner.NewSetServerTimeService().Do(context.Background()); err == nil {
+				SERVER_TIME_OFFSET = offset
+				SERVER_TIME_UPDATE = time.Now()
+			}
+		}
+	}
 }
 
 var (

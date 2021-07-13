@@ -42,6 +42,12 @@
             ],
             "problemMatcher": [],
             "group": "test"
+        },
+        {
+            "label": "go lint",
+            "type": "shell",
+            "command": "golint ${file}",
+            "problemMatcher": []
         }
     ]
 }

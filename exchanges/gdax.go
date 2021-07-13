@@ -378,11 +378,8 @@ func (self *Gdax) sell(
 								self.error(err, notify.Level(), service)
 							}
 
-							var (
-								mult  float64
-								strat model.Strategy = model.GetStrategy()
-							)
-							if mult, err = strat.Mult(); err != nil {
+							var mult multiplier.Mult
+							if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
 								self.error(err, notify.Level(), service)
 							}
 
@@ -420,14 +417,13 @@ func (self *Gdax) sell(
 
 		if time.Since(lastInterval).Minutes() > intervalMinutes {
 			var (
-				cursor   *exchange.Cursor
-				orders   []gdax.Order
-				strategy model.Strategy = model.GetStrategy()
-				client   *gdax.Client   = self.getClient(apiKey, apiSecret, apiPassphrase, sandbox)
+				cursor *exchange.Cursor
+				orders []gdax.Order
+				client *gdax.Client = self.getClient(apiKey, apiSecret, apiPassphrase, sandbox)
 			)
 
 			// follow up on the "aggressive" strategy
-			if strategy == model.STRATEGY_STANDARD && flag.Exists("dca") {
+			if flag.Dca() {
 				// we won't be re-buying *unless* your most recent (non-sold) sell is older than 14 days
 				const rebuyAfterDays = 14
 				var open []gdax.Order
@@ -528,127 +524,25 @@ func (self *Gdax) sell(
 					}
 				}
 			}
-
-			// follow up on the trailing stop loss strategy
-			if strategy == model.STRATEGY_TRAILING || strategy == model.STRATEGY_TRAILING_STOP_LOSS {
-				var mult float64
-				if mult, err = strategy.Mult(); err != nil {
-					self.error(err, notify.Level(), service)
-				} else {
-					cache := make(map[string]float64)
-
-					// phase #1: enumerate over limit sell orders
-					cursor = client.ListOrders(exchange.ListOrdersParams{Status: "open"})
-					for cursor.HasMore {
-						if err = cursor.NextPage(&orders); err != nil {
-							self.error(errors.Wrap(err, 1), notify.Level(), service)
-						} else {
-							for _, order := range orders {
-								// do not replace the limit orders that are merely used as a reference for the HODL strategy
-								if !hold.HasMarket(order.ProductID) {
-									// replace limit sell (not limit buy) orders
-									side := model.NewOrderSide(order.Side)
-									if side == model.SELL {
-										ticker, ok := cache[order.ProductID]
-										if !ok {
-											if ticker, err = self.GetTicker(client, order.ProductID); err == nil {
-												cache[order.ProductID] = ticker
-											}
-										}
-										if ticker > 0 {
-											price := multiplier.Scale(mult, 0.75) * (order.GetPrice() / mult)
-											// is the ticker nearing the price? then cancel the limit sell order, and place a stop loss order below the ticker.
-											if ticker > price {
-												if err = client.CancelOrder(order.ID); err == nil {
-													var prec int
-													if prec, err = self.GetPricePrec(client, order.ProductID); err == nil {
-														price = multiplier.Scale(mult, 0.5) * (ticker / mult)
-														_, err = self.StopLoss(client, order.ProductID, order.GetSize(), precision.Round(price, prec), model.LIMIT, "")
-														// is this market in limit-only mode?
-														if err != nil {
-															log.Printf("[ERROR] %v\n", err)
-															_, err = client.CreateOrder(&order)
-														}
-													}
-												}
-											}
-										}
-										if err != nil {
-											msg := err.Error()
-											var data []byte
-											if data, err = json.Marshal(order); err == nil {
-												msg = msg + "\n\n" + string(data)
-											}
-											self.error(errors.New(msg), notify.Level(), service)
-										}
-									}
-								}
-							}
-						}
-					}
-
-					// phase #2: enumerate over stop loss orders
-					cursor = client.ListOrders(exchange.ListOrdersParams{Status: "active"})
-					for cursor.HasMore {
-						if err = cursor.NextPage(&orders); err != nil {
-							self.error(errors.Wrap(err, 1), notify.Level(), service)
-						} else {
-							for _, order := range orders {
-								// replace stop loss (not stop entry) orders
-								if order.Stop == "loss" {
-									ticker, ok := cache[order.ProductID]
-									if !ok {
-										if ticker, err = self.GetTicker(client, order.ProductID); err == nil {
-											cache[order.ProductID] = ticker
-										}
-									}
-									if ticker > 0 {
-										var prec int
-										if prec, err = self.GetPricePrec(client, order.ProductID); err == nil {
-											price := multiplier.Scale(mult, 0.5) * (ticker / mult)
-											// is the distance bigger than 5%? then cancel the stop loss, and place a new one.
-											if order.GetStopPrice() < precision.Round(price, prec) {
-												if err = client.CancelOrder(order.ID); err == nil {
-													_, err = self.StopLoss(client, order.ProductID, order.GetSize(), precision.Round(price, prec), model.LIMIT, "")
-												}
-											}
-										}
-									}
-									if err != nil {
-										msg := err.Error()
-										var data []byte
-										if data, err = json.Marshal(order); err == nil {
-											msg = msg + "\n\n" + string(data)
-										}
-										self.error(errors.New(msg), notify.Level(), service)
-									}
-								}
-							}
-						}
-					}
-				}
-			}
 			lastInterval = time.Now()
 		}
 	}
 }
 
 func (self *Gdax) Sell(
-	start time.Time,
+	strategy model.Strategy,
 	hold model.Markets,
 	sandbox, tweet, debug bool,
 	success model.OnSuccess,
 ) error {
-	var err error
-
-	strategy := model.GetStrategy()
-	if strategy == model.STRATEGY_STANDARD || strategy == model.STRATEGY_TRAILING {
+	if strategy == model.STRATEGY_STANDARD {
 		// we are OK
 	} else {
 		return errors.New("Strategy not implemented")
 	}
 
 	var (
+		err           error
 		apiSecret     string
 		apiKey        string
 		apiPassphrase string
@@ -691,7 +585,6 @@ func (self *Gdax) Order(
 	size float64,
 	price float64,
 	kind model.OrderType,
-	meta string,
 ) (oid []byte, raw []byte, err error) {
 	gdaxClient, ok := client.(*gdax.Client)
 	if !ok {
@@ -719,7 +612,7 @@ func (self *Gdax) Order(
 	return []byte(saved.ID), out, nil
 }
 
-func (self *Gdax) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType, meta string) ([]byte, error) {
+func (self *Gdax) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType) ([]byte, error) {
 	var err error
 
 	gdaxClient, ok := client.(*gdax.Client)
@@ -764,7 +657,7 @@ func (self *Gdax) StopLoss(client interface{}, market string, size float64, pric
 	return out, nil
 }
 
-func (self *Gdax) OCO(client interface{}, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
+func (self *Gdax) OCO(client interface{}, market string, size float64, price, stop float64) ([]byte, error) {
 	return nil, errors.New("Not implemented")
 }
 
@@ -939,7 +832,7 @@ func (self *Gdax) GetPricePrec(client interface{}, market string) (int, error) {
 	}
 	for _, p := range products {
 		if p.ID == market {
-			return getPrecFromStr(p.QuoteIncrement, 0), nil
+			return precision.Parse(p.QuoteIncrement, 0), nil
 		}
 	}
 	return 0, errors.Errorf("market %s not found", market)
@@ -952,7 +845,7 @@ func (self *Gdax) GetSizePrec(client interface{}, market string) (int, error) {
 	}
 	for _, p := range products {
 		if p.ID == market {
-			return getPrecFromStr(p.BaseIncrement, 8), nil
+			return precision.Parse(p.BaseIncrement, 8), nil
 		}
 	}
 	return 8, errors.Errorf("market %s not found", market)

@@ -16,6 +16,7 @@ func (self *Client) Ticker(symbol string) (*exchange.PriceChangeStats, error) {
 	defer AfterRequest()
 	BeforeRequest(self, WEIGHT_TICKER_24H_WITH_SYMBOL)
 	if stats, err = self.inner.NewListPriceChangeStatsService().Symbol(symbol).Do(context.Background()); err != nil {
+		self.handleError(err)
 		return nil, err
 	}
 	if len(stats) == 0 {

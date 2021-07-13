@@ -15,8 +15,7 @@ func (c *AboutCommand) Run(args []string) int {
 	text := fmt.Sprintf(`
 NAME:
   %s is a command-line trading bot that follows a simple but proven
-  strategy: buy the dip, then sell those trades as soon as possible, preferably
-  on the same day.
+  strategy: buy the dip, then sell those trades as soon as possible.
 
 USAGE:
   ./%s command [options]

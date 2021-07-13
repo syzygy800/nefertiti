@@ -71,7 +71,7 @@ func buyEvery(
 	size float64,
 	dip float64,
 	pip float64,
-	mult float64,
+	mult multiplier.Mult,
 	dist int64,
 	top int64,
 	max float64,
@@ -99,7 +99,7 @@ func buy(
 	size float64,
 	dip float64,
 	pip float64,
-	mult float64,
+	mult multiplier.Mult,
 	dist int64,
 	top int64,
 	max float64,
@@ -339,7 +339,7 @@ func buy(
 		}
 
 		// the more non-sold sell orders we have, the bigger the new buy order size
-		if flag.Exists("dca") {
+		if flag.Dca() {
 			var prec int
 			if prec, err = exchange.GetSizePrec(client, market); err != nil {
 				return err, market
@@ -484,7 +484,7 @@ func buySignals(
 			}
 
 			size := precision.Round(price/ticker, prec)
-			if flag.Exists("dca") {
+			if flag.Dca() {
 				hasOpenSell := 0
 				var opened model.Orders
 				if opened, err = exchange.GetOpened(client, market); err != nil {
@@ -616,25 +616,15 @@ func (c *BuyCommand) Run(args []string) int {
 		flg *flag.Flag
 	)
 
-	sandbox := false
-	flg = flag.Get("sandbox")
-	if flg.Exists {
-		sandbox = flg.String() == "Y"
-	}
-
-	flg = flag.Get("exchange")
-	if flg.Exists == false {
-		return c.ReturnError(errors.New("missing argument: exchange"))
-	}
-	exchange := exchanges.New().FindByName(flg.String())
-	if exchange == nil {
-		return c.ReturnError(errors.Errorf("exchange %v does not exist", flg))
+	var exchange model.Exchange
+	if exchange, err = exchanges.GetExchange(); err != nil {
+		return c.ReturnError(err)
 	}
 
 	test := flag.Exists("test")
 
 	var client interface{}
-	if client, err = exchange.GetClient(model.PRIVATE, sandbox); err != nil {
+	if client, err = exchange.GetClient(model.PRIVATE, flag.Sandbox()); err != nil {
 		return c.ReturnError(err)
 	}
 
@@ -646,11 +636,8 @@ func (c *BuyCommand) Run(args []string) int {
 	}
 
 	var min float64 = 0
-	flg = flag.Get("min")
-	if flg.Exists {
-		if min, err = flg.Float64(); err != nil {
-			return c.ReturnError(errors.Errorf("min %v is invalid", flg))
-		}
+	if min, err = flag.Min(); err != nil {
+		return c.ReturnError(err)
 	}
 
 	flg = flag.Get("signals")
@@ -711,7 +698,7 @@ func (c *BuyCommand) Run(args []string) int {
 		}
 		// initial run starts here
 		var calls model.Calls
-		if calls, err = buySignals(channel, client, exchange, flag.Get("quote").Split(","), price, duration2, nil, min, btc_volume_min, btc_pump_max, deviation, service, sandbox, test, flag.Debug()); err != nil {
+		if calls, err = buySignals(channel, client, exchange, flag.Get("quote").Split(","), price, duration2, nil, min, btc_volume_min, btc_pump_max, deviation, service, flag.Sandbox(), test, flag.Debug()); err != nil {
 			if flag.Exists("ignore-error") {
 				log.Printf("[ERROR] %v\n", err)
 			} else {
@@ -746,7 +733,7 @@ func (c *BuyCommand) Run(args []string) int {
 					if err = c.ReturnSuccess(); err != nil {
 						return c.ReturnError(err)
 					}
-					buySignalsEvery(duration1, channel, client, exchange, flag.Get("quote").Split(","), price, duration2, calls, min, btc_volume_min, btc_pump_max, deviation, service, sandbox, flag.Debug())
+					buySignalsEvery(duration1, channel, client, exchange, flag.Get("quote").Split(","), price, duration2, calls, min, btc_volume_min, btc_pump_max, deviation, service, flag.Sandbox(), flag.Debug())
 				}
 			}
 		}
@@ -754,7 +741,7 @@ func (c *BuyCommand) Run(args []string) int {
 	}
 
 	var all []model.Market
-	if all, err = exchange.GetMarkets(true, sandbox); err != nil {
+	if all, err = exchange.GetMarkets(true, flag.Sandbox()); err != nil {
 		return c.ReturnError(err)
 	}
 
@@ -811,23 +798,17 @@ func (c *BuyCommand) Run(args []string) int {
 	}
 
 	var dip float64 = 5
-	flg = flag.Get("dip")
-	if flg.Exists {
-		if dip, err = flg.Float64(); err != nil {
-			return c.ReturnError(errors.Errorf("dip %v is invalid", flg))
-		}
+	if dip, err = flag.Dip(); err != nil {
+		return c.ReturnError(err)
 	}
 
 	var pip float64 = 30
-	flg = flag.Get("pip")
-	if flg.Exists {
-		if pip, err = flg.Float64(); err != nil {
-			return c.ReturnError(errors.Errorf("pip %v is invalid", flg))
-		}
+	if pip, err = flag.Pip(); err != nil {
+		return c.ReturnError(err)
 	}
 
-	var mult float64 = multiplier.FIVE_PERCENT
-	if mult, err = multiplier.Get(mult); err != nil {
+	var mult multiplier.Mult
+	if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
 		return c.ReturnError(err)
 	}
 
@@ -848,14 +829,11 @@ func (c *BuyCommand) Run(args []string) int {
 	}
 
 	var max float64 = 0
-	flg = flag.Get("max")
-	if flg.Exists {
-		if max, err = flg.Float64(); err != nil {
-			return c.ReturnError(errors.Errorf("max %v is invalid", flg))
-		}
+	if max, err = flag.Max(); err != nil {
+		return c.ReturnError(err)
 	}
 
-	if err, _ = buy(client, exchange, splitted, hold, agg, size, dip, pip, mult, dist, top, max, min, price, service, flag.Strict(), sandbox, test, flag.Debug()); err != nil {
+	if err, _ = buy(client, exchange, splitted, hold, agg, size, dip, pip, mult, dist, top, max, min, price, service, flag.Strict(), flag.Sandbox(), test, flag.Debug()); err != nil {
 		if flag.Exists("ignore-error") {
 			log.Printf("[ERROR] %v\n", err)
 		} else {
@@ -873,7 +851,7 @@ func (c *BuyCommand) Run(args []string) int {
 			if err = c.ReturnSuccess(); err != nil {
 				return c.ReturnError(err)
 			}
-			buyEvery(time.Duration(repeat*float64(time.Hour)), client, exchange, splitted, hold, agg, size, dip, pip, mult, dist, top, max, min, price, service, flag.Strict(), sandbox, flag.Debug())
+			buyEvery(time.Duration(repeat*float64(time.Hour)), client, exchange, splitted, hold, agg, size, dip, pip, mult, dist, top, max, min, price, service, flag.Strict(), flag.Sandbox(), flag.Debug())
 		}
 	}
 

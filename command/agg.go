@@ -1,7 +1,6 @@
 package command
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -18,74 +17,38 @@ type (
 )
 
 func (c *AggCommand) Run(args []string) int {
-	var (
-		err error
-		flg *flag.Flag
-	)
-
-	sandbox := false
-	flg = flag.Get("sandbox")
-	if flg.Exists {
-		sandbox = flg.String() == "Y"
-	}
-
-	flg = flag.Get("exchange")
-	if flg.Exists == false {
-		return c.ReturnError(errors.New("missing argument: exchange"))
-	}
-	exchange := exchanges.New().FindByName(flg.String())
-	if exchange == nil {
-		return c.ReturnError(fmt.Errorf("exchange %v does not exist", flg))
-	}
-
-	var markets []model.Market
-	if markets, err = exchange.GetMarkets(true, sandbox); err != nil {
+	exchange, err := exchanges.GetExchange()
+	if err != nil {
 		return c.ReturnError(err)
 	}
 
-	flg = flag.Get("market")
-	if flg.Exists == false {
-		return c.ReturnError(errors.New("missing argument: market"))
-	}
-	market := flg.String()
-	if model.HasMarket(markets, market) == false {
-		return c.ReturnError(fmt.Errorf("market %s does not exist", market))
+	market, err := model.GetMarket(exchange)
+	if err != nil {
+		return c.ReturnError(err)
 	}
 
-	var dip float64 = 5
-	flg = flag.Get("dip")
-	if flg.Exists {
-		if dip, err = flg.Float64(); err != nil {
-			return c.ReturnError(fmt.Errorf("dip %v is invalid", flg))
-		}
+	dip, err := flag.Dip()
+	if err != nil {
+		return c.ReturnError(err)
 	}
 
-	var pip float64 = 30
-	flg = flag.Get("pip")
-	if flg.Exists {
-		if pip, err = flg.Float64(); err != nil {
-			return c.ReturnError(fmt.Errorf("pip %v is invalid", flg))
-		}
+	pip, err := flag.Pip()
+	if err != nil {
+		return c.ReturnError(err)
 	}
 
-	var max float64 = 0
-	flg = flag.Get("max")
-	if flg.Exists {
-		if max, err = flg.Float64(); err != nil {
-			return c.ReturnError(fmt.Errorf("max %v is invalid", flg))
-		}
+	max, err := flag.Max()
+	if err != nil {
+		return c.ReturnError(err)
 	}
 
-	var min float64 = 0
-	flg = flag.Get("min")
-	if flg.Exists {
-		if min, err = flg.Float64(); err != nil {
-			return c.ReturnError(fmt.Errorf("min %v is invalid", flg))
-		}
+	min, err := flag.Min()
+	if err != nil {
+		return c.ReturnError(err)
 	}
 
-	var agg float64
-	if agg, _, err = aggregation.Get(exchange, market, dip, pip, max, min, 4, flag.Strict(), sandbox); err != nil {
+	agg, _, err := aggregation.Get(exchange, market, dip, pip, max, min, 4, flag.Strict(), flag.Sandbox())
+	if err != nil {
 		return c.ReturnError(err)
 	}
 

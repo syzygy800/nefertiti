@@ -2,6 +2,8 @@ package gdax
 
 import (
 	exchange "github.com/svanas/go-coinbasepro"
+	"net/http"
+	"time"
 )
 
 const (
@@ -45,6 +47,10 @@ func (self *Client) GetOrder(id string) (*Order, error) {
 
 func New(sandbox bool) *Client {
 	client := exchange.NewClient()
+
+	client.HTTPClient = &http.Client{
+		Timeout: 30 * time.Second,
+	}
 
 	if sandbox {
 		client.UpdateConfig(&exchange.ClientConfig{

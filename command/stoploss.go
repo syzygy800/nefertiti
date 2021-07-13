@@ -22,19 +22,9 @@ func (c *StopLossCommand) Run(args []string) int {
 		flg *flag.Flag
 	)
 
-	sandbox := false
-	flg = flag.Get("sandbox")
-	if flg.Exists {
-		sandbox = flg.String() == "Y"
-	}
-
-	flg = flag.Get("exchange")
-	if flg.Exists == false {
-		return c.ReturnError(errors.New("missing argument: exchange"))
-	}
-	exchange := exchanges.New().FindByName(flg.String())
-	if exchange == nil {
-		return c.ReturnError(fmt.Errorf("exchange %v does not exist", flg))
+	var exchange model.Exchange
+	if exchange, err = exchanges.GetExchange(); err != nil {
+		return c.ReturnError(err)
 	}
 
 	var kind model.OrderType = model.LIMIT
@@ -46,18 +36,9 @@ func (c *StopLossCommand) Run(args []string) int {
 		}
 	}
 
-	var markets []model.Market
-	if markets, err = exchange.GetMarkets(true, sandbox); err != nil {
+	var market string
+	if market, err = model.GetMarket(exchange); err != nil {
 		return c.ReturnError(err)
-	}
-
-	flg = flag.Get("market")
-	if flg.Exists == false {
-		return c.ReturnError(errors.New("missing argument: market"))
-	}
-	market := flg.String()
-	if model.HasMarket(markets, market) == false {
-		return c.ReturnError(fmt.Errorf("market %s does not exist", market))
 	}
 
 	var size float64
@@ -80,7 +61,7 @@ func (c *StopLossCommand) Run(args []string) int {
 	}
 
 	var client interface{}
-	if client, err = exchange.GetClient(model.PRIVATE, sandbox); err != nil {
+	if client, err = exchange.GetClient(model.PRIVATE, flag.Sandbox()); err != nil {
 		return c.ReturnError(err)
 	}
 
@@ -90,7 +71,7 @@ func (c *StopLossCommand) Run(args []string) int {
 		market,
 		size,
 		price,
-		kind, "",
+		kind,
 	); err != nil {
 		return c.ReturnError(err)
 	}

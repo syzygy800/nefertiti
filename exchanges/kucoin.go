@@ -87,9 +87,8 @@ type Kucoin struct {
 func (self *Kucoin) baseURI(sandbox bool) string {
 	if sandbox {
 		return self.ExchangeInfo.REST.Sandbox
-	} else {
-		return self.ExchangeInfo.REST.URI
 	}
+	return self.ExchangeInfo.REST.URI
 }
 
 func (self *Kucoin) error(err error, level int64, service model.Notify) {
@@ -160,6 +159,7 @@ func (self *Kucoin) getSymbols(client *exchange.ApiService, cached bool) (exchan
 	return self.symbols, nil
 }
 
+// the minimum order quantity requried to place an order.
 func (self *Kucoin) getMinSize(client *exchange.ApiService, market string, cached bool) (float64, error) {
 	symbols, err := self.getSymbols(client, cached)
 	if err != nil {
@@ -232,7 +232,7 @@ func (self *Kucoin) getOrders(client *exchange.ApiService, params map[string]str
 
 // getRecentFills returns a list of your recent fills, up to max orders.
 func (self *Kucoin) getRecentFills(client *exchange.ApiService, max int) (exchange.FillsModel, error) {
-	const PAGE_SIZE = 100
+	const pageSize = 100
 
 	var (
 		err    error
@@ -242,7 +242,7 @@ func (self *Kucoin) getRecentFills(client *exchange.ApiService, max int) (exchan
 
 	for {
 		var resp *exchange.ApiResponse
-		if resp, err = client.Fills(map[string]string{}, &exchange.PaginationParam{CurrentPage: curr, PageSize: PAGE_SIZE}); err != nil {
+		if resp, err = client.Fills(map[string]string{}, &exchange.PaginationParam{CurrentPage: curr, PageSize: pageSize}); err != nil {
 			return nil, errors.Wrap(err, 1)
 		}
 		var (
@@ -254,7 +254,7 @@ func (self *Kucoin) getRecentFills(client *exchange.ApiService, max int) (exchan
 		}
 		if len(orders) == 0 {
 			if page.CurrentPage == 1 && page.TotalPage > 1 || page.CurrentPage > 1 {
-				errors.Errorf("/api/v1/fills?currentPage=%d&pageSize=%d returned 0 orders, expected at least 1.", curr, PAGE_SIZE)
+				errors.Errorf("/api/v1/fills?currentPage=%d&pageSize=%d returned 0 orders, expected at least 1.", curr, pageSize)
 			}
 		}
 		output = append(output, orders...)
@@ -328,7 +328,7 @@ func (self *Kucoin) FormatMarket(base, quote string) string {
 func (self *Kucoin) sell(
 	client *exchange.ApiService,
 	strategy model.Strategy,
-	mult float64,
+	mult, stop multiplier.Mult,
 	hold model.Markets,
 	service model.Notify,
 	twitter *notify.TwitterKeys,
@@ -383,9 +383,8 @@ func (self *Kucoin) sell(
 		}
 		if order.High == 0 && order.Low == 0 {
 			return 0
-		} else {
-			return (order.Low + order.High) / 2
 		}
+		return (order.Low + order.High) / 2
 	}
 	var (
 		bought  = make(SimpleOrders)
@@ -438,12 +437,10 @@ func (self *Kucoin) sell(
 					if service != nil {
 						title := fmt.Sprintf("Kucoin - Done %s", model.FormatOrderSide(side))
 						if side == model.SELL {
-							if strategy == model.STRATEGY_STOP_LOSS {
-								perc := (mult - 1) * 100
-								if order.Stop == "loss" {
-									perc = perc * -2
-								}
-								title = fmt.Sprintf("%s %.2f%%", title, perc)
+							if strategy == model.STRATEGY_STOP_LOSS && order.Stop == "loss" {
+								title = fmt.Sprintf("%s %s", title, multiplier.Format(stop))
+							} else {
+								title = fmt.Sprintf("%s %s", title, multiplier.Format(mult))
 							}
 						}
 						if err = service.SendMessage(order, title, model.ALWAYS); err != nil {
@@ -458,16 +455,10 @@ func (self *Kucoin) sell(
 		}
 	}
 
-	// has a stop loss been filled? then place a buy order double the order size
+	// has a stop loss been filled? then place a buy order double the order size *** if --dca is included ***
 	if strategy == model.STRATEGY_STOP_LOSS {
-		for symbol, stop := range stopped {
-			var ticker float64
-			if ticker, err = self.GetTicker(client, symbol); err != nil {
-				return new, err
-			}
-			if ticker > stop.High {
-				log.Printf("[INFO] Not re-buying %s because ticker %.8f is higher than stop price %.8f\n", symbol, ticker, stop.High)
-			} else {
+		if flag.Dca() {
+			for symbol, stop := range stopped {
 				var opened exchange.OrdersModel
 				if opened, err = self.getOrders(client, map[string]string{"status": "active", "symbol": symbol}); err != nil {
 					self.error(err, level, service)
@@ -485,7 +476,7 @@ func (self *Kucoin) sell(
 							_, _, err = self.Order(client,
 								model.BUY, symbol,
 								precision.Round(size, prec),
-								0, model.MARKET, "",
+								0, model.MARKET,
 							)
 						}
 					}
@@ -502,9 +493,8 @@ func (self *Kucoin) sell(
 		var sp int
 		if sp, err = self.GetSizePrec(client, symbol); err != nil {
 			return new, err
-		} else {
-			amount = precision.Floor(amount, sp)
 		}
+		amount = precision.Floor(amount, sp)
 
 		if bought == 0 {
 			if bought, err = self.GetTicker(client, symbol); err != nil {
@@ -532,49 +522,37 @@ func (self *Kucoin) sell(
 				}
 			}
 			// ---- END ---- svanas 2019-02-19 ----------------------------------------
-			var pp int
-			if pp, err = self.GetPricePrec(client, symbol); err == nil {
-				if strategy == model.STRATEGY_TRAILING_STOP_LOSS || strategy == model.STRATEGY_STOP_LOSS {
+			amount = self.GetMaxSize(client, base, quote, hold.HasMarket(symbol), amount)
+			if amount > 0 {
+				var pp int
+				if pp, err = self.GetPricePrec(client, symbol); err == nil {
 					var ticker float64
 					if ticker, err = self.GetTicker(client, symbol); err == nil {
-						sold := false
-						if strategy == model.STRATEGY_STOP_LOSS {
-							if ticker >= pricing.Multiply(bought, mult, pp) {
+						if ticker >= pricing.Multiply(bought, mult, pp) {
+							_, _, err = self.Order(client,
+								model.SELL,
+								symbol,
+								amount,
+								0, model.MARKET,
+							)
+						} else {
+							if strategy == model.STRATEGY_STOP_LOSS {
+								_, err = self.StopLoss(client,
+									symbol,
+									amount,
+									pricing.Multiply(bought, stop, pp),
+									model.MARKET,
+								)
+							} else {
 								_, _, err = self.Order(client,
 									model.SELL,
 									symbol,
 									amount,
-									0, model.MARKET, "",
+									pricing.Multiply(bought, mult, pp),
+									model.LIMIT,
 								)
-								sold = true
 							}
 						}
-						if !sold {
-							stop := func() float64 {
-								if strategy == model.STRATEGY_STOP_LOSS {
-									return ticker / multiplier.Scale(mult, 2.0)
-								} else {
-									return ticker / multiplier.Scale(mult, 0.5)
-								}
-							}()
-							_, err = self.StopLoss(client,
-								symbol,
-								amount,
-								precision.Round(stop, pp),
-								model.MARKET, "",
-							)
-						}
-					}
-				} else {
-					amount = self.GetMaxSize(client, base, quote, hold.HasMarket(symbol), amount)
-					if amount > 0 {
-						_, _, err = self.Order(client,
-							model.SELL,
-							symbol,
-							amount,
-							pricing.Multiply(bought, mult, pp),
-							model.LIMIT, "",
-						)
 					}
 				}
 			}
@@ -662,21 +640,19 @@ func (self *Kucoin) listen(
 }
 
 func (self *Kucoin) Sell(
-	start time.Time,
+	strategy model.Strategy,
 	hold model.Markets,
 	sandbox, tweet, debug bool,
 	success model.OnSuccess,
 ) error {
-	var err error
-
-	strategy := model.GetStrategy()
-	if strategy == model.STRATEGY_STANDARD || strategy == model.STRATEGY_TRAILING || strategy == model.STRATEGY_TRAILING_STOP_LOSS || strategy == model.STRATEGY_STOP_LOSS {
+	if strategy == model.STRATEGY_STANDARD || strategy == model.STRATEGY_STOP_LOSS {
 		// we are OK
 	} else {
 		return errors.New("Strategy not implemented")
 	}
 
 	var (
+		err           error
 		apiKey        string
 		apiSecret     string
 		apiPassphrase string
@@ -723,117 +699,56 @@ func (self *Kucoin) Sell(
 	for {
 		// read the dynamic settings
 		var (
-			mult     float64
-			level    int64          = notify.Level()
-			strategy model.Strategy = model.GetStrategy()
+			mult  multiplier.Mult
+			stop  multiplier.Mult
+			level int64 = notify.Level()
 		)
-		if mult, err = strategy.Mult(); err != nil {
+		if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
 			self.error(err, level, service)
-		} else {
-			// listens to the filled orders, look for newly filled orders, automatically place new sell orders.
-			if filled, err = self.sell(client, strategy, mult, hold, service, twitter, level, filled, sandbox, debug); err != nil {
-				self.error(err, level, service)
-			} else {
-				// listens to the open orders, look for cancelled orders, send a notification on newly opened orders.
-				if opened, err = self.listen(client, service, level, opened, filled); err != nil {
-					self.error(err, level, service)
-				} else {
-					// listens to the open orders, follow up on the trailing stop loss strategy
-					if strategy == model.STRATEGY_TRAILING || strategy == model.STRATEGY_TRAILING_STOP_LOSS || strategy == model.STRATEGY_STOP_LOSS {
-						cache := make(map[string]float64)
-						for _, order := range opened {
-							// enumerate over stop loss orders
-							if order.Stop == "loss" {
-								ticker, ok := cache[order.Symbol]
-								if !ok {
-									if ticker, err = self.GetTicker(client, order.Symbol); err == nil {
-										cache[order.Symbol] = ticker
-									}
-								}
-								if ticker > 0 {
-									var prec int
-									if prec, err = self.GetPricePrec(client, order.Symbol); err == nil {
-										sold := false
-										if strategy == model.STRATEGY_STOP_LOSS {
-											bought := pricing.Multiply(order.ParseStopPrice(), multiplier.Scale(mult, 2.0), prec)
-											if ticker >= pricing.Multiply(bought, mult, prec) {
-												if _, err = client.CancelStopOrder(order.Id); err == nil {
-													_, _, err = self.Order(client,
-														model.SELL,
-														order.Symbol,
-														order.ParseSize(),
-														0, model.MARKET, "",
-													)
-													sold = true
-												}
-											}
-										}
-										if !sold {
-											if strategy != model.STRATEGY_STOP_LOSS {
-												price := multiplier.Scale(mult, 0.5) * (ticker / mult)
-												// is the distance bigger than 5%? then cancel the stop loss, and place a new one.
-												if order.ParseStopPrice() < precision.Round(price, prec) {
-													if _, err = client.CancelStopOrder(order.Id); err == nil {
-														_, err = self.StopLoss(client,
-															order.Symbol,
-															order.ParseSize(),
-															precision.Round(price, prec),
-															model.NewOrderType(order.Type), "",
-														)
-													}
-												}
-											}
-										}
-									}
-									if err != nil {
-										var data []byte
-										if data, _ = json.Marshal(order); data == nil {
-											self.error(err, level, service)
-										} else {
-											self.error(errors.Append(err, "\t", string(data)), level, service)
-										}
-									}
+		} else if stop, err = multiplier.Stop(); err != nil {
+			self.error(err, level, service)
+		} else
+		// listens to the filled orders, look for newly filled orders, automatically place new sell orders.
+		if filled, err = self.sell(client, strategy, mult, stop, hold, service, twitter, level, filled, sandbox, debug); err != nil {
+			self.error(err, level, service)
+		} else
+		// listens to the open orders, look for cancelled orders, send a notification on newly opened orders.
+		if opened, err = self.listen(client, service, level, opened, filled); err != nil {
+			self.error(err, level, service)
+		} else
+		// listens to the open orders, follow up on the stop loss strategy
+		if strategy == model.STRATEGY_STOP_LOSS {
+			cache := make(map[string]float64)
+			for _, order := range opened {
+				// enumerate over stop loss orders
+				if order.Stop == "loss" {
+					ticker, ok := cache[order.Symbol]
+					if !ok {
+						if ticker, err = self.GetTicker(client, order.Symbol); err == nil {
+							cache[order.Symbol] = ticker
+						}
+					}
+					if ticker > 0 {
+						var prec int
+						if prec, err = self.GetPricePrec(client, order.Symbol); err == nil {
+							bought := order.ParseStopPrice() / float64(stop)
+							if ticker >= pricing.Multiply(bought, mult, prec) {
+								if _, err = client.CancelStopOrder(order.Id); err == nil {
+									_, _, err = self.Order(client,
+										model.SELL,
+										order.Symbol,
+										order.ParseSize(),
+										0, model.MARKET,
+									)
 								}
 							}
-							// enumerate over limit sell orders
-							if order.Stop == "" {
-								side := model.NewOrderSide(order.Side)
-								if side == model.SELL {
-									if strategy != model.STRATEGY_STOP_LOSS {
-										ticker, ok := cache[order.Symbol]
-										if !ok {
-											if ticker, err = self.GetTicker(client, order.Symbol); err == nil {
-												cache[order.Symbol] = ticker
-											}
-										}
-										if ticker > 0 {
-											price := multiplier.Scale(mult, 0.75) * (order.ParsePrice() / mult)
-											// is the ticker nearing the price? then cancel the limit sell order, and place a stop loss order below the ticker.
-											if ticker > price {
-												if _, err = client.CancelOrder(order.Id); err == nil {
-													var prec int
-													if prec, err = self.GetPricePrec(client, order.Symbol); err == nil {
-														price = multiplier.Scale(mult, 0.5) * (ticker / mult)
-														_, err = self.StopLoss(client,
-															order.Symbol,
-															order.ParseSize(),
-															precision.Round(price, prec),
-															model.MARKET, "",
-														)
-													}
-												}
-												if err != nil {
-													var data []byte
-													if data, _ = json.Marshal(order); data == nil {
-														self.error(err, level, service)
-													} else {
-														self.error(errors.Append(err, "\t", string(data)), level, service)
-													}
-												}
-											}
-										}
-									}
-								}
+						}
+						if err != nil {
+							var data []byte
+							if data, _ = json.Marshal(order); data == nil {
+								self.error(err, level, service)
+							} else {
+								self.error(errors.Append(err, "\t", string(data)), level, service)
 							}
 						}
 					}
@@ -850,7 +765,6 @@ func (self *Kucoin) Order(
 	size float64,
 	price float64,
 	kind model.OrderType,
-	meta string,
 ) (oid []byte, raw []byte, err error) {
 	var (
 		resp  *exchange.ApiResponse
@@ -886,7 +800,7 @@ func (self *Kucoin) Order(
 	return []byte(order.OrderId), raw, nil
 }
 
-func (self *Kucoin) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType, meta string) ([]byte, error) {
+func (self *Kucoin) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType) ([]byte, error) {
 	var (
 		err   error
 		out   []byte
@@ -925,7 +839,7 @@ func (self *Kucoin) StopLoss(client interface{}, market string, size float64, pr
 	return out, nil
 }
 
-func (self *Kucoin) OCO(client interface{}, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
+func (self *Kucoin) OCO(client interface{}, market string, size float64, price, stop float64) ([]byte, error) {
 	return nil, errors.New("Not implemented")
 }
 
@@ -1141,7 +1055,7 @@ func (self *Kucoin) GetPricePrec(client interface{}, market string) (int, error)
 	}
 	for _, symbol := range symbols {
 		if symbol.Symbol == market {
-			return getPrecFromStr(symbol.PriceIncrement, 8), nil
+			return precision.Parse(symbol.PriceIncrement, 8), nil
 		}
 	}
 	return 8, nil
@@ -1158,7 +1072,7 @@ func (self *Kucoin) GetSizePrec(client interface{}, market string) (int, error) 
 	}
 	for _, symbol := range symbols {
 		if symbol.Symbol == market {
-			return getPrecFromStr(symbol.BaseIncrement, 0), nil
+			return precision.Parse(symbol.BaseIncrement, 0), nil
 		}
 	}
 	return 0, nil
@@ -1174,9 +1088,8 @@ func (self *Kucoin) GetMaxSize(client interface{}, base, quote string, hold bool
 		prec, err := self.GetSizePrec(client, self.FormatMarket(base, quote))
 		if err != nil {
 			return 0
-		} else {
-			return prec
 		}
+		return prec
 	}
 	return model.GetSizeMax(hold, def, fn)
 }
@@ -1268,7 +1181,7 @@ func (self *Kucoin) Buy(client interface{}, cancel bool, market string, calls mo
 				market,
 				qty,
 				limit,
-				kind, "",
+				kind,
 			)
 			if err != nil {
 				return err

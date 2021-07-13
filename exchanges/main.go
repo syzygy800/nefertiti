@@ -12,7 +12,7 @@ import (
 
 type Exchanges []model.Exchange
 
-func (exchanges *Exchanges) FindByName(name string) model.Exchange {
+func (exchanges *Exchanges) findByName(name string) model.Exchange {
 	for _, exchange := range *exchanges {
 		if exchange.GetInfo().Equals(name) {
 			return exchange
@@ -35,24 +35,16 @@ func New() *Exchanges {
 	return &out
 }
 
-func getPrecFromStr(value string, def int) int {
-	i := strings.Index(value, ".")
-	if i > -1 {
-		n := i + 1
-		for n < len(value) {
-			if string(value[n]) != "0" {
-				return n - i
-			}
-			n++
-		}
-		return 0
+func GetExchange() (model.Exchange, error) {
+	arg := flag.Get("exchange")
+	if !arg.Exists {
+		return nil, errors.New("missing argument: exchange")
 	}
-	i, err := strconv.Atoi(value)
-	if err == nil && i == 1 {
-		return 0
-	} else {
-		return def
+	out := New().findByName(arg.String())
+	if out == nil {
+		return nil, errors.Errorf("exchange %v does not exist", arg)
 	}
+	return out, nil
 }
 
 func promptForApiKeys(exchange string) (apiKey, apiSecret string, err error) {

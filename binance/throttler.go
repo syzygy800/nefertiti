@@ -45,6 +45,7 @@ func GetRequestsPerSecond(client *Client, weight int) (float64, error) {
 	if requestsPerSecond == 0 {
 		info, err := client.inner.NewExchangeInfoService().Do(context.Background())
 		if err != nil {
+			client.handleError(err)
 			return out, err
 		}
 		requestsPerSecond = float64(getRequestsPerSecond(info))

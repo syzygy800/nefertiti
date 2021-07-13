@@ -1,13 +1,8 @@
 package model
 
 import (
-	"encoding/base64"
 	"encoding/json"
-	"fmt"
-	"strconv"
 	"time"
-
-	"github.com/svanas/nefertiti/multiplier"
 )
 
 type OrderSide int
@@ -127,120 +122,5 @@ func (orders Orders) Youngest(side OrderSide, def time.Time) time.Time {
 		return def
 	} else {
 		return youngest
-	}
-}
-
-type OrderMetaData struct {
-	Nonce int64   `json:"-"`
-	Price float64 `json:"p"`
-	Mult  float64 `json:"m"`
-	Trail bool    `json:"-"`
-}
-
-var metaDataNonce int64 = -1
-
-func NewMetaData(price, mult float64) *OrderMetaData {
-	return NewMetaDataEx(price, mult, true)
-}
-
-func NewMetaDataEx(price, mult float64, trail bool) *OrderMetaData {
-	if metaDataNonce == 9 {
-		metaDataNonce = 0
-	} else {
-		metaDataNonce++
-	}
-	return &OrderMetaData{
-		Nonce: metaDataNonce,
-		Price: price,
-		Mult:  mult,
-		Trail: trail,
-	}
-}
-
-func HasMetaData(str string) bool {
-	if len(str) > 1 {
-		var (
-			err error
-			buf []byte
-		)
-		if str[1] >= '0' && str[1] <= '9' {
-			buf, err = base64.RawURLEncoding.DecodeString(str[2:])
-		} else {
-			buf, err = base64.RawURLEncoding.DecodeString(str[1:])
-		}
-		if err == nil {
-			var omd OrderMetaData
-			if json.Unmarshal(buf, &omd) == nil {
-				return omd.Price > 0 && omd.Mult > 0
-			}
-		}
-	}
-	return false
-}
-
-func ParseMetaData(str string) *OrderMetaData {
-	var (
-		err error
-		buf []byte
-		out OrderMetaData
-	)
-	if len(str) > 1 {
-		if str[1] >= '0' && str[1] <= '9' {
-			out.Trail = str[1] != '0'
-			buf, err = base64.RawURLEncoding.DecodeString(str[2:])
-		} else {
-			out.Trail = true
-			buf, err = base64.RawURLEncoding.DecodeString(str[1:])
-		}
-		if err == nil {
-			err = json.Unmarshal(buf, &out)
-			if err == nil {
-				out.Nonce, err = strconv.ParseInt(str[:1], 10, 64)
-			}
-		}
-	}
-	return &out
-}
-
-func GetOrderMult(meta string) float64 {
-	if len(meta) > 1 {
-		var (
-			err error
-			buf []byte
-		)
-		if meta[1] >= '0' && meta[1] <= '9' {
-			buf, err = base64.RawURLEncoding.DecodeString(meta[2:])
-		} else {
-			buf, err = base64.RawURLEncoding.DecodeString(meta[1:])
-		}
-		if err == nil {
-			var omd OrderMetaData
-			if json.Unmarshal(buf, &omd) == nil {
-				if omd.Mult > 0 {
-					return omd.Mult
-				}
-			}
-		}
-	}
-	strat := GetStrategy()
-	out, _ := strat.Mult()
-	if out == 0 {
-		out = multiplier.FIVE_PERCENT
-	}
-	return out
-}
-
-func (md *OrderMetaData) String() string {
-	if md.Price == 0 || md.Mult == 0 {
-		return ""
-	}
-	buf, err := json.Marshal(md)
-	if err != nil {
-		return ""
-	}
-	if md.Trail {
-		return fmt.Sprintf("%d1%s", md.Nonce, base64.RawURLEncoding.EncodeToString(buf))
-	} else {
-		return fmt.Sprintf("%d0%s", md.Nonce, base64.RawURLEncoding.EncodeToString(buf))
 	}
 }

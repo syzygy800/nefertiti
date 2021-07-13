@@ -4,7 +4,28 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 )
+
+func Parse(value string, def int) int {
+	i := strings.Index(value, ".")
+	if i > -1 {
+		n := i + 1
+		for n < len(value) {
+			if string(value[n]) != "0" {
+				return n - i
+			}
+			n++
+		}
+		return 0
+	}
+	i, err := strconv.Atoi(value)
+	if err == nil && i == 1 {
+		return 0
+	} else {
+		return def
+	}
+}
 
 func Format(prec int) string {
 	var out string

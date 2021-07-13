@@ -2,7 +2,6 @@ package model
 
 import (
 	"strings"
-	"time"
 )
 
 type Permission int
@@ -41,10 +40,10 @@ type Exchange interface {
 	GetClient(permission Permission, sandbox bool) (interface{}, error)
 	GetMarkets(cached, sandbox bool) ([]Market, error)
 	FormatMarket(base, quote string) string
-	Sell(start time.Time, hold Markets, sandbox, tweet, debug bool, success OnSuccess) error
-	Order(client interface{}, side OrderSide, market string, size float64, price float64, kind OrderType, meta string) (oid []byte, raw []byte, err error)
-	StopLoss(client interface{}, market string, size float64, price float64, kind OrderType, meta string) ([]byte, error)
-	OCO(client interface{}, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error)
+	Sell(stategy Strategy, hold Markets, sandbox, tweet, debug bool, success OnSuccess) error
+	Order(client interface{}, side OrderSide, market string, size float64, price float64, kind OrderType) (oid []byte, raw []byte, err error)
+	StopLoss(client interface{}, market string, size float64, price float64, kind OrderType) ([]byte, error)
+	OCO(client interface{}, market string, size float64, price, stop float64) ([]byte, error)
 	GetClosed(client interface{}, market string) (Orders, error)
 	GetOpened(client interface{}, market string) (Orders, error)
 	GetBook(client interface{}, market string, side BookSide) (interface{}, error)

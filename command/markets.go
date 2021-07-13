@@ -2,7 +2,6 @@ package command
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -17,17 +16,12 @@ type (
 )
 
 func (c *MarketsCommand) Run(args []string) int {
-	flg := flag.Get("exchange")
-	if flg.Exists == false {
-		return c.ReturnError(errors.New("missing argument: exchange"))
+	exchange, err := exchanges.GetExchange()
+	if err != nil {
+		return c.ReturnError(err)
 	}
 
-	exchange := exchanges.New().FindByName(flg.String())
-	if exchange == nil {
-		return c.ReturnError(fmt.Errorf("exchange %v does not exist", flg))
-	}
-
-	markets, err := exchange.GetMarkets(true, flag.Get("sandbox").String() == "Y")
+	markets, err := exchange.GetMarkets(true, flag.Sandbox())
 	if err != nil {
 		return c.ReturnError(err)
 	}

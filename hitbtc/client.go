@@ -12,15 +12,10 @@ import (
 )
 
 type client struct {
-	apiKey      string
-	apiSecret   string
-	httpClient  *http.Client
-	httpTimeout time.Duration
+	apiKey     string
+	apiSecret  string
+	httpClient *http.Client
 }
-
-const (
-	httpClientTimeout = 30
-)
 
 var (
 	lastRequest       time.Time
@@ -44,42 +39,17 @@ func init() {
 
 // NewClient return a new HitBtc HTTP client
 func NewClient(apiKey, apiSecret string) (c *client) {
-	return &client{apiKey, apiSecret, &http.Client{}, httpClientTimeout * time.Second}
+	return NewClientWithCustomTimeout(apiKey, apiSecret, (30 * time.Second))
 }
 
 // NewClientWithCustomHttpConfig returns a new HitBtc HTTP client using the predefined http client
 func NewClientWithCustomHttpConfig(apiKey, apiSecret string, httpClient *http.Client) (c *client) {
-	timeout := httpClient.Timeout
-	if timeout <= 0 {
-		timeout = httpClientTimeout * time.Second
-	}
-	return &client{apiKey, apiSecret, httpClient, timeout}
+	return &client{apiKey, apiSecret, httpClient}
 }
 
 // NewClient returns a new HitBtc HTTP client with custom timeout
 func NewClientWithCustomTimeout(apiKey, apiSecret string, timeout time.Duration) (c *client) {
-	return &client{apiKey, apiSecret, &http.Client{}, timeout}
-}
-
-// doTimeoutRequest do a HTTP request with timeout
-func (c *client) doTimeoutRequest(timer *time.Timer, req *http.Request) (*http.Response, error) {
-	// Do the request in the background so we can check the timeout
-	type result struct {
-		resp *http.Response
-		err  error
-	}
-	done := make(chan result, 1)
-	go func() {
-		resp, err := c.httpClient.Do(req)
-		done <- result{resp, err}
-	}()
-	// Wait for the read or the timeout
-	select {
-	case r := <-done:
-		return r.resp, r.err
-	case <-timer.C:
-		return nil, errors.New("timeout on reading data from HitBtc API")
-	}
+	return NewClientWithCustomHttpConfig(apiKey, apiSecret, &http.Client{Timeout: timeout})
 }
 
 // do prepare and process HTTP request to HitBtc API
@@ -91,8 +61,6 @@ func (c *client) do(method string, resource string, payload map[string]string, a
 	defer func() {
 		AfterRequest()
 	}()
-
-	connectTimer := time.NewTimer(c.httpTimeout)
 
 	var rawurl string
 	if strings.HasPrefix(resource, "http") {
@@ -140,7 +108,7 @@ func (c *client) do(method string, resource string, payload map[string]string, a
 		req.SetBasicAuth(c.apiKey, c.apiSecret)
 	}
 
-	resp, err := c.doTimeoutRequest(connectTimer, req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return
 	}

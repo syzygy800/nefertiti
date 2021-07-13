@@ -114,9 +114,10 @@ func init() {
 }
 
 type Client struct {
-	apiKey    string
-	apiSecret string
-	appId     string
+	apiKey     string
+	apiSecret  string
+	appId      string
+	httpClient *http.Client
 }
 
 func New(apiKey, apiSecret string, appId string) *Client {
@@ -124,6 +125,9 @@ func New(apiKey, apiSecret string, appId string) *Client {
 		apiKey,
 		apiSecret,
 		appId,
+		&http.Client{
+			Timeout: 30 * time.Second,
+		},
 	}
 }
 
@@ -200,7 +204,7 @@ func (client *Client) _do(method string, path string, payload []byte, auth bool)
 	}
 
 	var resp *http.Response
-	if resp, err = http.DefaultClient.Do(req); err != nil {
+	if resp, err = client.httpClient.Do(req); err != nil {
 		return 0, nil, err
 	}
 	defer resp.Body.Close()

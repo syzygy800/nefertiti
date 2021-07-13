@@ -1,7 +1,6 @@
 package flag
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -63,18 +62,6 @@ func Get(name string) *Flag {
 	return New(false, "")
 }
 
-func GetAsInt(name string, def int64) (int64, error) {
-	out := def
-	flg := Get(name)
-	if flg.Exists {
-		var err error
-		if out, err = flg.Int64(); err != nil {
-			return 0, fmt.Errorf("%s=%v is invalid", name, flg)
-		}
-	}
-	return out, nil
-}
-
 func Set(name, value string) {
 	args := os.Args
 	i := 0
@@ -116,21 +103,4 @@ func Exists(name string) bool {
 		}
 	}
 	return false
-}
-
-func Debug() bool {
-	return Exists("debug")
-}
-
-// when included, then the bot will respect the --dip setting (or the default 5% value) and not be smart about it.
-func Strict() bool {
-	return Exists("strict")
-}
-
-func Listen() bool {
-	return Exists("listen")
-}
-
-func Interactive() bool {
-	return Listen() == false
 }

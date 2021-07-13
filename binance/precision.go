@@ -2,9 +2,10 @@ package binance
 
 import (
 	"context"
+	"fmt"
 	"strconv"
-	"strings"
 
+	"bitbucket.com/svanas/cryptotrader/precision"
 	exchange "github.com/adshao/go-binance/v2"
 )
 
@@ -37,26 +38,6 @@ func (self Precs) PrecFromSymbol(symbol string) *Prec {
 
 var cache Precs
 
-func getPrecFromStr(value string, def int) int {
-	i := strings.Index(value, ".")
-	if i > -1 {
-		n := i + 1
-		for n < len(value) {
-			if string(value[n]) != "0" {
-				return n - i
-			}
-			n++
-		}
-		return 0
-	}
-	i, err := strconv.Atoi(value)
-	if err == nil && i == 1 {
-		return 0
-	} else {
-		return def
-	}
-}
-
 func getPrecs(client *Client) (Precs, error) {
 	var out Precs
 
@@ -65,6 +46,7 @@ func getPrecs(client *Client) (Precs, error) {
 
 	info, err := client.inner.NewExchangeInfoService().Do(context.Background())
 	if err != nil {
+		client.handleError(err)
 		return nil, err
 	} else {
 		for _, symbol := range info.Symbols {
@@ -75,14 +57,14 @@ func getPrecs(client *Client) (Precs, error) {
 				if filter["filterType"] == string(exchange.SymbolFilterTypeLotSize) {
 					if val, ok := filter["stepSize"]; ok {
 						if str, ok := val.(string); ok {
-							prec.Size = getPrecFromStr(str, 0)
+							prec.Size = precision.Parse(str, 0)
 						}
 					}
 				}
 				if filter["filterType"] == string(exchange.SymbolFilterTypePriceFilter) {
 					if val, ok := filter["tickSize"]; ok {
 						if str, ok := val.(string); ok {
-							prec.Price = getPrecFromStr(str, 8)
+							prec.Price = precision.Parse(str, 8)
 						}
 					}
 				}
@@ -110,4 +92,25 @@ func GetPrecs(client *Client, cached bool) (Precs, error) {
 		}
 	}
 	return cache, nil
+}
+
+func GetSymbol(client *Client, name string) (*exchange.Symbol, error) {
+	var (
+		err    error
+		precs  Precs
+		cached bool = true
+	)
+	for {
+		if precs, err = GetPrecs(client, cached); err != nil {
+			return nil, err
+		}
+		prec := precs.PrecFromSymbol(name)
+		if prec != nil {
+			return &prec.Symbol, nil
+		}
+		if !cached {
+			return nil, fmt.Errorf("symbol %s does not exist", name)
+		}
+		cached = false
+	}
 }

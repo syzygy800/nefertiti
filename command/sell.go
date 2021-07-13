@@ -1,12 +1,10 @@
 package command
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/svanas/nefertiti/exchanges"
 	"github.com/svanas/nefertiti/flag"
@@ -27,38 +25,22 @@ func (c *SellCommand) Run(args []string) int {
 		flg *flag.Flag
 	)
 
-	sandbox := false
-	flg = flag.Get("sandbox")
-	if flg.Exists {
-		sandbox = flg.String() == "Y"
+	var exchange model.Exchange
+	if exchange, err = exchanges.GetExchange(); err != nil {
+		return c.ReturnError(err)
 	}
 
-	flg = flag.Get("exchange")
-	if flg.Exists == false {
-		return c.ReturnError(errors.New("missing argument: exchange"))
-	}
-	exchange := exchanges.New().FindByName(flg.String())
-	if exchange == nil {
-		return c.ReturnError(fmt.Errorf("exchange %v does not exist", flg))
+	var strategy model.Strategy = model.STRATEGY_STANDARD
+	if strategy, err = model.GetStrategy(); err != nil {
+		return c.ReturnError(err)
 	}
 
-	var strategy int64 = int64(model.STRATEGY_STANDARD)
-	flg = flag.Get("strategy")
-	if flg.Exists == false {
-		flag.Set("strategy", strconv.FormatInt(strategy, 10))
-	} else {
-		if strategy, err = flg.Int64(); err != nil {
-			return c.ReturnError(fmt.Errorf("strategy %v is invalid", flg))
-		}
-	}
-
-	var mult float64 = multiplier.FIVE_PERCENT
-	if mult, err = multiplier.Get(mult); err != nil {
+	if _, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
 		return c.ReturnError(err)
 	}
 
 	var all []model.Market
-	if all, err = exchange.GetMarkets(true, sandbox); err != nil {
+	if all, err = exchange.GetMarkets(true, flag.Sandbox()); err != nil {
 		return c.ReturnError(err)
 	}
 
@@ -99,7 +81,7 @@ func (c *SellCommand) Run(args []string) int {
 		return nil
 	}
 
-	if err = exchange.Sell(time.Now(), hold, sandbox, flag.Exists("tweet"), flag.Debug(), success); err != nil {
+	if err = exchange.Sell(strategy, hold, flag.Sandbox(), flag.Exists("tweet"), flag.Debug(), success); err != nil {
 		return c.ReturnError(err)
 	}
 
@@ -115,19 +97,11 @@ The sell command listens for buy orders getting filled, and then opens new sell 
 Options:
   --exchange = [name]
   --sandbox  = [Y|N] (optional)
-  --strategy = [0|1|2|3|4] (see below)
+  --stoploss = [Y|N] (optional)
   --notify   = [0|1|2|3] (see below)
   --mult     = multiplier, for example: 1.05 (aka 5 percent, optional)
   --hold     = name of the market not to sell, for example: BTC-EUR (optional)
   --sweep    = if you have dust, try and sell it (optional, defaults to false)
-
-Strategy:
-  0 = Standard. No trailing. No stop-loss. Recommended, default strategy.
-  1 = Trailing. As strategy #0, but includes trailing. Never sells at a loss.
-  2 = Trailing Stop-Loss. As strategy #1, but potentially sells at a loss.
-  3 = Trailing Stop-Loss Short/Mid Term. As strategy #2, but does not trail
-      forever. Sells as soon as ticker >= mult.
-  4 = Stop-Loss. No trailing. As strategy #0, but potentially sells at a loss.
 
 Notify:
   0 = nothing, ever

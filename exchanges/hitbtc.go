@@ -286,7 +286,7 @@ func (self *HitBTC) listen(
 func (self *HitBTC) sell(
 	client *exchange.HitBtc,
 	strategy model.Strategy,
-	mult float64,
+	mult multiplier.Mult,
 	hold model.Markets,
 	service model.Notify,
 	twitter *notify.TwitterKeys,
@@ -365,26 +365,13 @@ func (self *HitBTC) sell(
 				if err == nil {
 					var prec int
 					if prec, err = self.GetPricePrec(client, new[i].Symbol); err == nil {
-						if strategy == model.STRATEGY_TRAILING_STOP_LOSS {
-							if price, err = self.GetTicker(client, new[i].Symbol); err == nil {
-								price = multiplier.Scale(mult, 0.5) * (price / mult)
-								_, err = self.StopLoss(
-									client,
-									new[i].Symbol,
-									qty,
-									precision.Round(price, prec),
-									model.MARKET, "",
-								)
-							}
-						} else {
-							_, _, err = self.Order(client,
-								model.SELL,
-								new[i].Symbol,
-								self.GetMaxSize(client, base, quote, hold.HasMarket(new[i].Symbol), qty),
-								pricing.Multiply(price, mult, prec),
-								model.LIMIT, "",
-							)
-						}
+						_, _, err = self.Order(client,
+							model.SELL,
+							new[i].Symbol,
+							self.GetMaxSize(client, base, quote, hold.HasMarket(new[i].Symbol), qty),
+							pricing.Multiply(price, mult, prec),
+							model.LIMIT,
+						)
 					}
 				}
 
@@ -405,21 +392,19 @@ func (self *HitBTC) sell(
 }
 
 func (self *HitBTC) Sell(
-	start time.Time,
+	strategy model.Strategy,
 	hold model.Markets,
 	sandbox, tweet, debug bool,
 	success model.OnSuccess,
 ) error {
-	var err error
-
-	strategy := model.GetStrategy()
-	if strategy == model.STRATEGY_STANDARD || strategy == model.STRATEGY_TRAILING || strategy == model.STRATEGY_TRAILING_STOP_LOSS {
+	if strategy == model.STRATEGY_STANDARD {
 		// we are OK
 	} else {
 		return errors.New("Strategy not implemented")
 	}
 
 	var (
+		err       error
 		apiKey    string
 		apiSecret string
 	)
@@ -460,98 +445,19 @@ func (self *HitBTC) Sell(
 	for {
 		// read the dynamic settings
 		var (
-			mult     float64
-			level    int64          = notify.Level()
-			strategy model.Strategy = model.GetStrategy()
+			mult  multiplier.Mult
+			level int64 = notify.Level()
 		)
-		if mult, err = strategy.Mult(); err != nil {
+		if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
 			self.error(err, level, service)
-		} else {
-			// listens to the filled orders, look for newly filled orders, automatically place new sell orders.
-			if filled, err = self.sell(client, strategy, mult, hold, service, twitter, level, filled, sandbox); err != nil {
-				self.error(err, level, service)
-			} else {
-				// listens to the open orders, look for cancelled orders, send a notification.
-				if opened, err = self.listen(client, service, level, opened, filled); err != nil {
-					self.error(err, level, service)
-				} else {
-					// listens to the open orders, follow up on the trailing stop loss strategy
-					if strategy == model.STRATEGY_TRAILING || strategy == model.STRATEGY_TRAILING_STOP_LOSS {
-						for _, order := range opened {
-							// phase #2: enumerate over stop loss orders
-							if order.Type == exchange.ORDER_TYPE_STOP_MARKET || order.Type == exchange.ORDER_TYPE_STOP_LIMIT {
-								var ticker float64
-								if ticker, err = self.GetTicker(client, order.Symbol); err == nil {
-									var prec int
-									if prec, err = self.GetPricePrec(client, order.Symbol); err == nil {
-										price := multiplier.Scale(mult, 0.5) * (ticker / mult)
-										// is the distance bigger than 5%? then cancel the stop loss, and place a new one.
-										if order.ParseStopPrice() < precision.Round(price, prec) {
-											if _, err = client.CancelClientOrderId(order.ClientOrderId); err == nil {
-												for {
-													try := 0
-													if order.Type == exchange.ORDER_TYPE_STOP_LIMIT {
-														_, err = self.StopLoss(client, order.Symbol, order.Quantity, precision.Round(price, prec), model.LIMIT, "")
-													} else {
-														_, err = self.StopLoss(client, order.Symbol, order.Quantity, precision.Round(price, prec), model.MARKET, "")
-													}
-													if err == nil {
-														break
-													} else {
-														try++
-														if try >= 10 {
-															break
-														}
-													}
-												}
-											}
-										}
-									}
-								}
-								if err != nil {
-									var data []byte
-									if data, _ = json.Marshal(order); data == nil {
-										self.error(err, level, service)
-									} else {
-										self.error(errors.Append(err, "\t", string(data)), level, service)
-									}
-								}
-							}
-							// phase #1: enumerate over limit sell orders
-							if order.Type == exchange.ORDER_TYPE_LIMIT {
-								side := self.getOrderSide(&order)
-								if side == model.SELL {
-									var ticker float64
-									if ticker, err = self.GetTicker(client, order.Symbol); err == nil {
-										price := multiplier.Scale(mult, 0.75) * (order.ParsePrice() / mult)
-										// is the ticker nearing the price? then cancel the limit sell order, and place a stop loss order below the ticker.
-										if ticker > price {
-											if _, err = client.CancelClientOrderId(order.ClientOrderId); err == nil {
-												var prec int
-												if prec, err = self.GetPricePrec(client, order.Symbol); err == nil {
-													price = multiplier.Scale(mult, 0.5) * (ticker / mult)
-													_, err = self.StopLoss(client, order.Symbol, order.Quantity, precision.Round(price, prec), model.MARKET, "")
-													if err != nil { // reopen the above limit sell on an error
-														_, _, _ = self.Order(client, self.getOrderSide(&order), order.Symbol, order.Quantity, order.ParsePrice(), model.LIMIT, "")
-													}
-												}
-											}
-										}
-									}
-									if err != nil {
-										var data []byte
-										if data, _ = json.Marshal(order); data == nil {
-											self.error(err, level, service)
-										} else {
-											self.error(errors.Append(err, "\t", string(data)), level, service)
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
+		} else
+		// listens to the filled orders, look for newly filled orders, automatically place new sell orders.
+		if filled, err = self.sell(client, strategy, mult, hold, service, twitter, level, filled, sandbox); err != nil {
+			self.error(err, level, service)
+		} else
+		// listens to the open orders, look for cancelled orders, send a notification.
+		if opened, err = self.listen(client, service, level, opened, filled); err != nil {
+			self.error(err, level, service)
 		}
 	}
 }
@@ -563,7 +469,6 @@ func (self *HitBTC) Order(
 	size float64,
 	price float64,
 	kind model.OrderType,
-	meta string,
 ) (oid []byte, raw []byte, err error) {
 	hitbtc, ok := client.(*exchange.HitBtc)
 	if !ok {
@@ -606,7 +511,7 @@ func (self *HitBTC) Order(
 	return []byte(order.ClientOrderId), out, nil
 }
 
-func (self *HitBTC) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType, meta string) ([]byte, error) {
+func (self *HitBTC) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType) ([]byte, error) {
 	var err error
 
 	hitbtc, ok := client.(*exchange.HitBtc)
@@ -650,7 +555,7 @@ func (self *HitBTC) StopLoss(client interface{}, market string, size float64, pr
 	return out, nil
 }
 
-func (self *HitBTC) OCO(client interface{}, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
+func (self *HitBTC) OCO(client interface{}, market string, size float64, price, stop float64) ([]byte, error) {
 	return nil, errors.New("Not implemented")
 }
 
@@ -806,7 +711,7 @@ func (self *HitBTC) GetPricePrec(client interface{}, market string) (int, error)
 	}
 	for _, symbol := range symbols {
 		if symbol.Id == market {
-			return getPrecFromStr(strconv.FormatFloat(symbol.TickSize, 'f', -1, 64), 8), nil
+			return precision.Parse(strconv.FormatFloat(symbol.TickSize, 'f', -1, 64), 8), nil
 		}
 	}
 	return 8, nil
@@ -823,7 +728,7 @@ func (self *HitBTC) GetSizePrec(client interface{}, market string) (int, error) 
 	}
 	for _, symbol := range symbols {
 		if symbol.Id == market {
-			return getPrecFromStr(strconv.FormatFloat(symbol.QuantityIncrement, 'f', -1, 64), 0), nil
+			return precision.Parse(strconv.FormatFloat(symbol.QuantityIncrement, 'f', -1, 64), 0), nil
 		}
 	}
 	return 0, nil
@@ -907,7 +812,7 @@ func (self *HitBTC) Buy(client interface{}, cancel bool, market string, calls mo
 				market,
 				size,
 				limit,
-				kind, "",
+				kind,
 			)
 			if err != nil {
 				return err

@@ -40,10 +40,11 @@ func init() {
 }
 
 type Client struct {
-	URL      string
-	Key      string
-	Secret   string
-	UserName string
+	URL        string
+	Key        string
+	Secret     string
+	UserName   string
+	httpClient *http.Client
 }
 
 func New(apiKey, apiSecret, userName string) *Client {
@@ -52,6 +53,9 @@ func New(apiKey, apiSecret, userName string) *Client {
 		Key:      apiKey,
 		Secret:   apiSecret,
 		UserName: userName,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
 	}
 }
 
@@ -72,7 +76,7 @@ func (client *Client) signature() (string, string) {
 func (client *Client) get(url string) ([]byte, error) {
 	var err error
 	var resp *http.Response
-	if resp, err = http.Get(url); err != nil {
+	if resp, err = client.httpClient.Get(url); err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -86,7 +90,7 @@ func (client *Client) get(url string) ([]byte, error) {
 func (client *Client) post(url string, v url.Values) ([]byte, error) {
 	var err error
 	var resp *http.Response
-	if resp, err = http.PostForm(url, v); err != nil {
+	if resp, err = client.httpClient.PostForm(url, v); err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()

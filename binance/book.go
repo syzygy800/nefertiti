@@ -20,5 +20,7 @@ func (self *Client) Depth(symbol string, limit int) (*exchange.DepthResponse, er
 	} else {
 		BeforeRequest(self, 50)
 	}
-	return self.inner.NewDepthService().Symbol(symbol).Limit(limit).Do(context.Background())
+	dept, err := self.inner.NewDepthService().Symbol(symbol).Limit(limit).Do(context.Background())
+	self.handleError(err)
+	return dept, err
 }

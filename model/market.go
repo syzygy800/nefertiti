@@ -13,13 +13,38 @@ type Market struct {
 	Quote string `json:"-"`
 }
 
+func GetMarket(exchange Exchange) (string, error) {
+	arg := flag.Get("market")
+	if !arg.Exists {
+		return "", errors.New("missing argument: market")
+	}
+
+	markets, err := exchange.GetMarkets(true, flag.Sandbox())
+	if err != nil {
+		return "", err
+	}
+
+	market := arg.String()
+	if !HasMarket(markets, market) {
+		markets, err = exchange.GetMarkets(false, flag.Sandbox())
+		if err != nil {
+			return "", err
+		}
+		if !HasMarket(markets, market) {
+			return "", errors.Errorf("market %s does not exist", market)
+		}
+	}
+
+	return market, nil
+}
+
 func GetBaseCurr(markets []Market, market string) (string, error) {
 	for _, m := range markets {
 		if m.Name == market {
 			return m.Base, nil
 		}
 	}
-	return "", fmt.Errorf("market %s does not exist", market)
+	return "", errors.Errorf("market %s does not exist", market)
 }
 
 func GetQuoteCurr(markets []Market, market string) (string, error) {
@@ -28,7 +53,7 @@ func GetQuoteCurr(markets []Market, market string) (string, error) {
 			return m.Quote, nil
 		}
 	}
-	return "", fmt.Errorf("market %s does not exist", market)
+	return "", errors.Errorf("market %s does not exist", market)
 }
 
 func ParseMarket(markets []Market, market string) (base, quote string, err error) {
@@ -37,7 +62,7 @@ func ParseMarket(markets []Market, market string) (base, quote string, err error
 			return m.Base, m.Quote, nil
 		}
 	}
-	return "", "", fmt.Errorf("market %s does not exist", market)
+	return "", "", errors.Errorf("market %s does not exist", market)
 }
 
 func TweetMarket(markets []Market, market string) string {
@@ -100,25 +125,4 @@ func (markets Markets) IndexOf(market string) int {
 
 func (markets Markets) HasMarket(market string) bool {
 	return markets.IndexOf(market) > -1
-}
-
-type (
-	Assets []string
-)
-
-func (assets Assets) IndexOf(asset string) int {
-	for i, a := range assets {
-		if strings.EqualFold(a, asset) {
-			return i
-		}
-	}
-	return -1
-}
-
-func (assets Assets) HasAsset(asset string) bool {
-	return assets.IndexOf(asset) > -1
-}
-
-func (assets Assets) IsEmpty() bool {
-	return len(assets) == 0 || len(assets) == 1 && assets[0] == ""
 }

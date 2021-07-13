@@ -56,10 +56,12 @@ func (self *CreateOrderService) StopPrice(stopPrice float64) *CreateOrderService
 	return self
 }
 
-func (self *CreateOrderService) Do(ctx context.Context, opts ...exchange.RequestOption) (res *exchange.CreateOrderResponse, err error) {
+func (self *CreateOrderService) Do(ctx context.Context, opts ...exchange.RequestOption) (*exchange.CreateOrderResponse, error) {
 	defer AfterRequest()
 	BeforeRequest(self.client, WEIGHT_CREATE_ORDER)
-	return self.inner.Do(ctx, opts...)
+	res, err := self.inner.Do(ctx, opts...)
+	self.client.handleError(err)
+	return res, err
 }
 
 //---------------------------- NewCreateOCOService ----------------------------
@@ -109,10 +111,17 @@ func (self *CreateOCOService) StopLimitPrice(stopLimitPrice float64) *CreateOCOS
 	return self
 }
 
-func (self *CreateOCOService) Do(ctx context.Context, opts ...exchange.RequestOption) (res *exchange.CreateOCOResponse, err error) {
+func (self *CreateOCOService) StopLimitTimeInForce(stopLimitTimeInForce exchange.TimeInForceType) *CreateOCOService {
+	self.inner.StopLimitTimeInForce(stopLimitTimeInForce)
+	return self
+}
+
+func (self *CreateOCOService) Do(ctx context.Context, opts ...exchange.RequestOption) (*exchange.CreateOCOResponse, error) {
 	defer AfterRequest()
 	BeforeRequest(self.client, WEIGHT_CREATE_OCO_ORDER)
-	return self.inner.Do(ctx, opts...)
+	res, err := self.inner.Do(ctx, opts...)
+	self.client.handleError(err)
+	return res, err
 }
 
 //----------------------------------- Order -----------------------------------
@@ -162,12 +171,21 @@ func (self *Order) GetStopPrice() float64 {
 	return 0
 }
 
-// GetTime returns the execution time as time.Time
-func (self *Order) GetTime() time.Time {
+// CreatedAt returns the order creation time as time.Time
+func (self *Order) CreatedAt() time.Time {
 	if self.Time == 0 {
 		return time.Now()
 	} else {
 		return time.Unix((self.Time / 1000), 0)
+	}
+}
+
+// UpdatedAt returns the last time the order was updated as time.Time
+func (self *Order) UpdatedAt() time.Time {
+	if self.UpdateTime == 0 {
+		return time.Now()
+	} else {
+		return time.Unix((self.UpdateTime / 1000), 0)
 	}
 }
 

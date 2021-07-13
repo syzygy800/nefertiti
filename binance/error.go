@@ -7,6 +7,9 @@ import (
 type BinanceError = common.APIError
 
 func IsBinanceError(err error) (*BinanceError, bool) {
+	if err == nil {
+		return nil, false
+	}
 	apiError, ok := err.(*common.APIError)
 	if ok {
 		return apiError, true

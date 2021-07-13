@@ -351,7 +351,7 @@ func (self *CryptoDotCom) listen(
 func (self *CryptoDotCom) sell(
 	client *exchange.Client,
 	quotes []string,
-	mult float64,
+	mult multiplier.Mult,
 	hold model.Markets,
 	service model.Notify,
 	level int64,
@@ -458,19 +458,17 @@ func (self *CryptoDotCom) sell(
 }
 
 func (self *CryptoDotCom) Sell(
-	start time.Time,
+	strategy model.Strategy,
 	hold model.Markets,
 	sandbox, tweet, debug bool,
 	success model.OnSuccess,
 ) error {
-	var err error
-
-	strategy := model.GetStrategy()
 	if strategy != model.STRATEGY_STANDARD {
 		return errors.New("Strategy not implemented")
 	}
 
 	var (
+		err       error
 		apiKey    string
 		apiSecret string
 	)
@@ -532,22 +530,19 @@ func (self *CryptoDotCom) Sell(
 	for {
 		// read the dynamic settings
 		var (
-			mult  float64
-			level int64          = notify.Level()
-			strat model.Strategy = model.GetStrategy()
+			mult  multiplier.Mult
+			level int64 = notify.Level()
 		)
-		if mult, err = strat.Mult(); err != nil {
+		if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
 			self.error(err, level, service)
-		} else {
-			// listen to the filled orders, look for newly filled orders, automatically place new LIMIT SELL orders.
-			if filled, err = self.sell(client, quotes, mult, hold, service, level, filled); err != nil {
-				self.error(err, level, service)
-			} else {
-				// listen to the opened orders, look for cancelled orders, send a notification.
-				if opened, err = self.listen(client, quotes, service, level, opened, filled); err != nil {
-					self.error(err, level, service)
-				}
-			}
+		} else
+		// listen to the filled orders, look for newly filled orders, automatically place new LIMIT SELL orders.
+		if filled, err = self.sell(client, quotes, mult, hold, service, level, filled); err != nil {
+			self.error(err, level, service)
+		} else
+		// listen to the opened orders, look for cancelled orders, send a notification.
+		if opened, err = self.listen(client, quotes, service, level, opened, filled); err != nil {
+			self.error(err, level, service)
 		}
 	}
 }
@@ -559,7 +554,6 @@ func (self *CryptoDotCom) Order(
 	size float64,
 	price float64,
 	kind model.OrderType,
-	meta string,
 ) (oid []byte, raw []byte, err error) {
 	var out int64
 
@@ -589,11 +583,11 @@ func (self *CryptoDotCom) Order(
 	return []byte(strconv.FormatInt(out, 10)), nil, nil
 }
 
-func (self *CryptoDotCom) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType, meta string) ([]byte, error) {
+func (self *CryptoDotCom) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType) ([]byte, error) {
 	return nil, errors.New("Not implemented")
 }
 
-func (self *CryptoDotCom) OCO(client interface{}, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
+func (self *CryptoDotCom) OCO(client interface{}, market string, size float64, price, stop float64) ([]byte, error) {
 	return nil, errors.New("Not implemented")
 }
 

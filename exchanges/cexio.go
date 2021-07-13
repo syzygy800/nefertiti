@@ -244,7 +244,7 @@ func (self *CexIo) listen(
 // listens to the archived orders, look for newly filled orders, automatically place new LIMIT SELL orders.
 func (self *CexIo) sell(
 	client *exchange.Client,
-	mult float64,
+	mult multiplier.Mult,
 	hold model.Markets,
 	service model.Notify,
 	twitter *notify.TwitterKeys,
@@ -319,21 +319,19 @@ func (self *CexIo) sell(
 }
 
 func (self *CexIo) Sell(
-	start time.Time,
+	strategy model.Strategy,
 	hold model.Markets,
 	sandbox, tweet, debug bool,
 	success model.OnSuccess,
 ) error {
-	var err error
-
-	strategy := model.GetStrategy()
-	if strategy == model.STRATEGY_STANDARD || strategy == model.STRATEGY_TRAILING_STOP_LOSS {
+	if strategy == model.STRATEGY_STANDARD {
 		// we are OK
 	} else {
 		return errors.New("Strategy not implemented.")
 	}
 
 	var (
+		err       error
 		apiKey    string
 		apiSecret string
 		userName  string
@@ -375,98 +373,19 @@ func (self *CexIo) Sell(
 	for {
 		// read the dynamic settings
 		var (
-			mult  float64
-			level int64          = notify.Level()
-			strat model.Strategy = model.GetStrategy()
+			mult  multiplier.Mult
+			level int64 = notify.Level()
 		)
-		if mult, err = strat.Mult(); err != nil {
+		if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
 			self.error(err, level, service)
-		} else {
-			// listen to the archived orders, look for newly filled orders, automatically place new LIMIT SELL orders.
-			if archive, err = self.sell(client, mult, hold, service, twitter, level, archive, sandbox); err != nil {
-				self.error(err, level, service)
-			} else {
-				// listen to the open orders, look for cancelled orders, send a notification.
-				if open, err = self.listen(client, service, level, open); err != nil {
-					self.error(err, level, service)
-				} else {
-					// listens to the open orders, follow up on the trailing stop loss strategy
-					if model.GetStrategy() == model.STRATEGY_TRAILING_STOP_LOSS {
-						for _, order := range open {
-							side := order.Side()
-							// enumerate over limit sell orders
-							if side == exchange.SELL {
-								var market string
-								if market, err = self.encodePair(order.Symbol1, order.Symbol2); err == nil {
-									// do not replace the limit orders that are merely used as a reference for the HODL strategy
-									if !hold.HasMarket(market) {
-										var ticker float64
-										if ticker, err = self.GetTicker(client, market); err == nil {
-											// is the ticker nearing the order price? then cancel the limit sell order, and place a new one above the ticker.
-											if ticker > (multiplier.Scale(mult, 0.75) * (order.Price / mult)) {
-												var prec int
-												if prec, err = self.GetPricePrec(client, market); err == nil {
-													price := pricing.Multiply(ticker, multiplier.Scale(mult, 0.5), prec)
-													if price > order.Price {
-														var created time.Time
-														if created, err = order.GetTime(); err == nil {
-															self.info(
-																fmt.Sprintf("Reopening %s (created at %s) because ticker is nearing limit sell price %f",
-																	market, created.String(), order.Price,
-																),
-																level, service)
-															if err = client.CancelOrder(order.Id); err == nil {
-																time.Sleep(time.Second * 5) // give CEX.IO some time to credit your wallet before we re-open this order
-																_, err = client.PlaceOrder(order.Symbol1, order.Symbol2, exchange.SELL, order.Amount, price)
-															}
-														}
-													}
-												}
-											} else {
-												// has this limit sell order been created after we started this instance of the sell bot?
-												var created time.Time
-												if created, err = order.GetTime(); err == nil {
-													if created.Sub(start) > 0 {
-														stop := (order.Price / mult) - (((mult - 1) * 0.5) * (order.Price / mult))
-														// is the ticker below the stop loss price? then cancel the limit sell order, and place a market sell.
-														if ticker < stop {
-															self.info(
-																fmt.Sprintf("Selling %s (created at %s) because ticker is below stop loss price %f",
-																	market, created.String(), stop,
-																),
-																level, service)
-															if err = client.CancelOrder(order.Id); err == nil {
-																time.Sleep(time.Second * 5) // give CEX.IO some time to credit your wallet before we re-open this order
-																_, err = client.PlaceMarketOrder(
-																	order.Symbol1, order.Symbol2, exchange.SELL, order.Amount,
-																)
-															}
-														} else {
-															self.info(
-																fmt.Sprintf("Managing %s (created at %s). Currently placed at limit sell price %f",
-																	market, created.String(), order.Price,
-																),
-																level, nil)
-														}
-													}
-												}
-											}
-										}
-									}
-								}
-							}
-							if err != nil {
-								msg := err.Error()
-								var data []byte
-								if data, err = json.Marshal(order); err == nil {
-									msg = msg + "\n\n" + string(data)
-								}
-								self.error(errors.New(msg), level, service)
-							}
-						}
-					}
-				}
-			}
+		} else
+		// listen to the archived orders, look for newly filled orders, automatically place new LIMIT SELL orders.
+		if archive, err = self.sell(client, mult, hold, service, twitter, level, archive, sandbox); err != nil {
+			self.error(err, level, service)
+		} else
+		// listen to the open orders, look for cancelled orders, send a notification.
+		if open, err = self.listen(client, service, level, open); err != nil {
+			self.error(err, level, service)
 		}
 	}
 }
@@ -478,7 +397,6 @@ func (self *CexIo) Order(
 	size float64,
 	price float64,
 	kind model.OrderType,
-	meta string,
 ) (oid []byte, raw []byte, err error) {
 	cexio, ok := client.(*exchange.Client)
 	if !ok {
@@ -510,11 +428,11 @@ func (self *CexIo) Order(
 	return []byte(order.Id), out, nil
 }
 
-func (self *CexIo) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType, meta string) ([]byte, error) {
+func (self *CexIo) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType) ([]byte, error) {
 	return nil, errors.New("Not implemented")
 }
 
-func (self *CexIo) OCO(client interface{}, market string, size float64, price, stop float64, meta1, meta2 string) ([]byte, error) {
+func (self *CexIo) OCO(client interface{}, market string, size float64, price, stop float64) ([]byte, error) {
 	return nil, errors.New("Not implemented")
 }
 
@@ -687,27 +605,91 @@ func (self *CexIo) Get24h(client interface{}, market string) (*model.Stats, erro
 	}, nil
 }
 
-// see: https://blog.cex.io/news/engine-updates-16956
+// see: https://blog.cex.io/news/precision-and-minimum-order-size-change-for-certain-trading-pairs-20957
 func (self *CexIo) GetPricePrec(client interface{}, market string) (int, error) {
-	symbol1, symbol2, err := self.decodePair(market)
-	if err != nil {
-		return 0, err
-	}
-	if symbol1 == model.BTC {
-		if model.Fiat(symbol2) {
-			return 1, nil
+	if out, ok := func() map[string]int {
+		return map[string]int{
+			"ADA-EUR":  6,
+			"ADA-GBP":  6,
+			"ADA-USD":  6,
+			"ADA-USDT": 6,
+			"ATOM-EUR": 4,
+			"ATOM-GBP": 4,
+			"ATOM-USD": 4,
+			"BAT-EUR":  5,
+			"BAT-GBP":  5,
+			"BAT-USD":  5,
+			"BCH-BTC":  6,
+			"BCH-EUR":  2,
+			"BCH-GBP":  2,
+			"BCH-USD":  2,
+			"BTC-EUR":  1,
+			"BTC-GBP":  1,
+			"BTC-RUB":  1,
+			"BTC-USD":  1,
+			"BTC-USDC": 1,
+			"BTC-USDT": 1,
+			"BTG-BTC":  6,
+			"BTG-EUR":  3,
+			"BTG-USD":  3,
+			"BTT-BTC":  8,
+			"BTT-EUR":  7,
+			"BTT-USD":  7,
+			"DASH-BTC": 6,
+			"DASH-EUR": 3,
+			"DASH-USD": 3,
+			"ETH-BTC":  6,
+			"ETH-EUR":  2,
+			"ETH-GBP":  2,
+			"ETH-USD":  2,
+			"ETH-USDT": 2,
+			"GAS-EUR":  4,
+			"GAS-GBP":  4,
+			"GAS-USD":  4,
+			"GUSD-EUR": 4,
+			"GUSD-USD": 4,
+			"LTC-BTC":  8,
+			"LTC-EUR":  3,
+			"LTC-GBP":  3,
+			"LTC-USD":  3,
+			"LTC-USDT": 3,
+			"MHC-BTC":  8,
+			"MHC-ETH":  8,
+			"MHC-EUR":  4,
+			"MHC-GBP":  4,
+			"MHC-USD":  4,
+			"NEO-EUR":  4,
+			"NEO-GBP":  4,
+			"NEO-USD":  4,
+			"OMG-BTC":  8,
+			"OMG-EUR":  5,
+			"OMG-USD":  5,
+			"ONG-BTC":  8,
+			"ONG-EUR":  5,
+			"ONG-USD":  5,
+			"ONT-BTC":  8,
+			"ONT-EUR":  4,
+			"ONT-USD":  4,
+			"TRX-BTC":  8,
+			"TRX-EUR":  6,
+			"TRX-USD":  6,
+			"USDC-USD": 4,
+			"XLM-BTC":  8,
+			"XLM-EUR":  5,
+			"XLM-USD":  5,
+			"XRP-BTC":  8,
+			"XRP-EUR":  5,
+			"XRP-GBP":  5,
+			"XRP-USD":  5,
+			"XRP-USDT": 5,
+			"XTZ-EUR":  4,
+			"XTZ-GBP":  4,
+			"XTZ-USD":  4,
 		}
+	}()[market]; ok {
+		return out, nil
 	}
-	if model.Fiat(symbol2) {
-		if symbol1 == model.XRP {
-			return 4, nil
-		}
-		return 2, nil
-	}
-	if symbol1 == model.XRP && symbol2 == model.BTC {
-		return 8, nil
-	}
-	return 6, nil
+	return 0, nil
 }
 
 func (self *CexIo) GetSizePrec(client interface{}, market string) (int, error) {
