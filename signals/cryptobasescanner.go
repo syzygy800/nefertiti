@@ -42,7 +42,7 @@ func NewCryptoBaseScannerAlgo(data string) (CryptoBaseScannerAlgo, error) {
 			return algo, nil
 		}
 	}
-	return CBS_ALGO_DAY_TRADE, fmt.Errorf("%s does not exist", data)
+	return CBS_ALGO_DAY_TRADE, errors.Errorf("%s does not exist", data)
 }
 
 type MarketStat struct {
@@ -61,7 +61,7 @@ func (stats MarketStats) ratio(algorithm CryptoBaseScannerAlgo) (float64, error)
 			return stat.Ratio, nil
 		}
 	}
-	return 0, fmt.Errorf("marketStats[%s].ratio does not exist", algorithm.String())
+	return 0, errors.Errorf("marketStats[%s].ratio does not exist", algorithm.String())
 }
 
 func (stats MarketStats) medianDrop(algorithm CryptoBaseScannerAlgo) (float64, error) {
@@ -70,7 +70,7 @@ func (stats MarketStats) medianDrop(algorithm CryptoBaseScannerAlgo) (float64, e
 			return stat.MedianDrop, nil
 		}
 	}
-	return 0, fmt.Errorf("marketStats[%s].medianDrop does not exist", algorithm.String())
+	return 0, errors.Errorf("marketStats[%s].medianDrop does not exist", algorithm.String())
 }
 
 type CryptoBase struct {
@@ -112,7 +112,7 @@ func (self *CryptoBase) Buy(exchange model.Exchange, algorithm CryptoBaseScanner
 
 	medianDrop, err := self.MarketStats.medianDrop(algorithm)
 	if err != nil {
-		return false, fmt.Errorf("%v. Market: %s", err, market)
+		return false, errors.Errorf("%v. Market: %s", err, market)
 	}
 
 	if medianDrop < 0 && medianDrop > -100 {
@@ -125,7 +125,7 @@ func (self *CryptoBase) Buy(exchange model.Exchange, algorithm CryptoBaseScanner
 			if success_ratio > 0 {
 				ratio, err := self.MarketStats.ratio(algorithm)
 				if err != nil {
-					return false, fmt.Errorf("%v. Market: %s", err, market)
+					return false, errors.Errorf("%v. Market: %s", err, market)
 				}
 				if ratio < success_ratio {
 					log.Printf("[INFO] Ignoring %s because success ratio %f is lower than %.2f\n", market, ratio, success_ratio)
@@ -217,7 +217,7 @@ func (self *CryptoBaseScanner) get(
 	pairs := make(map[string]interface{})
 	if err = json.Unmarshal(body, &pairs); err == nil {
 		if err, ok := pairs["error"]; ok {
-			return fmt.Errorf("%v", err)
+			return errors.Errorf("%v", err)
 		}
 	}
 
@@ -311,7 +311,7 @@ func (self *CryptoBaseScanner) GetMarkets(
 	if flg.Exists {
 		success_ratio, err = flg.Float64()
 		if err != nil {
-			return nil, fmt.Errorf("success %v is invalid", flg)
+			return nil, errors.Errorf("success %v is invalid", flg)
 		}
 	}
 
@@ -320,7 +320,7 @@ func (self *CryptoBaseScanner) GetMarkets(
 	if flg.Exists {
 		algo, err = NewCryptoBaseScannerAlgo(flg.String())
 		if err != nil {
-			return nil, fmt.Errorf("algo %v does not exist", flg)
+			return nil, errors.Errorf("algo %v does not exist", flg)
 		}
 	}
 

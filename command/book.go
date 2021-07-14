@@ -48,7 +48,7 @@ func (c *BookCommand) Run(args []string) int {
 		return c.ReturnError(errors.New("missing argument: agg"))
 	} else {
 		if agg, err = flg.Float64(); err != nil {
-			return c.ReturnError(fmt.Errorf("agg value %v is invalid", flg))
+			return c.ReturnError(errors.Errorf("agg value %v is invalid", flg))
 		}
 	}
 

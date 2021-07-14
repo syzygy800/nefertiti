@@ -265,7 +265,7 @@ func (self *CryptoQualitySignals) GetMarkets(
 	if flg.Exists {
 		risk_level, err = flg.Int64()
 		if err != nil {
-			return nil, fmt.Errorf("risk_level %v is invalid", flg)
+			return nil, errors.Errorf("risk_level %v is invalid", flg)
 		}
 	}
 
@@ -305,7 +305,7 @@ func (self *CryptoQualitySignals) GetCalls(exchange model.Exchange, market strin
 	if flg.Exists {
 		risk_level, err = flg.Int64()
 		if err != nil {
-			return nil, fmt.Errorf("risk_level %v is invalid", flg)
+			return nil, errors.Errorf("risk_level %v is invalid", flg)
 		}
 	}
 

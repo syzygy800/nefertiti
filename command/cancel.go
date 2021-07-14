@@ -38,7 +38,7 @@ func (c *CancelCommand) Run(args []string) int {
 	}
 	side := model.NewOrderSide(flg.String())
 	if side == model.ORDER_SIDE_NONE {
-		return c.ReturnError(fmt.Errorf("side %v is invalid", flg))
+		return c.ReturnError(errors.Errorf("side %v is invalid", flg))
 	}
 
 	var client interface{}

@@ -32,7 +32,7 @@ func (c *StopLossCommand) Run(args []string) int {
 	if flg.Exists {
 		kind = model.NewOrderType(flg.String())
 		if kind == model.ORDER_TYPE_NONE {
-			return c.ReturnError(fmt.Errorf("type %v is invalid", flg))
+			return c.ReturnError(errors.Errorf("type %v is invalid", flg))
 		}
 	}
 
@@ -47,14 +47,14 @@ func (c *StopLossCommand) Run(args []string) int {
 		return c.ReturnError(errors.New("missing argument: size"))
 	}
 	if size, err = flg.Float64(); err != nil {
-		return c.ReturnError(fmt.Errorf("size %v is invalid", flg))
+		return c.ReturnError(errors.Errorf("size %v is invalid", flg))
 	}
 
 	var price float64 = 0
 	flg = flag.Get("price")
 	if flg.Exists {
 		if price, err = flg.Float64(); err != nil {
-			return c.ReturnError(fmt.Errorf("price %v is invalid", flg))
+			return c.ReturnError(errors.Errorf("price %v is invalid", flg))
 		}
 	} else if kind == model.LIMIT {
 		return c.ReturnError(errors.New("missing argument: price"))
