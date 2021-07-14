@@ -31,7 +31,7 @@ require (
 	github.com/svanas/go-crypto-dot-com v0.0.0-20210713115445-bc9932f61c14
 	github.com/svanas/go-mining-hamster v0.0.0-20190102110438-73bc620cc6e9
 	github.com/yanzay/tbot v1.0.0
-	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a
-	golang.org/x/sys v0.0.0-20210525143221-35b2ab0089ea // indirect
-	golang.org/x/term v0.0.0-20210503060354-a79de5458b56 // indirect
+	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97
+	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c // indirect
+	golang.org/x/term v0.0.0-20210615171337-6886f2dfbf5b // indirect
 )
