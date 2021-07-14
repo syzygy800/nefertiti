@@ -13,7 +13,7 @@ require (
 	github.com/equinox-io/equinox v1.2.0
 	github.com/fatih/color v1.12.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
-	github.com/google/uuid v1.2.0 // indirect
+	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/gregdel/pushover v1.1.0
