@@ -28,7 +28,7 @@ require (
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/stretchr/testify v1.7.0 // indirect
 	github.com/svanas/go-coinbasepro v0.0.0-20210706151135-3ac97ad777f0
-	github.com/svanas/go-crypto-dot-com v0.0.0-20200621190630-a4cbac992669
+	github.com/svanas/go-crypto-dot-com v0.0.0-20210713115445-bc9932f61c14
 	github.com/svanas/go-mining-hamster v0.0.0-20190102110438-73bc620cc6e9
 	github.com/yanzay/tbot v1.0.0
 	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a
