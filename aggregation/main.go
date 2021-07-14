@@ -3,7 +3,7 @@ package aggregation
 import (
 	"math"
 
-	"github.com/go-errors/errors"
+	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/precision"
 )

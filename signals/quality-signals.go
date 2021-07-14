@@ -2,7 +2,6 @@ package signals
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/passphrase"

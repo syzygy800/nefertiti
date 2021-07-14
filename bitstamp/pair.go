@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/go-errors/errors"
+	"github.com/svanas/nefertiti/errors"
 )
 
 type Pair struct {

@@ -2,11 +2,11 @@ package command
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
 
+	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/exchanges"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"

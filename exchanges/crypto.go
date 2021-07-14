@@ -12,9 +12,9 @@ import (
 	"time"
 
 	filemutex "github.com/alexflint/go-filemutex"
-	"github.com/go-errors/errors"
 	exchange "github.com/svanas/go-crypto-dot-com"
 	"github.com/svanas/nefertiti/aggregation"
+	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/multiplier"

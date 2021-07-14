@@ -8,11 +8,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/go-errors/errors"
 	"github.com/gorilla/mux"
 	"github.com/mitchellh/cli"
 	"github.com/svanas/nefertiti/command"
 	ctcommand "github.com/svanas/nefertiti/command"
+	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
 )
 

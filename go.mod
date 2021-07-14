@@ -12,7 +12,6 @@ require (
 	github.com/dghubble/oauth1 v0.7.0
 	github.com/equinox-io/equinox v1.2.0
 	github.com/fatih/color v1.12.0 // indirect
-	github.com/go-errors/errors v1.4.0
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.2.0 // indirect
 	github.com/gorilla/mux v1.8.0
@@ -36,7 +35,5 @@ require (
 	golang.org/x/sys v0.0.0-20210525143221-35b2ab0089ea // indirect
 	golang.org/x/term v0.0.0-20210503060354-a79de5458b56 // indirect
 )
-
-replace github.com/go-errors/errors => ./vendor-modified/github.com/go-errors/errors
 
 replace github.com/go-telegram-bot-api/telegram-bot-api => ./vendor-modified/github.com/go-telegram-bot-api/telegram-bot-api

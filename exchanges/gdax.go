@@ -13,10 +13,10 @@ import (
 	"time"
 
 	filemutex "github.com/alexflint/go-filemutex"
-	"github.com/go-errors/errors"
 	ws "github.com/gorilla/websocket"
 	exchange "github.com/svanas/go-coinbasepro"
 	"github.com/svanas/nefertiti/aggregation"
+	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/gdax"
 	"github.com/svanas/nefertiti/model"

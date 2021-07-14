@@ -13,9 +13,9 @@ import (
 
 	exchange "github.com/adshao/go-binance/v2"
 	filemutex "github.com/alexflint/go-filemutex"
-	"github.com/go-errors/errors"
 	"github.com/svanas/nefertiti/aggregation"
 	"github.com/svanas/nefertiti/binance"
+	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/multiplier"

@@ -10,8 +10,8 @@ import (
 	"time"
 
 	filemutex "github.com/alexflint/go-filemutex"
-	"github.com/go-errors/errors"
 	"github.com/svanas/nefertiti/aggregation"
+	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
 	exchange "github.com/svanas/nefertiti/hitbtc"
 	"github.com/svanas/nefertiti/model"

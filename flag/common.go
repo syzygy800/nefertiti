@@ -3,7 +3,7 @@ package flag
 import (
 	"strconv"
 
-	"github.com/go-errors/errors"
+	"github.com/svanas/nefertiti/errors"
 )
 
 // --dca (aka dollar-cost-averaging)

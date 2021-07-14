@@ -1,10 +1,9 @@
 package command
 
 import (
-	"errors"
-	"fmt"
 	"strings"
 
+	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/exchanges"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"

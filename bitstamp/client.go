@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-errors/errors"
+	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/uuid"
 )
 

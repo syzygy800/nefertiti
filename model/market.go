@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/go-errors/errors"
+	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/precision"
 )

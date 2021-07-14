@@ -1,7 +1,7 @@
 package exchanges
 
 import (
-	"github.com/go-errors/errors"
+	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/passphrase"
