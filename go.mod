@@ -35,5 +35,3 @@ require (
 	golang.org/x/sys v0.0.0-20210525143221-35b2ab0089ea // indirect
 	golang.org/x/term v0.0.0-20210503060354-a79de5458b56 // indirect
 )
-
-replace github.com/go-telegram-bot-api/telegram-bot-api => ./vendor-modified/github.com/go-telegram-bot-api/telegram-bot-api
