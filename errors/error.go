@@ -172,11 +172,11 @@ func Append(err error, prefix string, suffix ...string) *Error {
 
 	var out *Error
 
-	switch err.(type) {
+	switch e := err.(type) {
 	case *Error:
-		out = err.(*Error)
+		out = e
 	default:
-		out = Wrap(err, 1)
+		out = Wrap(e, 1)
 	}
 
 	if prefix == "" {

@@ -1,3 +1,4 @@
+//lint:file-ignore ST1006 receiver name should be a reflection of its identity; don't use generic names such as "this" or "self"
 package exchanges
 
 import (
@@ -80,8 +81,8 @@ func init() {
 	}
 }
 
-func canNotify(msg *gdax.Message) bool {
-	switch notify.Level() {
+func canNotify(level int64, msg *gdax.Message) bool {
+	switch level {
 	case notify.LEVEL_NOTHING:
 		return false
 	case notify.LEVEL_ERRORS:
@@ -135,7 +136,7 @@ func (self *Gdax) getMinOrderSize(client *gdax.Client, market string) (float64, 
 		if cached {
 			cached = false
 		} else {
-			return 0, errors.Errorf("Market %s does not exist", market)
+			return 0, errors.Errorf("market %s does not exist", market)
 		}
 	}
 }
@@ -175,7 +176,7 @@ func (self *Gdax) GetClient(permission model.Permission, sandbox bool) (interfac
 }
 
 func (self *Gdax) getProducts(client interface{}, cached bool) ([]exchange.Product, error) {
-	if self.products == nil || cached == false {
+	if self.products == nil || !cached {
 		gdaxClient, ok := client.(*gdax.Client)
 		if !ok {
 			return nil, errors.New("invalid argument: client")
@@ -231,6 +232,11 @@ func (self *Gdax) sell(
 		URI = self.ExchangeInfo.WebSocket.Sandbox
 	}
 
+	var level int64 = notify.LEVEL_DEFAULT
+	if level, err = notify.Level(); err != nil {
+		return err
+	}
+
 	var markets []model.Market
 	if markets, err = self.GetMarkets(true, sandbox); err != nil {
 		return err
@@ -279,13 +285,13 @@ func (self *Gdax) sell(
 				time.Sleep(5 * time.Second)
 				conn, err = init()
 				if err != nil {
-					self.error(err, notify.Level(), service)
+					self.error(err, level, service)
 					return err
 				}
 			} else {
 				// read: connection reset by peer?
 				if strings.Contains(err.Error(), "connection reset by peer") {
-					for true {
+					for {
 						log.Printf("[ERROR] %v", err)
 						time.Sleep(5 * time.Second)
 						conn, err = init()
@@ -293,25 +299,25 @@ func (self *Gdax) sell(
 							break
 						} else {
 							if !strings.Contains(err.Error(), "connection reset by peer") {
-								self.error(err, notify.Level(), service)
+								self.error(err, level, service)
 								return err
 							}
 						}
 					}
 				} else {
 					// exit the websocket loop
-					self.error(err, notify.Level(), service)
+					self.error(err, level, service)
 					return err
 				}
 			}
 		} else {
 			msg := gdax.Message{}
 			if err = json.Unmarshal(data, &msg); err != nil {
-				self.error(errors.Errorf("%s. Message: %s", err.Error(), string(data)), notify.Level(), service)
+				self.error(errors.Errorf("%s. Message: %s", err.Error(), string(data)), level, service)
 				return err
 			}
 			if msg.GetType() == gdax.MESSAGE_ERROR {
-				self.error(errors.Errorf("%s. Reason: %s", msg.Message.Message, msg.Reason), notify.Level(), service)
+				self.error(errors.Errorf("%s. Reason: %s", msg.Message.Message, msg.Reason), level, service)
 				return err
 			}
 			if msg.UserID == gdaxUserId {
@@ -319,7 +325,7 @@ func (self *Gdax) sell(
 				mt := msg.GetType()
 				// send a notification if type != ["received"|"match"]
 				if mt != gdax.MESSAGE_RECEIVED && mt != gdax.MESSAGE_MATCH {
-					if canNotify(&msg) {
+					if canNotify(level, &msg) {
 						if service != nil {
 							if err = service.SendMessage(msg, msg.Title(), model.ALWAYS); err != nil {
 								log.Printf("[ERROR] %v", err)
@@ -343,19 +349,19 @@ func (self *Gdax) sell(
 							price := gdax.ParseFloat(msg.Price)
 							if price == 0 {
 								if price, err = self.GetTicker(client, msg.ProductID); err != nil {
-									self.error(err, notify.Level(), service)
+									self.error(err, level, service)
 								}
 							}
 
 							var old *gdax.Order
 							if old, err = client.GetOrder(msg.OrderID); err != nil {
-								self.error(errors.Wrap(err, 1), notify.Level(), service)
+								self.error(errors.Wrap(err, 1), level, service)
 							}
 
 							qty := old.GetSize()
 							if qty == 0 {
 								if qty, err = self.getMinOrderSize(client, msg.ProductID); err != nil {
-									self.error(err, notify.Level(), service)
+									self.error(err, level, service)
 								}
 								qty = qty * 5
 							}
@@ -369,18 +375,18 @@ func (self *Gdax) sell(
 									base, quote, err = model.ParseMarket(markets, msg.ProductID)
 								}
 								if err != nil {
-									self.error(err, notify.Level(), service)
+									self.error(err, level, service)
 								}
 							}
 
 							var prec int
 							if prec, err = self.GetPricePrec(client, msg.ProductID); err != nil {
-								self.error(err, notify.Level(), service)
+								self.error(err, level, service)
 							}
 
 							var mult multiplier.Mult
 							if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
-								self.error(err, notify.Level(), service)
+								self.error(err, level, service)
 							}
 
 							// by default, we will sell at a 5% profit
@@ -400,14 +406,14 @@ func (self *Gdax) sell(
 							if raw, err = json.Marshal(order); err == nil {
 								log.Println("[INFO] " + string(raw))
 								if service != nil {
-									if notify.CanSend(notify.Level(), notify.INFO) {
+									if notify.CanSend(level, notify.INFO) {
 										service.SendMessage(order, "Coinbase Pro - New Sell", model.ALWAYS)
 									}
 								}
 							}
 
 							if _, err = client.CreateOrder(order); err != nil {
-								self.error(errors.Wrap(err, 1), notify.Level(), service)
+								self.error(errors.Wrap(err, 1), level, service)
 							}
 						}
 					}
@@ -433,18 +439,16 @@ func (self *Gdax) sell(
 					if err = cursor.NextPage(&orders); err != nil {
 						break
 					} else {
-						for _, order := range orders {
-							open = append(open, order)
-						}
+						open = append(open, orders...)
 					}
 				}
 
 				if err != nil {
-					self.error(errors.Wrap(err, 1), notify.Level(), service)
+					self.error(errors.Wrap(err, 1), level, service)
 				} else {
 					var products []exchange.Product
 					if products, err = self.getProducts(client, true); err != nil {
-						self.error(err, notify.Level(), service)
+						self.error(err, level, service)
 					} else {
 						for _, product := range products {
 							if product.LimitOnly {
@@ -468,7 +472,7 @@ func (self *Gdax) sell(
 									// did we recently sell an "aggressive" order on this market? then prevent us from buying this pump.
 									var closed model.Orders
 									if closed, err = self.GetClosed(client, product.ID); err != nil {
-										self.error(err, notify.Level(), service)
+										self.error(err, level, service)
 									} else {
 										if time.Since(closed.Youngest(model.SELL, time.Now())).Hours() < 24*rebuyAfterDays {
 											// continue
@@ -480,14 +484,14 @@ func (self *Gdax) sell(
 
 											log.Println("[INFO] " + msg)
 											if service != nil {
-												if notify.CanSend(notify.Level(), notify.INFO) {
+												if notify.CanSend(level, notify.INFO) {
 													service.SendMessage(msg, "Coinbase Pro - INFO", model.ALWAYS)
 												}
 											}
 
 											var qty float64
 											if qty, err = gdax.GetMinOrderSize(&product); err != nil {
-												self.error(err, notify.Level(), service)
+												self.error(err, level, service)
 											} else {
 												if hold.HasMarket(product.ID) {
 													qty = qty * 5
@@ -506,14 +510,14 @@ func (self *Gdax) sell(
 												if raw, err = json.Marshal(order); err == nil {
 													log.Println("[INFO] " + string(raw))
 													if service != nil {
-														if notify.CanSend(notify.Level(), notify.INFO) {
+														if notify.CanSend(level, notify.INFO) {
 															service.SendMessage(order, "Coinbase Pro - New Buy", model.ALWAYS)
 														}
 													}
 												}
 
 												if _, err = client.CreateOrder(order); err != nil {
-													self.error(errors.Wrap(err, 1), notify.Level(), service)
+													self.error(errors.Wrap(err, 1), level, service)
 												}
 											}
 										}
@@ -538,7 +542,7 @@ func (self *Gdax) Sell(
 	if strategy == model.STRATEGY_STANDARD {
 		// we are OK
 	} else {
-		return errors.New("Strategy not implemented")
+		return errors.New("strategy not implemented")
 	}
 
 	var (
@@ -635,7 +639,7 @@ func (self *Gdax) StopLoss(client interface{}, market string, size float64, pric
 			return nil, err
 		}
 		limit := price
-		for true {
+		for {
 			limit = limit * 0.99
 			if precision.Round(limit, prec) < price {
 				break
@@ -658,7 +662,7 @@ func (self *Gdax) StopLoss(client interface{}, market string, size float64, pric
 }
 
 func (self *Gdax) OCO(client interface{}, market string, size float64, price, stop float64) ([]byte, error) {
-	return nil, errors.New("Not implemented")
+	return nil, errors.New("not implemented")
 }
 
 func (self *Gdax) GetClosed(client interface{}, market string) (model.Orders, error) {

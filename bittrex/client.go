@@ -53,7 +53,7 @@ func getRequestsPerSecond(path string) (float64, bool) { // -> (rps, cooldown)
 		return RequestsPerSecond(INTENSITY_SUPER), true
 	}
 	for i := range path {
-		if strings.Index("?", string(path[i])) > -1 {
+		if strings.Contains("?", string(path[i])) {
 			path = path[:i]
 			break
 		}
@@ -85,7 +85,7 @@ func init() {
 			exists bool
 		)
 		for idx := range path {
-			if strings.Index("?", string(path[idx])) > -1 {
+			if strings.Contains("?", string(path[idx])) {
 				path = path[:idx]
 				break
 			}
@@ -179,7 +179,7 @@ func (client *Client) _do(method string, path string, payload []byte, auth bool)
 
 	if auth {
 		if len(client.apiKey) == 0 || len(client.apiSecret) == 0 {
-			err = errors.New("You need to set API Key and API Secret to call this method")
+			err = errors.New("you need to set API key and API secret to call this method")
 			return 0, nil, err
 		}
 
@@ -303,8 +303,7 @@ func (client *Client) CreateOrder(
 ) (*Order, error) {
 	var err error
 
-	var order *newOrder
-	order = &newOrder{
+	order := &newOrder{
 		MarketSymbol: marketSymbol,
 		Direction:    direction.String(),
 		OrderType:    orderType.String(),
@@ -434,8 +433,7 @@ func (client *Client) CreateConditionalOrder(
 		OrderToCancel *newCancelConditionalOrder `json:"orderToCancel"`
 	}
 
-	var order *newConditionalOrder
-	order = &newConditionalOrder{
+	order := &newConditionalOrder{
 		MarketSymbol: marketSymbol,
 		Operand:      operand.String(),
 		TriggerPrice: strconv.FormatFloat(triggerPrice, 'f', -1, 64),

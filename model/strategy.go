@@ -21,7 +21,7 @@ func GetStrategy() (Strategy, error) {
 			return STRATEGY_STOP_LOSS, nil
 		}
 		if len(str) == 0 || (str[0] != 'N' && str[0] != 'n') {
-			return STRATEGY_STANDARD, fmt.Errorf("stoploss %v is invalid. valid values are Y or N.", new)
+			return STRATEGY_STANDARD, fmt.Errorf("stoploss %v is invalid. valid values are Y or N", new)
 		}
 	}
 
@@ -29,7 +29,7 @@ func GetStrategy() (Strategy, error) {
 	if old.Exists {
 		out, err := old.Int64()
 		if err != nil {
-			return STRATEGY_STANDARD, fmt.Errorf("strategy %v is invalid. valid values are 0 or 4.", old)
+			return STRATEGY_STANDARD, fmt.Errorf("strategy %v is invalid. valid values are 0 or 4", old)
 		}
 		if out == 4 {
 			return STRATEGY_STOP_LOSS, nil

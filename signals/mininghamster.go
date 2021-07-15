@@ -1,8 +1,8 @@
+//lint:file-ignore ST1006 receiver name should be a reflection of its identity; don't use generic names such as "this" or "self"
 package signals
 
 import (
 	"encoding/json"
-	"errors"
 	"log"
 	"strings"
 	"time"

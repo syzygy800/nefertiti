@@ -40,17 +40,32 @@ func (t *Ticker) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	//--- BEGIN --- svanas --- 2018-04-04 -------------------------------------
-	t.Ask, err = strconv.ParseFloat(aux.Ask, 64)
-	t.Bid, err = strconv.ParseFloat(aux.Bid, 64)
-	t.Last, err = strconv.ParseFloat(aux.Last, 64)
-	t.Open, err = strconv.ParseFloat(aux.Open, 64)
-	t.Low, err = strconv.ParseFloat(aux.Low, 64)
-	t.High, err = strconv.ParseFloat(aux.High, 64)
-	t.Volume, err = strconv.ParseFloat(aux.Volume, 64)
-	t.VolumeQuote, err = strconv.ParseFloat(aux.VolumeQuote, 64)
+	if t.Ask, err = strconv.ParseFloat(aux.Ask, 64); err != nil {
+		return err
+	}
+	if t.Bid, err = strconv.ParseFloat(aux.Bid, 64); err != nil {
+		return err
+	}
+	if t.Last, err = strconv.ParseFloat(aux.Last, 64); err != nil {
+		return err
+	}
+	if t.Open, err = strconv.ParseFloat(aux.Open, 64); err != nil {
+		return err
+	}
+	if t.Low, err = strconv.ParseFloat(aux.Low, 64); err != nil {
+		return err
+	}
+	if t.High, err = strconv.ParseFloat(aux.High, 64); err != nil {
+		return err
+	}
+	if t.Volume, err = strconv.ParseFloat(aux.Volume, 64); err != nil {
+		return err
+	}
+	if t.VolumeQuote, err = strconv.ParseFloat(aux.VolumeQuote, 64); err != nil {
+		return err
+	}
 	//---- END ---- svanas --- 2018-04-04 -------------------------------------
-	t.Timestamp, err = time.Parse("2006-01-02T15:04:05.999Z", aux.Timestamp)
-	if err != nil {
+	if t.Timestamp, err = time.Parse("2006-01-02T15:04:05.999Z", aux.Timestamp); err != nil {
 		return err
 	}
 	return nil

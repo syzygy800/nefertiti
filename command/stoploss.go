@@ -43,7 +43,7 @@ func (c *StopLossCommand) Run(args []string) int {
 
 	var size float64
 	flg = flag.Get("size")
-	if flg.Exists == false {
+	if !flg.Exists {
 		return c.ReturnError(errors.New("missing argument: size"))
 	}
 	if size, err = flg.Float64(); err != nil {

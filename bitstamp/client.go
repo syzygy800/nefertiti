@@ -142,10 +142,8 @@ func (client *Client) post(path string, values url.Values) ([]byte, error) {
 	endpoint.Path += path
 
 	// encode the url.Values in the body
-	var payload string
-	payload = values.Encode()
-	var input *strings.Reader
-	input = strings.NewReader(payload)
+	payload := values.Encode()
+	input := strings.NewReader(payload)
 
 	// create the request
 	var req *http.Request

@@ -76,6 +76,7 @@ func TweetMarket(markets []Market, market string) string {
 }
 
 func IndexByMarket(markets []Market, market string) int {
+	//lint:ignore S1031 unnecessary nil check around range
 	if markets != nil {
 		for i, m := range markets {
 			if m.Name == market {

@@ -1,3 +1,4 @@
+//lint:file-ignore ST1006 receiver name should be a reflection of its identity; don't use generic names such as "this" or "self"
 package flag
 
 import (
@@ -68,7 +69,7 @@ func Set(name, value string) {
 	for i < len(args) {
 		arg := args[i]
 		if strings.HasPrefix(arg, "-") {
-			for true {
+			for {
 				arg = arg[1:]
 				if !strings.HasPrefix(arg, "-") {
 					break

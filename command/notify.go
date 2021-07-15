@@ -1,12 +1,13 @@
 package command
 
 import (
-	"errors"
 	"strings"
 
-	"github.com/svanas/nefertiti/flag"
-	"github.com/svanas/nefertiti/model"
-	"github.com/svanas/nefertiti/notify"
+	"bitbucket.com/svanas/cryptotrader/errors"
+
+	"bitbucket.com/svanas/cryptotrader/flag"
+	"bitbucket.com/svanas/cryptotrader/model"
+	"bitbucket.com/svanas/cryptotrader/notify"
 )
 
 type (

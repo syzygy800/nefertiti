@@ -1,3 +1,4 @@
+//lint:file-ignore ST1006 receiver name should be a reflection of its identity; don't use generic names such as "this" or "self"
 package exchanges
 
 import (
@@ -133,7 +134,7 @@ func (self *Kucoin) getAvailableBalance(client *exchange.ApiService, curr string
 		return 0, errors.Wrap(err, 1)
 	}
 	if len(accounts) == 0 {
-		return 0, errors.Errorf("Currency %s does not exist", curr)
+		return 0, errors.Errorf("currency %s does not exist", curr)
 	}
 	if out, err = strconv.ParseFloat(accounts[0].Available, 64); err != nil {
 		return 0, errors.Wrap(err, 1)
@@ -142,7 +143,7 @@ func (self *Kucoin) getAvailableBalance(client *exchange.ApiService, curr string
 }
 
 func (self *Kucoin) getSymbols(client *exchange.ApiService, cached bool) (exchange.SymbolsModel, error) {
-	if self.symbols == nil || cached == false {
+	if self.symbols == nil || !cached {
 		var (
 			err     error
 			resp    *exchange.ApiResponse
@@ -186,7 +187,7 @@ func (self *Kucoin) getOrders(client *exchange.ApiService, params map[string]str
 	)
 
 	curr = 1
-	for true {
+	for {
 		var resp *exchange.ApiResponse
 		if resp, err = client.Orders(params, &exchange.PaginationParam{CurrentPage: curr, PageSize: 50}); err != nil {
 			return nil, errors.Wrap(err, 1)
@@ -207,7 +208,7 @@ func (self *Kucoin) getOrders(client *exchange.ApiService, params map[string]str
 	}
 
 	curr = 1
-	for true {
+	for {
 		var resp *exchange.ApiResponse
 		if resp, err = client.StopOrders(params, &exchange.PaginationParam{CurrentPage: curr, PageSize: 50}); err != nil {
 			return nil, errors.Wrap(err, 1)
@@ -463,21 +464,23 @@ func (self *Kucoin) sell(
 				if opened, err = self.getOrders(client, map[string]string{"status": "active", "symbol": symbol}); err != nil {
 					self.error(err, level, service)
 				} else {
-					var cb exchange.OrderPredicate
-					cb = func(order *exchange.OrderModel) bool {
+					var cb exchange.OrderPredicate = func(order *exchange.OrderModel) bool {
 						return order.Stop == "loss" && order.Side == "sell"
 					}
 					if opened.Find(&cb) > -1 {
 						log.Printf("[INFO] Not re-buying %s because you have at least one active (non-filled) stop-loss order.\n", symbol)
 					} else {
 						prec := 0
-						size := 2 * stop.Size
+						size := 2.2 * stop.Size
 						if prec, err = self.GetSizePrec(client, symbol); err == nil {
 							_, _, err = self.Order(client,
 								model.BUY, symbol,
 								precision.Round(size, prec),
 								0, model.MARKET,
 							)
+						}
+						if err != nil {
+							self.error(err, level, service)
 						}
 					}
 				}
@@ -648,7 +651,7 @@ func (self *Kucoin) Sell(
 	if strategy == model.STRATEGY_STANDARD || strategy == model.STRATEGY_STOP_LOSS {
 		// we are OK
 	} else {
-		return errors.New("Strategy not implemented")
+		return errors.New("strategy not implemented")
 	}
 
 	var (
@@ -699,11 +702,13 @@ func (self *Kucoin) Sell(
 	for {
 		// read the dynamic settings
 		var (
+			level int64 = notify.LEVEL_DEFAULT
 			mult  multiplier.Mult
 			stop  multiplier.Mult
-			level int64 = notify.Level()
 		)
-		if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
+		if level, err = notify.Level(); err != nil {
+			self.error(err, level, service)
+		} else if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
 			self.error(err, level, service)
 		} else if stop, err = multiplier.Stop(); err != nil {
 			self.error(err, level, service)
@@ -858,7 +863,7 @@ func (self *Kucoin) GetClosed(client interface{}, market string) (model.Orders, 
 	}
 
 	var curr int64 = 1
-	for true {
+	for {
 		if resp, err = kucoin.Fills(
 			map[string]string{"symbol": market},
 			&exchange.PaginationParam{CurrentPage: curr, PageSize: 50}); err != nil {

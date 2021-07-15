@@ -1,3 +1,4 @@
+//lint:file-ignore ST1006 receiver name should be a reflection of its identity; don't use generic names such as "this" or "self"
 package exchanges
 
 import (
@@ -141,7 +142,7 @@ func (self *HitBTC) error(err error, level int64, service model.Notify) {
 }
 
 func (self *HitBTC) getSymbols(client *exchange.HitBtc, cached bool) (symbols []exchange.Symbol, err error) {
-	if self.symbols == nil || cached == false {
+	if self.symbols == nil || !cached {
 		if self.symbols, err = client.GetSymbols(); err != nil {
 			return nil, errors.Wrap(err, 1)
 		}
@@ -400,7 +401,7 @@ func (self *HitBTC) Sell(
 	if strategy == model.STRATEGY_STANDARD {
 		// we are OK
 	} else {
-		return errors.New("Strategy not implemented")
+		return errors.New("strategy not implemented")
 	}
 
 	var (
@@ -445,10 +446,12 @@ func (self *HitBTC) Sell(
 	for {
 		// read the dynamic settings
 		var (
+			level int64 = notify.LEVEL_DEFAULT
 			mult  multiplier.Mult
-			level int64 = notify.Level()
 		)
-		if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
+		if level, err = notify.Level(); err != nil {
+			self.error(err, level, service)
+		} else if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
 			self.error(err, level, service)
 		} else
 		// listens to the filled orders, look for newly filled orders, automatically place new sell orders.

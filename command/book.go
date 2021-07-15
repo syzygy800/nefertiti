@@ -44,7 +44,7 @@ func (c *BookCommand) Run(args []string) int {
 
 	var agg float64
 	flg = flag.Get("agg")
-	if flg.Exists == false {
+	if !flg.Exists {
 		return c.ReturnError(errors.New("missing argument: agg"))
 	} else {
 		if agg, err = flg.Float64(); err != nil {

@@ -21,13 +21,24 @@ const (
 	CANCELLED
 )
 
-func Level() int64 {
-	out := int64(LEVEL_DEFAULT)
-	flg := flag.Get("notify")
-	if flg.Exists {
-		out, _ = flg.Int64()
+// --level=[0..3]
+func Level() (int64, error) {
+	var (
+		err error
+		out int64 = LEVEL_DEFAULT
+	)
+	arg := flag.Get("notify")
+	if !arg.Exists {
+		flag.Set("notify", strconv.FormatInt(out, 10))
+	} else {
+		if out, err = arg.Int64(); err != nil {
+			return out, errors.Errorf("notify %v is invalid", arg)
+		}
+		if out < 0 || out > 3 {
+			return out, errors.Errorf("notify %v is not in the 0..3 range", arg)
+		}
 	}
-	return out
+	return out, nil
 }
 
 func CanSend(level int64, notification Notification) bool {

@@ -14,9 +14,7 @@ type (
 )
 
 func (transaction *Transaction) OrderId() string {
-	var out interface{}
-	out = (*transaction)["order_id"]
-	return empty.AsString(out)
+	return empty.AsString((*transaction)["order_id"])
 }
 
 func (transaction *Transaction) Market(client *Client) string {
@@ -73,12 +71,11 @@ func (transaction *Transaction) Side(client *Client) (string, error) {
 			}
 		}
 	}
-	return "", errors.Errorf("Unknown transaction side: %+v", transaction)
+	return "", errors.Errorf("unknown transaction side: %+v", transaction)
 }
 
 func (transaction *Transaction) DateTime() time.Time {
-	var dt interface{}
-	dt = (*transaction)["datetime"]
+	dt := (*transaction)["datetime"]
 	var out time.Time
 	if dt != nil {
 		out, _ = time.Parse(TimeFormat, empty.AsString(dt))

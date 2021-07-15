@@ -32,7 +32,7 @@ func (c *CancelCommand) Run(args []string) int {
 	}
 
 	flg = flag.Get("side")
-	if flg.Exists == false {
+	if !flg.Exists {
 		return c.ReturnError(errors.New("missing argument: side"))
 	}
 	side := model.NewOrderSide(flg.String())

@@ -1,8 +1,8 @@
+//lint:file-ignore ST1006 receiver name should be a reflection of its identity; don't use generic names such as "this" or "self"
 package exchanges
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -79,6 +79,7 @@ type CexIo struct {
 	*model.ExchangeInfo
 }
 
+//lint:ignore U1000 func is unused
 func (self *CexIo) info(msg string, level int64, service model.Notify) {
 	_, file, line, _ := runtime.Caller(1)
 	log.Printf("[INFO] %s:%d %s", filepath.Base(file), line, msg)
@@ -102,10 +103,10 @@ func (self *CexIo) error(err error, level int64, service model.Notify) {
 
 func (self *CexIo) encodePair(symbol1, symbol2 string) (string, error) {
 	if symbol1 == "" {
-		return "", errors.New("Symbol1 is empty")
+		return "", errors.New("symbol1 is empty")
 	}
 	if symbol2 == "" {
-		return "", errors.New("Symbol2 is empty")
+		return "", errors.New("symbol2 is empty")
 	}
 	return symbol1 + "-" + symbol2, nil
 }
@@ -327,7 +328,7 @@ func (self *CexIo) Sell(
 	if strategy == model.STRATEGY_STANDARD {
 		// we are OK
 	} else {
-		return errors.New("Strategy not implemented.")
+		return errors.New("strategy not implemented")
 	}
 
 	var (
@@ -373,10 +374,12 @@ func (self *CexIo) Sell(
 	for {
 		// read the dynamic settings
 		var (
+			level int64 = notify.LEVEL_DEFAULT
 			mult  multiplier.Mult
-			level int64 = notify.Level()
 		)
-		if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
+		if level, err = notify.Level(); err != nil {
+			self.error(err, level, service)
+		} else if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
 			self.error(err, level, service)
 		} else
 		// listen to the archived orders, look for newly filled orders, automatically place new LIMIT SELL orders.
@@ -429,11 +432,11 @@ func (self *CexIo) Order(
 }
 
 func (self *CexIo) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType) ([]byte, error) {
-	return nil, errors.New("Not implemented")
+	return nil, errors.New("not implemented")
 }
 
 func (self *CexIo) OCO(client interface{}, market string, size float64, price, stop float64) ([]byte, error) {
-	return nil, errors.New("Not implemented")
+	return nil, errors.New("not implemented")
 }
 
 func (self *CexIo) GetClosed(client interface{}, market string) (model.Orders, error) {

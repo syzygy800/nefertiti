@@ -1,3 +1,4 @@
+//lint:file-ignore ST1006 receiver name should be a reflection of its identity; don't use generic names such as "this" or "self"
 package signals
 
 import (
@@ -72,8 +73,7 @@ func (self *Volume) get(
 ) error {
 	var err error
 
-	var client *ethplorer.Client
-	client = ethplorer.New(self.apiKey)
+	client := ethplorer.New(self.apiKey)
 
 	var top []ethplorer.Top
 	if top, err = client.GetTop(ethplorer.ByTradeVolume); err != nil {

@@ -102,7 +102,7 @@ func (c *client) do(method string, resource string, payload map[string]string, a
 	// Auth
 	if authNeeded {
 		if len(c.apiKey) == 0 || len(c.apiSecret) == 0 {
-			err = errors.New("You need to set API Key and API Secret to call this method")
+			err = errors.New("you need to set API key and API secret to call this method")
 			return
 		}
 		req.SetBasicAuth(c.apiKey, c.apiSecret)

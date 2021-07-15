@@ -3,7 +3,6 @@ package command
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -14,8 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"bitbucket.com/svanas/cryptotrader/errors"
+
+	"bitbucket.com/svanas/cryptotrader/flag"
 	"github.com/gorilla/mux"
-	"github.com/svanas/nefertiti/flag"
 )
 
 type (
@@ -48,7 +49,7 @@ func (c *ListenCommand) Run(args []string) int {
 			return c.ReturnError(err)
 		}
 	} else {
-		for true {
+		for {
 			log.Printf("[INFO] Listening to port %d...", *c.Port)
 			err = http.ListenAndServe(fmt.Sprintf(":%d", *c.Port), router)
 			if err == nil {
@@ -116,7 +117,7 @@ func getHostPort(req *http.Request) (host string, port int64, err error) {
 
 func getFirstAvailablePort(req *http.Request) int64 {
 	host, port, _ := getHostPort(req)
-	for true { // enumerate over ports, starting with "our" port + 1
+	for { // enumerate over ports, starting with "our" port + 1
 		port++
 		_, err := http.Get("http://" + host + ":" + strconv.FormatInt(port, 10) + "/ping")
 		if err != nil {
@@ -138,7 +139,7 @@ func getPong(req *http.Request) Pongs {
 	}
 
 	not_ok := 0
-	for true { // enumerate over ports, starting with "our" port + 1
+	for { // enumerate over ports, starting with "our" port + 1
 		port++
 		resp, err := http.Get("http://" + host + ":" + strconv.FormatInt(port, 10) + "/ping")
 		if err != nil {

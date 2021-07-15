@@ -3,7 +3,6 @@ package command
 import (
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
 
 	"github.com/svanas/nefertiti/exchanges"
@@ -20,10 +19,7 @@ type (
 )
 
 func (c *SellCommand) Run(args []string) int {
-	var (
-		err error
-		flg *flag.Flag
-	)
+	var err error
 
 	var exchange model.Exchange
 	if exchange, err = exchanges.GetExchange(); err != nil {
@@ -54,13 +50,8 @@ func (c *SellCommand) Run(args []string) int {
 	}
 
 	var level int64 = notify.LEVEL_DEFAULT
-	flg = flag.Get("notify")
-	if flg.Exists == false {
-		flag.Set("notify", strconv.FormatInt(level, 10))
-	} else {
-		if level, err = flg.Int64(); err != nil {
-			return c.ReturnError(fmt.Errorf("notify %v is invalid", flg))
-		}
+	if level, err = notify.Level(); err != nil {
+		return c.ReturnError(err)
 	}
 
 	success := func(service model.Notify) error {
@@ -71,7 +62,7 @@ func (c *SellCommand) Run(args []string) int {
 		msg := fmt.Sprintf("Listening to %s...", exchange.GetInfo().Name)
 		log.Println("[INFO] " + msg)
 		if service != nil {
-			if notify.CanSend(notify.Level(), notify.INFO) {
+			if notify.CanSend(level, notify.INFO) {
 				err := service.SendMessage(msg, fmt.Sprintf("%s - INFO", exchange.GetInfo().Name), model.ALWAYS)
 				if err != nil {
 					return err

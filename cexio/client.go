@@ -322,9 +322,7 @@ func (client *Client) ArchivedOrdersAll() ([]Order, error) {
 		if orders, err = client.ArchivedOrders(pair.Symbol1, pair.Symbol2); err != nil {
 			return nil, err
 		}
-		for _, order := range orders {
-			result = append(result, order)
-		}
+		result = append(result, orders...)
 	}
 	return result, nil
 }

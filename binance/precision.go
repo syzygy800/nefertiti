@@ -1,3 +1,4 @@
+//lint:file-ignore ST1006 receiver name should be a reflection of its identity; don't use generic names such as "this" or "self"
 package binance
 
 import (
@@ -85,7 +86,7 @@ func getPrecs(client *Client) (Precs, error) {
 }
 
 func GetPrecs(client *Client, cached bool) (Precs, error) {
-	if cache == nil || cached == false {
+	if cache == nil || !cached {
 		var err error
 		if cache, err = getPrecs(client); err != nil {
 			return nil, err

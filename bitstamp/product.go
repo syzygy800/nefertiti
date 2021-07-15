@@ -38,7 +38,7 @@ func getMarkets(client *Client) ([]Market, error) {
 }
 
 func GetMarkets(client *Client, cached bool) ([]Market, error) {
-	if markets == nil || cached == false {
+	if markets == nil || !cached {
 		var err error
 		if markets, err = getMarkets(client); err != nil {
 			return nil, err
@@ -57,7 +57,7 @@ func GetMinimumOrder(client *Client, market string) (float64, error) {
 			return pair.getMinimumOrder()
 		}
 	}
-	return 0, errors.Errorf("Market %s does not exist", market)
+	return 0, errors.Errorf("market %s does not exist", market)
 }
 
 func GetMinOrderSize(client *Client, market string, ticker float64, prec int) (float64, error) {

@@ -1,3 +1,4 @@
+//lint:file-ignore ST1006 receiver name should be a reflection of its identity; don't use generic names such as "this" or "self"
 package exchanges
 
 import (
@@ -98,6 +99,7 @@ func binanceOrderSide(order *binance.Order) model.OrderSide {
 	return model.ORDER_SIDE_NONE
 }
 
+//lint:ignore U1000 func is unused
 func binanceOrderType(order *binance.Order) model.OrderType {
 	if order.Type == exchange.OrderTypeLimit || order.Type == exchange.OrderTypeStopLossLimit {
 		return model.LIMIT
@@ -128,6 +130,7 @@ func binanceOrderToString(order *binance.Order) ([]byte, error) {
 	return out, nil
 }
 
+//lint:ignore U1000 func is unused
 func binanceOrderIsOCO(orders []binance.Order, order1 *binance.Order) bool {
 	if order1.Type == exchange.OrderTypeStopLoss || order1.Type == exchange.OrderTypeStopLossLimit || order1.Type == exchange.OrderTypeLimitMaker {
 		for _, order2 := range orders {
@@ -420,7 +423,7 @@ func (self *Binance) sell(
 							if flag.Dca() {
 								var prec int
 								if prec, err = self.GetSizePrec(client, order.Symbol); err == nil {
-									size := 2 * order.GetSize()
+									size := 2.2 * order.GetSize()
 									_, _, err = self.Order(client,
 										model.BUY,
 										order.Symbol,
@@ -546,7 +549,7 @@ func (self *Binance) Sell(
 	if strategy == model.STRATEGY_STANDARD || strategy == model.STRATEGY_STOP_LOSS {
 		// we are OK
 	} else {
-		return errors.New("Strategy not implemented")
+		return errors.New("strategy not implemented")
 	}
 
 	var (
@@ -613,12 +616,14 @@ func (self *Binance) Sell(
 	for {
 		// read the dynamic settings
 		var (
+			level  int64 = notify.LEVEL_DEFAULT
 			mult   multiplier.Mult
 			stop   multiplier.Mult
-			level  int64    = notify.Level()
 			quotes []string = flag.Get("quote").Split(",")
 		)
-		if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
+		if level, err = notify.Level(); err != nil {
+			self.notify(err, level, service)
+		} else if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
 			self.notify(err, level, service)
 		} else if stop, err = multiplier.Stop(); err != nil {
 			self.notify(err, level, service)
@@ -647,8 +652,10 @@ func (self *Binance) Order(
 		return nil, nil, errors.New("invalid argument: client")
 	}
 
-	var service *binance.CreateOrderService
-	service = binanceClient.NewCreateOrderService().Symbol(market).Quantity(size).NewClientOrderID(binance.NewClientOrderID())
+	service := binanceClient.NewCreateOrderService().
+		Symbol(market).
+		Quantity(size).
+		NewClientOrderID(binance.NewClientOrderID())
 
 	if kind == model.MARKET {
 		service.Type(exchange.OrderTypeMarket)
@@ -683,8 +690,7 @@ func (self *Binance) StopLoss(client interface{}, market string, size float64, p
 		return nil, errors.New("invalid argument: client")
 	}
 
-	var service *binance.CreateOrderService
-	service = binanceClient.NewCreateOrderService().
+	service := binanceClient.NewCreateOrderService().
 		Symbol(market).
 		Side(exchange.SideTypeSell).
 		Quantity(size).
@@ -711,7 +717,7 @@ func (self *Binance) StopLoss(client interface{}, market string, size float64, p
 	var order *exchange.CreateOrderResponse
 	if order, err = service.Do(context.Background()); err != nil {
 		// --- BEGIN --- svanas 2019-02-07 ------------------------------------
-		_, ok := err.(*binance.BinanceError)
+		_, ok := isBinanceError(err)
 		if ok {
 			self.warn(err)
 			// -1013 stop loss orders are not supported for this symbol
@@ -765,7 +771,7 @@ func (self *Binance) OCO(client interface{}, market string, size float64, price,
 		resp *exchange.CreateOCOResponse
 	)
 	if resp, err = svc.Do(context.Background()); err != nil {
-		_, ok := err.(*binance.BinanceError)
+		_, ok := isBinanceError(err)
 		if ok {
 			self.warn(err)
 			// -2010 Filter failure: MAX_NUM_ALGO_ORDERS

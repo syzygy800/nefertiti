@@ -23,8 +23,7 @@ type CommandMeta struct {
 func (cm *CommandMeta) ReturnError(err error) int {
 	pc, file, line, _ := runtime.Caller(1)
 	// step #1: execute the callback function (passing the error back to main)
-	var cb CommandCallBack
-	cb = *cm.CallBack
+	cb := *cm.CallBack
 	cb(pc, file, line, err)
 	// step #2: return 1 as an error code
 	return 1

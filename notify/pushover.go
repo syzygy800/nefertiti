@@ -1,8 +1,8 @@
+//lint:file-ignore ST1006 receiver name should be a reflection of its identity; don't use generic names such as "this" or "self"
 package notify
 
 import (
 	"encoding/json"
-	"errors"
 	"time"
 
 	"github.com/gregdel/pushover"
@@ -16,44 +16,44 @@ type Pushover struct {
 	userKey string
 }
 
-func (this *Pushover) promptForKeys(interactive bool) (ok bool, err error) {
-	this.appKey = flag.Get("pushover-app-key").String()
+func (self *Pushover) promptForKeys(interactive bool) (ok bool, err error) {
+	self.appKey = flag.Get("pushover-app-key").String()
 
-	if this.appKey == "none" {
+	if self.appKey == "none" {
 		return false, nil
 	}
 
-	if this.appKey == "" && interactive {
+	if self.appKey == "" && interactive {
 		var data []byte
 		if data, err = passphrase.Read("Pushover application key"); err != nil {
 			return false, err
 		}
-		this.appKey = string(data)
+		self.appKey = string(data)
 	}
 
-	if this.appKey == "none" {
+	if self.appKey == "none" {
 		return false, nil
 	}
 
-	if this.appKey != "" {
-		this.userKey = flag.Get("pushover-user-key").String()
-		if this.userKey == "" && interactive {
+	if self.appKey != "" {
+		self.userKey = flag.Get("pushover-user-key").String()
+		if self.userKey == "" && interactive {
 			var data []byte
 			if data, err = passphrase.Read("Pushover user key"); err != nil {
 				return false, err
 			}
-			this.userKey = string(data)
+			self.userKey = string(data)
 		}
 	}
 
-	return this.appKey != "" && this.userKey != "", nil
+	return self.appKey != "" && self.userKey != "", nil
 }
 
-func (this *Pushover) PromptForKeys(interactive, verify bool) (ok bool, err error) {
-	ok, err = this.promptForKeys(interactive)
+func (self *Pushover) PromptForKeys(interactive, verify bool) (ok bool, err error) {
+	ok, err = self.promptForKeys(interactive)
 	if ok && verify {
 		// verify the pushover user key
-		if err = pushoverVerifyRecipient(this.appKey, this.userKey); err != nil {
+		if err = pushoverVerifyRecipient(self.appKey, self.userKey); err != nil {
 			ok = false
 		}
 	}
@@ -78,11 +78,11 @@ func init() {
 	messageHistory = make(map[string]time.Time)
 }
 
-func (this *Pushover) SendMessage(message interface{}, title string, frequency model.Frequency) error {
-	if this.appKey == "" {
+func (self *Pushover) SendMessage(message interface{}, title string, frequency model.Frequency) error {
+	if self.appKey == "" {
 		return errors.New("missing argument: Pushover application key")
 	}
-	if this.userKey == "" {
+	if self.userKey == "" {
 		return errors.New("missing argument: Pushover recipient")
 	}
 
@@ -116,8 +116,8 @@ func (this *Pushover) SendMessage(message interface{}, title string, frequency m
 		delete(messageHistory, body)
 	}
 
-	app := pushover.New(this.appKey)
-	rec := pushover.NewRecipient(this.userKey)
+	app := pushover.New(self.appKey)
+	rec := pushover.NewRecipient(self.userKey)
 	msg := pushover.NewMessageWithTitle(body, title)
 
 	_, err = app.SendMessage(msg, rec)

@@ -1,8 +1,8 @@
+//lint:file-ignore ST1006 receiver name should be a reflection of its identity; don't use generic names such as "this" or "self"
 package notify
 
 import (
 	"encoding/json"
-	"errors"
 	"strconv"
 
 	"github.com/svanas/nefertiti/flag"
@@ -16,36 +16,36 @@ type Telegram struct {
 	chatId int64
 }
 
-func (this *Telegram) PromptForKeys(interactive, verify bool) (ok bool, err error) {
-	this.appKey = flag.Get("telegram-app-key").String()
+func (self *Telegram) PromptForKeys(interactive, verify bool) (ok bool, err error) {
+	self.appKey = flag.Get("telegram-app-key").String()
 
-	if this.appKey == "none" {
+	if self.appKey == "none" {
 		return false, nil
 	}
 
-	if this.appKey == "" && interactive {
+	if self.appKey == "" && interactive {
 		var data []byte
 		if data, err = passphrase.Read("Telegram application key"); err != nil {
 			return false, err
 		}
-		this.appKey = string(data)
+		self.appKey = string(data)
 	}
 
-	if this.appKey == "none" {
+	if self.appKey == "none" {
 		return false, nil
 	}
 
-	if this.appKey != "" {
+	if self.appKey != "" {
 		chatId := flag.Get("telegram-chat-id").String()
 		if chatId != "" {
-			this.chatId, err = strconv.ParseInt(chatId, 10, 64)
+			self.chatId, err = strconv.ParseInt(chatId, 10, 64)
 		} else {
 			if interactive {
 				var data []byte
 				if data, err = passphrase.Read("Telegram chat ID"); err != nil {
 					return false, err
 				}
-				this.chatId, err = strconv.ParseInt(string(data), 10, 64)
+				self.chatId, err = strconv.ParseInt(string(data), 10, 64)
 			}
 		}
 		if err != nil {
@@ -53,14 +53,14 @@ func (this *Telegram) PromptForKeys(interactive, verify bool) (ok bool, err erro
 		}
 	}
 
-	return this.appKey != "" && this.chatId != 0, nil
+	return self.appKey != "" && self.chatId != 0, nil
 }
 
-func (this *Telegram) SendMessage(message interface{}, title string, frequency model.Frequency) error {
-	if this.appKey == "" {
+func (self *Telegram) SendMessage(message interface{}, title string, frequency model.Frequency) error {
+	if self.appKey == "" {
 		return errors.New("missing argument: Telegram application key")
 	}
-	if this.chatId == 0 {
+	if self.chatId == 0 {
 		return errors.New("missing argument: Telegram chatId")
 	}
 
@@ -83,15 +83,15 @@ func (this *Telegram) SendMessage(message interface{}, title string, frequency m
 		return err
 	}
 
-	bot, err := tbot.NewServer(this.appKey)
+	bot, err := tbot.NewServer(self.appKey)
 	if err != nil {
 		return err
 	}
 
 	if title == "" {
-		return bot.Send(this.chatId, body)
+		return bot.Send(self.chatId, body)
 	} else {
-		return bot.Send(this.chatId, (title + ": " + body))
+		return bot.Send(self.chatId, (title + ": " + body))
 	}
 }
 

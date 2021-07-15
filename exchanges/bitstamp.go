@@ -1,3 +1,4 @@
+//lint:file-ignore ST1006 receiver name should be a reflection of its identity; don't use generic names such as "this" or "self"
 package exchanges
 
 import (
@@ -408,7 +409,7 @@ func (self *Bitstamp) Sell(
 	if strategy == model.STRATEGY_STANDARD {
 		// we are OK
 	} else {
-		return errors.New("Strategy not implemented")
+		return errors.New("strategy not implemented")
 	}
 
 	var (
@@ -463,10 +464,12 @@ func (self *Bitstamp) Sell(
 	for {
 		// read the dynamic settings
 		var (
+			level int64 = notify.LEVEL_DEFAULT
 			mult  multiplier.Mult
-			level int64 = notify.Level()
 		)
-		if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
+		if level, err = notify.Level(); err != nil {
+			self.error(err, level, service)
+		} else if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
 			self.error(err, level, service)
 		} else
 		// listens to the transaction history, look for newly filled orders, automatically place new LIMIT SELL orders.
@@ -607,11 +610,11 @@ func (self *Bitstamp) Order(
 }
 
 func (self *Bitstamp) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType) ([]byte, error) {
-	return nil, errors.New("Not implemented")
+	return nil, errors.New("not implemented")
 }
 
 func (self *Bitstamp) OCO(client interface{}, market string, size float64, price, stop float64) ([]byte, error) {
-	return nil, errors.New("Not implemented")
+	return nil, errors.New("not implemented")
 }
 
 func (self *Bitstamp) GetClosed(client interface{}, market string) (model.Orders, error) {

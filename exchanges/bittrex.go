@@ -1,3 +1,4 @@
+//lint:file-ignore ST1006 receiver name should be a reflection of its identity; don't use generic names such as "this" or "self"
 package exchanges
 
 import (
@@ -6,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -58,14 +60,14 @@ func bittrexRequestsPerSecond(path string) (float64, bool) { // -> (rps, cooldow
 			if info.Cooldown {
 				info.Cooldown = false
 				if data, err = json.Marshal(info); err == nil {
-					err = ioutil.WriteFile(session.GetSessionFile(bittrexSessionInfo), data, 0600)
+					ioutil.WriteFile(session.GetSessionFile(bittrexSessionInfo), data, 0600)
 				}
 				return exchange.RequestsPerSecond(exchange.INTENSITY_SUPER), true
 			}
 		}
 	}
 	for i := range path {
-		if strings.Index("?", string(path[i])) > -1 {
+		if strings.Contains("?", string(path[i])) {
 			path = path[:i]
 			break
 		}
@@ -145,7 +147,7 @@ func init() {
 			}
 		}
 		for idx := range path {
-			if strings.Index("?", string(path[idx])) > -1 {
+			if strings.Contains("?", string(path[idx])) {
 				path = path[:idx]
 				break
 			}
@@ -195,7 +197,7 @@ func bittrexParseMarket(market string, version int) (base, quote string, err err
 		}
 		return symbols[1], symbols[0], nil
 	}
-	return "", "", errors.Errorf("Cannot parse market %s", market)
+	return "", "", errors.Errorf("cannot parse market %s", market)
 }
 
 func bittrexLogErr(err error, level int64, service model.Notify) {
@@ -258,7 +260,7 @@ func bittrexCancelOrder(client *exchange.Client, order *exchange.Order) (float64
 	)
 	// get conditional orders
 	if conditionals, err = client.GetOpenConditionalOrders(order.MarketSymbol); err != nil {
-		return 0, err
+		return 0, errors.Wrap(err, 1)
 	}
 	// is this order referenced by a conditional order?
 	for _, conditional := range conditionals {
@@ -267,7 +269,7 @@ func bittrexCancelOrder(client *exchange.Client, order *exchange.Order) (float64
 				// if yes, cancel the conditional order
 				triggerPrice = conditional.TriggerPrice
 				if err = client.CancelConditionalOrder(conditional.Id); err != nil {
-					return triggerPrice, err
+					return triggerPrice, errors.Wrap(err, 1)
 				}
 			}
 		}
@@ -306,7 +308,7 @@ func (self *Bittrex) GetMarkets(cached, sandbox bool) ([]model.Market, error) {
 		out []model.Market
 	)
 
-	if self.markets == nil || cached == false {
+	if self.markets == nil || !cached {
 		client := exchange.New("", "", bittrexAppID)
 		if self.markets, err = client.GetMarkets(); err != nil {
 			return nil, errors.Wrap(err, 1)
@@ -480,18 +482,51 @@ func (self *Bittrex) sell(
 				if side == model.SELL {
 					if strategy == model.STRATEGY_STOP_LOSS && order.Type() == exchange.MARKET {
 						if flag.Dca() {
-							var prec int
-							if prec, err = self.GetSizePrec(client, order.MarketName()); err == nil {
-								size := 2 * order.QuantityFilled()
+							var (
+								prec int
+								size float64 = 2.2 * order.QuantityFilled()
+							)
+							if prec, err = self.GetSizePrec(client, order.MarketName()); err != nil {
+								return new, err
+							}
+							for {
 								_, _, err = self.Order(client,
 									model.BUY,
 									order.MarketName(),
 									precision.Round(size, prec),
 									0, model.MARKET,
 								)
-							}
-							if err != nil {
-								return new, errors.Append(err, "\t", string(data))
+								if err == nil {
+									break
+								} else if !strings.Contains(err.Error(), "SELF_TRADE") {
+									return new, err
+								} else {
+									// get your open orders
+									var orders exchange.Orders
+									if orders, err = client.GetOpenOrders(order.MarketSymbol); err != nil {
+										return new, errors.Wrap(err, 1)
+									}
+									// filter out your buy orders
+									orders = func(input exchange.Orders) (output exchange.Orders) {
+										for _, order := range input {
+											if bittrexOrderSide(&order) == model.SELL {
+												output = append(output, order)
+											}
+										}
+										return
+									}(orders)
+									// sort your sell orders by price (lowest price first)
+									sort.Slice(orders, func(i1, i2 int) bool {
+										return orders[i1].Price() < orders[i2].Price()
+									})
+									// add up the size of your lowest priced sell order
+									size = size + orders[0].Quantity
+									// cancel your lowest priced sell order
+									if _, err = bittrexCancelOrder(client, &orders[0]); err != nil {
+										return nil, err
+									}
+									// re-place your market buy order
+								}
 							}
 						}
 					}
@@ -564,7 +599,7 @@ func (self *Bittrex) Sell(
 	if strategy == model.STRATEGY_STANDARD || strategy == model.STRATEGY_STOP_LOSS {
 		// we are OK
 	} else {
-		return errors.New("Strategy not implemented")
+		return errors.New("strategy not implemented")
 	}
 
 	var (
@@ -612,11 +647,13 @@ func (self *Bittrex) Sell(
 	for {
 		// read the dynamic settings
 		var (
+			level int64 = notify.LEVEL_DEFAULT
 			mult  multiplier.Mult
 			stop  multiplier.Mult
-			level int64 = notify.Level()
 		)
-		if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
+		if level, err = notify.Level(); err != nil {
+			bittrexLogErr(err, level, service)
+		} else if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
 			bittrexLogErr(err, level, service)
 		} else if stop, err = multiplier.Stop(); err != nil {
 			bittrexLogErr(err, level, service)
@@ -717,7 +754,7 @@ func (self *Bittrex) Order(
 }
 
 func (self *Bittrex) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType) ([]byte, error) {
-	return nil, errors.New("Not implemented")
+	return nil, errors.New("not implemented")
 }
 
 func (self *Bittrex) OCO(client interface{}, market1 string, size float64, price, stop float64) ([]byte, error) {
@@ -852,7 +889,7 @@ func (self *Bittrex) GetBook(client interface{}, market1 string, side model.Book
 		return book.Ask, nil
 	}
 
-	return nil, errors.Errorf("Non-exhaustive match: %v", side)
+	return nil, errors.Errorf("non-exhaustive match: %v", side)
 }
 
 func (self *Bittrex) Aggregate(client, book interface{}, market string, agg float64) (model.Book, error) {

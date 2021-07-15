@@ -1,3 +1,4 @@
+//lint:file-ignore ST1006 receiver name should be a reflection of its identity; don't use generic names such as "this" or "self"
 package exchanges
 
 import (
@@ -154,7 +155,7 @@ func (self *CryptoDotCom) error(err error, level int64, service model.Notify) {
 }
 
 func (self *CryptoDotCom) getSymbols(client *exchange.Client, quotes []string, cached bool) ([]exchange.Symbol, error) {
-	if len(self.symbols) == 0 || cached == false {
+	if len(self.symbols) == 0 || !cached {
 		var err error
 		if self.symbols, err = client.Symbols(); err != nil {
 			return nil, errors.Wrap(err, 1)
@@ -194,17 +195,6 @@ func (self *CryptoDotCom) getOrderSide(side exchange.OrderSide) model.OrderSide 
 		return model.SELL
 	default:
 		return model.ORDER_SIDE_NONE
-	}
-}
-
-func (self *CryptoDotCom) getOrderType(order *exchange.Order) model.OrderType {
-	switch order.GetType() {
-	case exchange.LIMIT:
-		return model.LIMIT
-	case exchange.MARKET:
-		return model.MARKET
-	default:
-		return model.ORDER_TYPE_NONE
 	}
 }
 
@@ -297,9 +287,7 @@ func (self *CryptoDotCom) listen(
 		if orders, err = client.OpenOrders(market.Symbol); err != nil {
 			return old, errors.Wrap(err, 1)
 		}
-		for _, order := range orders {
-			new = append(new, order)
-		}
+		new = append(new, orders...)
 	}
 
 	// look for cancelled orders
@@ -374,9 +362,7 @@ func (self *CryptoDotCom) sell(
 		if trades, err = client.MyTrades(market.Symbol); err != nil {
 			return old, errors.Wrap(err, 1)
 		}
-		for _, trade := range trades {
-			filled = append(filled, trade)
-		}
+		filled = append(filled, trades...)
 	}
 
 	// make a list of newly filled orders
@@ -465,7 +451,7 @@ func (self *CryptoDotCom) Sell(
 	success model.OnSuccess,
 ) error {
 	if strategy != model.STRATEGY_STANDARD {
-		return errors.New("Strategy not implemented")
+		return errors.New("strategy not implemented")
 	}
 
 	var (
@@ -508,9 +494,7 @@ func (self *CryptoDotCom) Sell(
 		if trades, err = client.MyTrades(market.Symbol); err != nil {
 			return errors.Wrap(err, 1)
 		}
-		for _, trade := range trades {
-			filled = append(filled, trade)
-		}
+		filled = append(filled, trades...)
 	}
 
 	// get my opened orders
@@ -519,9 +503,7 @@ func (self *CryptoDotCom) Sell(
 		if orders, err = client.OpenOrders(market.Symbol); err != nil {
 			return errors.Wrap(err, 1)
 		}
-		for _, order := range orders {
-			opened = append(opened, order)
-		}
+		opened = append(opened, orders...)
 	}
 
 	if err = success(service); err != nil {
@@ -531,10 +513,12 @@ func (self *CryptoDotCom) Sell(
 	for {
 		// read the dynamic settings
 		var (
+			level int64 = notify.LEVEL_DEFAULT
 			mult  multiplier.Mult
-			level int64 = notify.Level()
 		)
-		if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
+		if level, err = notify.Level(); err != nil {
+			self.error(err, level, service)
+		} else if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
 			self.error(err, level, service)
 		} else
 		// listen to the filled orders, look for newly filled orders, automatically place new LIMIT SELL orders.
@@ -585,11 +569,11 @@ func (self *CryptoDotCom) Order(
 }
 
 func (self *CryptoDotCom) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType) ([]byte, error) {
-	return nil, errors.New("Not implemented")
+	return nil, errors.New("not implemented")
 }
 
 func (self *CryptoDotCom) OCO(client interface{}, market string, size float64, price, stop float64) ([]byte, error) {
-	return nil, errors.New("Not implemented")
+	return nil, errors.New("not implemented")
 }
 
 func (self *CryptoDotCom) GetClosed(client interface{}, market string) (model.Orders, error) {

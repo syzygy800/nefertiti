@@ -12,10 +12,8 @@ const (
 )
 
 func GetSessionDir() string {
-	var tmp string
-	tmp = os.TempDir()
-	var dir string
-	dir = filepath.Join(tmp, "com.cryptotrader.session")
+	tmp := os.TempDir()
+	dir := filepath.Join(tmp, "com.cryptotrader.session")
 	os.MkdirAll(dir, os.ModePerm)
 	return dir
 }

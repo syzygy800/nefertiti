@@ -47,7 +47,7 @@ func GetFormat(value string) Format {
 Short: // step #1: do we have a short UUID?
 	if len(value) == 26 {
 		for i := range value {
-			if strings.Index(ValidShortChars, string(value[i])) == -1 {
+			if !strings.Contains(ValidShortChars, string(value[i])) {
 				goto Long
 			}
 		}
@@ -56,7 +56,7 @@ Short: // step #1: do we have a short UUID?
 Long: // step #2: do we have a long UUID?
 	if len(value) == 36 {
 		for i := range value {
-			if strings.Index(ValidLongChars, string(value[i])) == -1 {
+			if !strings.Contains(ValidLongChars, string(value[i])) {
 				goto None
 			}
 		}

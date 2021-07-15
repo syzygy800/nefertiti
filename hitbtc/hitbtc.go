@@ -44,13 +44,13 @@ func handleErr(r interface{}) error {
 				errorMessage := error.(map[string]interface{})["message"]
 				return errors.New(errorMessage.(string))
 			default:
-				return fmt.Errorf("I don't know about type %T!\n", v)
+				return fmt.Errorf("unknown type %T", v)
 			}
 		}
 	case []interface{}:
 		return nil
 	default:
-		return fmt.Errorf("I don't know about type %T!\n", v)
+		return fmt.Errorf("unknown type %T", v)
 	}
 
 	return nil

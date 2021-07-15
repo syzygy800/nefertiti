@@ -11,7 +11,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/mitchellh/cli"
 	"github.com/svanas/nefertiti/command"
-	ctcommand "github.com/svanas/nefertiti/command"
 	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
 )
@@ -34,15 +33,14 @@ func main() {
 		line int
 	)
 
-	var cb ctcommand.CommandCallBack
-	cb = func(pc uintptr, fn string, ln int, e error) {
+	var cb command.CommandCallBack = func(pc uintptr, fn string, ln int, e error) {
 		err = e
 		cnt = pc
 		file = fn
 		line = ln
 	}
 
-	cm := ctcommand.CommandMeta{
+	cm := command.CommandMeta{
 		Port:       &port,
 		AppName:    APP_NAME,
 		AppVersion: APP_VERSION,
@@ -53,49 +51,49 @@ func main() {
 	console.Args = os.Args[1:]
 	console.Commands = map[string]cli.CommandFactory{
 		"exchanges": func() (cli.Command, error) {
-			return &ctcommand.ExchangesCommand{CommandMeta: &cm}, nil
+			return &command.ExchangesCommand{CommandMeta: &cm}, nil
 		},
 		"markets": func() (cli.Command, error) {
-			return &ctcommand.MarketsCommand{CommandMeta: &cm}, nil
+			return &command.MarketsCommand{CommandMeta: &cm}, nil
 		},
 		"sell": func() (cli.Command, error) {
-			return &ctcommand.SellCommand{CommandMeta: &cm}, nil
+			return &command.SellCommand{CommandMeta: &cm}, nil
 		},
 		"order": func() (cli.Command, error) {
-			return &ctcommand.OrderCommand{CommandMeta: &cm}, nil
+			return &command.OrderCommand{CommandMeta: &cm}, nil
 		},
 		"book": func() (cli.Command, error) {
-			return &ctcommand.BookCommand{CommandMeta: &cm}, nil
+			return &command.BookCommand{CommandMeta: &cm}, nil
 		},
 		"buy": func() (cli.Command, error) {
-			return &ctcommand.BuyCommand{CommandMeta: &cm}, nil
+			return &command.BuyCommand{CommandMeta: &cm}, nil
 		},
 		"about": func() (cli.Command, error) {
-			return &ctcommand.AboutCommand{CommandMeta: &cm}, nil
+			return &command.AboutCommand{CommandMeta: &cm}, nil
 		},
 		"update": func() (cli.Command, error) {
-			return &ctcommand.UpdateCommand{CommandMeta: &cm}, nil
+			return &command.UpdateCommand{CommandMeta: &cm}, nil
 		},
 		"agg": func() (cli.Command, error) {
-			return &ctcommand.AggCommand{CommandMeta: &cm}, nil
+			return &command.AggCommand{CommandMeta: &cm}, nil
 		},
 		"cancel": func() (cli.Command, error) {
-			return &ctcommand.CancelCommand{CommandMeta: &cm}, nil
+			return &command.CancelCommand{CommandMeta: &cm}, nil
 		},
 		"base": func() (cli.Command, error) {
-			return &ctcommand.BaseCommand{CommandMeta: &cm}, nil
+			return &command.BaseCommand{CommandMeta: &cm}, nil
 		},
 		"quote": func() (cli.Command, error) {
-			return &ctcommand.QuoteCommand{CommandMeta: &cm}, nil
+			return &command.QuoteCommand{CommandMeta: &cm}, nil
 		},
 		"notify": func() (cli.Command, error) {
-			return &ctcommand.NotifyCommand{CommandMeta: &cm}, nil
+			return &command.NotifyCommand{CommandMeta: &cm}, nil
 		},
 		"stoploss": func() (cli.Command, error) {
-			return &ctcommand.StopLossCommand{CommandMeta: &cm}, nil
+			return &command.StopLossCommand{CommandMeta: &cm}, nil
 		},
 		"listen": func() (cli.Command, error) {
-			return &ctcommand.ListenCommand{CommandMeta: &cm}, nil
+			return &command.ListenCommand{CommandMeta: &cm}, nil
 		},
 	}
 
@@ -122,7 +120,7 @@ func main() {
 					os.Exit(1)
 				}
 			} else {
-				for true {
+				for {
 					err = http.ListenAndServe(fmt.Sprintf(":%d", port), router)
 					if err == nil {
 						break
@@ -168,7 +166,7 @@ func getPong() *command.Pong {
 	}
 	for _, arg := range os.Args {
 		if strings.HasPrefix(arg, "-") {
-			for true {
+			for {
 				arg = arg[1:]
 				if !strings.HasPrefix(arg, "-") {
 					break

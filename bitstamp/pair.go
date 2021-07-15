@@ -26,7 +26,7 @@ func (p *Pair) getMinimumOrder() (float64, error) {
 	var num string
 	for i := 0; i < len(str); i++ {
 		c := string(str[i])
-		if strings.Index("0123456789.", c) > -1 {
+		if strings.Contains("0123456789.", c) {
 			num = num + c
 		} else {
 			break

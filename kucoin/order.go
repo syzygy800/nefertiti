@@ -115,8 +115,7 @@ type (
 )
 
 func (orders OrdersModel) Find(callback *OrderPredicate) int {
-	var cb OrderPredicate
-	cb = *callback
+	cb := *callback
 	for idx, order := range orders {
 		if cb(order) {
 			return idx
@@ -126,8 +125,7 @@ func (orders OrdersModel) Find(callback *OrderPredicate) int {
 }
 
 func (orders OrdersModel) IndexOfId(Id string) int {
-	var cb OrderPredicate
-	cb = func(order *OrderModel) bool {
+	var cb OrderPredicate = func(order *OrderModel) bool {
 		return order.Id == Id
 	}
 	return orders.Find(&cb)
