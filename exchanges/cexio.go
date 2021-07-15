@@ -13,6 +13,7 @@ import (
 	filemutex "github.com/alexflint/go-filemutex"
 	"github.com/svanas/nefertiti/aggregation"
 	exchange "github.com/svanas/nefertiti/cexio"
+	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/multiplier"

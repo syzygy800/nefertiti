@@ -8,6 +8,7 @@ import (
 	"time"
 
 	mininghamster "github.com/svanas/go-mining-hamster"
+	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/passphrase"

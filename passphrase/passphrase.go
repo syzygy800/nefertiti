@@ -5,7 +5,7 @@ import (
 	"os"
 	"syscall"
 
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 )
 
 func Read(name string) ([]byte, error) {
@@ -19,7 +19,7 @@ func Read(name string) ([]byte, error) {
 	}
 	fmt.Fprintf(tty, "Please enter your %s: ", name)
 	var buf []byte
-	if buf, err = terminal.ReadPassword(int(fd)); err != nil {
+	if buf, err = term.ReadPassword(int(fd)); err != nil {
 		return nil, err
 	}
 	fmt.Fprintln(tty)

@@ -3,11 +3,10 @@ package command
 import (
 	"strings"
 
-	"bitbucket.com/svanas/cryptotrader/errors"
-
-	"bitbucket.com/svanas/cryptotrader/flag"
-	"bitbucket.com/svanas/cryptotrader/model"
-	"bitbucket.com/svanas/cryptotrader/notify"
+	"github.com/svanas/nefertiti/errors"
+	"github.com/svanas/nefertiti/flag"
+	"github.com/svanas/nefertiti/model"
+	"github.com/svanas/nefertiti/notify"
 )
 
 type (

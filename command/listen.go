@@ -13,10 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"bitbucket.com/svanas/cryptotrader/errors"
-
-	"bitbucket.com/svanas/cryptotrader/flag"
 	"github.com/gorilla/mux"
+	"github.com/svanas/nefertiti/errors"
+	"github.com/svanas/nefertiti/flag"
 )
 
 type (
