@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"math"
 
-	"bitbucket.com/svanas/cryptotrader/errors"
-	"bitbucket.com/svanas/cryptotrader/exchanges"
-	"bitbucket.com/svanas/cryptotrader/flag"
-	"bitbucket.com/svanas/cryptotrader/model"
-	"bitbucket.com/svanas/cryptotrader/precision"
-	"github.com/jedib0t/go-pretty/table"
+	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/svanas/nefertiti/errors"
+	"github.com/svanas/nefertiti/exchanges"
+	"github.com/svanas/nefertiti/flag"
+	"github.com/svanas/nefertiti/model"
+	"github.com/svanas/nefertiti/precision"
 )
 
 type (
@@ -206,8 +206,8 @@ func stopWithSize() (float64, error) {
 }
 
 // examples:
-// ./cryptotrader exit --exchange=GDAX --market=BTC-USDC --start-at-price=200000 --stop-at-price=240000 --start-with-size=0.015 --stop-with-size=0.020
-// ./cryptotrader exit --exchange=GDAX --market=BTC-USDC --start-at-price=100000 --stop-at-price=200000 --start-with-size=0.010 --stop-with-size=0.015
+// ./nefertiti exit --exchange=GDAX --market=BTC-USDC --start-at-price=200000 --stop-at-price=240000 --start-with-size=0.015 --stop-with-size=0.020
+// ./nefertiti exit --exchange=GDAX --market=BTC-USDC --start-at-price=100000 --stop-at-price=200000 --start-with-size=0.010 --stop-with-size=0.015
 func (c *ExitCommand) Run(args []string) int {
 	exchange, err := exchanges.GetExchange()
 	if err != nil {
@@ -255,7 +255,7 @@ func (c *ExitCommand) Run(args []string) int {
 }
 
 func (c *ExitCommand) Help() string {
-	return "Usage: ./cryptotrader exit"
+	return "Usage: ./nefertiti exit"
 }
 
 func (c *ExitCommand) Synopsis() string {
