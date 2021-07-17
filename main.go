@@ -17,7 +17,7 @@ import (
 
 const (
 	APP_NAME    = "nefertiti"
-	APP_VERSION = "0.0.161"
+	APP_VERSION = "0.0.162"
 )
 
 var (
@@ -94,6 +94,9 @@ func main() {
 		},
 		"listen": func() (cli.Command, error) {
 			return &command.ListenCommand{CommandMeta: &cm}, nil
+		},
+		"exit": func() (cli.Command, error) {
+			return &command.ExitCommand{CommandMeta: &cm}, nil
 		},
 	}
 

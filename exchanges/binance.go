@@ -489,12 +489,22 @@ func (self *Binance) sell(
 											0, model.MARKET,
 										)
 									} else {
+										limit := func() error {
+											_, _, err := self.Order(client,
+												model.SELL,
+												order.Symbol,
+												qty,
+												target,
+												model.LIMIT,
+											)
+											return err
+										}
 										if strategy == model.STRATEGY_STOP_LOSS {
 											// place an OCO (aka One-Cancels-the-Other) if we can
 											var symbol *exchange.Symbol
 											if symbol, err = binance.GetSymbol(client, order.Symbol); err == nil {
 												if symbol.OcoAllowed {
-													_, err = self.OCO(client,
+													if _, err = self.OCO(client,
 														order.Symbol,
 														qty,
 														target,
@@ -504,25 +514,15 @@ func (self *Binance) sell(
 															}
 															return pricing.Multiply(bought, stop, prec)
 														}(),
-													)
+													); err != nil {
+														err = limit()
+													}
 												} else {
-													_, _, err = self.Order(client,
-														model.SELL,
-														order.Symbol,
-														qty,
-														target,
-														model.LIMIT,
-													)
+													err = limit()
 												}
 											}
 										} else {
-											_, _, err = self.Order(client,
-												model.SELL,
-												order.Symbol,
-												qty,
-												target,
-												model.LIMIT,
-											)
+											err = limit()
 										}
 									}
 								}

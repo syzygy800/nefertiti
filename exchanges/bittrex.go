@@ -781,7 +781,13 @@ func (self *Bittrex) OCO(client interface{}, market1 string, size float64, price
 		Limit:        0,
 		TimeInForce:  exchange.IOC,
 	}, exchange.OrderId(id)); err != nil {
-		return nil, errors.Wrap(err, 1)
+		if strings.Contains(err.Error(), "INVALID_CANCEL_ORDER") {
+			// the above limit sell order probably got filled before we had the
+			// opportunity to create this conditional order. ignore this error.
+			log.Printf("[ERROR] %v", err)
+		} else {
+			return nil, errors.Wrap(err, 1)
+		}
 	}
 
 	var out []byte

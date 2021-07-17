@@ -148,6 +148,20 @@ func (self *Order) GetPrice() float64 {
 
 	out, err = strconv.ParseFloat(self.Price, 64)
 	if err == nil {
+		// if we don't have a price, divide cummulativeQuoteQty by executedQty
+		if out == 0 {
+			var (
+				cq float64 // cummulativeQuoteQty
+				eq float64 // executedQty
+			)
+			cq, err = strconv.ParseFloat(self.CummulativeQuoteQuantity, 64)
+			if err == nil && cq > 0 {
+				eq, err = strconv.ParseFloat(self.ExecutedQuantity, 64)
+				if err == nil && eq > 0 {
+					return cq / eq
+				}
+			}
+		}
 		return out
 	}
 
