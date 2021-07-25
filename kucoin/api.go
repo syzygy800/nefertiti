@@ -151,7 +151,7 @@ func (as *ApiService) Call(request *Request) (*ApiResponse, error) {
 		if err == nil {
 			break
 		} else {
-			if strings.Contains(err.Error(), "no such host") {
+			if strings.Contains(err.Error(), "no such host") || strings.Contains(err.Error(), "network is unreachable") {
 				attempts++
 				if attempts >= 10 {
 					return nil, err

@@ -47,7 +47,7 @@ func (c *AggCommand) Run(args []string) int {
 		return c.ReturnError(err)
 	}
 
-	agg, _, err := aggregation.Get(exchange, market, dip, pip, max, min, 4, flag.Strict(), flag.Sandbox())
+	agg, _, _, err := aggregation.Get(exchange, market, dip, pip, max, min, 2, flag.Strict(), flag.Sandbox())
 	if err != nil {
 		return c.ReturnError(err)
 	}

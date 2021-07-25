@@ -120,7 +120,7 @@ type Client struct {
 	httpClient *http.Client
 }
 
-func New(apiKey, apiSecret string, appId string) *Client {
+func New(apiKey, apiSecret, appId string) *Client {
 	return &Client{
 		apiKey,
 		apiSecret,

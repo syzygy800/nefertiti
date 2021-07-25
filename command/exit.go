@@ -124,7 +124,7 @@ func exit(
 
 		if !test {
 			if !hasLimitSell(currSize, currPrice) {
-				if _, _, err := exchange.Order(client, model.SELL, market, currSize, currPrice, model.LIMIT); err != nil {
+				if _, _, err := exchange.Order(client, model.SELL, market, currSize, currPrice, model.LIMIT, ""); err != nil {
 					return err
 				}
 			}

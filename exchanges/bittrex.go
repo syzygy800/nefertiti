@@ -200,7 +200,7 @@ func bittrexParseMarket(market string, version int) (base, quote string, err err
 	return "", "", errors.Errorf("cannot parse market %s", market)
 }
 
-func bittrexLogErr(err error, level int64, service model.Notify) {
+func bittrexLogError(err error, level int64, service model.Notify) {
 	pc, file, line, _ := runtime.Caller(1)
 	prefix := errors.FormatCaller(pc, file, line)
 
@@ -222,7 +222,7 @@ func bittrexLogErr(err error, level int64, service model.Notify) {
 	}
 }
 
-func bittrexLogErrEx(err error, order *exchange.Order, level int64, service model.Notify) {
+func bittrexLogErrorEx(err error, order *exchange.Order, level int64, service model.Notify) {
 	pc, file, line, _ := runtime.Caller(1)
 	prefix := errors.FormatCaller(pc, file, line)
 	msg := fmt.Sprintf("%s %v", prefix, err)
@@ -483,8 +483,9 @@ func (self *Bittrex) sell(
 					if strategy == model.STRATEGY_STOP_LOSS && order.Type() == exchange.MARKET {
 						if flag.Dca() {
 							var (
-								prec int
-								size float64 = 2.2 * order.QuantityFilled()
+								prec  int
+								limit float64 = 0
+								size  float64 = 2.2 * order.QuantityFilled()
 							)
 							if prec, err = self.GetSizePrec(client, order.MarketName()); err != nil {
 								return new, err
@@ -494,13 +495,18 @@ func (self *Bittrex) sell(
 									model.BUY,
 									order.MarketName(),
 									precision.Round(size, prec),
-									0, model.MARKET,
+									limit,
+									func() model.OrderType {
+										if limit > 0 {
+											return model.LIMIT
+										} else {
+											return model.MARKET
+										}
+									}(), "",
 								)
 								if err == nil {
 									break
-								} else if !strings.Contains(err.Error(), "SELF_TRADE") {
-									return new, err
-								} else {
+								} else if strings.Contains(err.Error(), "SELF_TRADE") && limit == 0 {
 									// get your open orders
 									var orders exchange.Orders
 									if orders, err = client.GetOpenOrders(order.MarketSymbol); err != nil {
@@ -519,13 +525,28 @@ func (self *Bittrex) sell(
 									sort.Slice(orders, func(i1, i2 int) bool {
 										return orders[i1].Price() < orders[i2].Price()
 									})
-									// add up the size of your lowest priced sell order
-									size = size + orders[0].Quantity
-									// cancel your lowest priced sell order
-									if _, err = bittrexCancelOrder(client, &orders[0]); err != nil {
-										return nil, err
+									// place limit buy order under your lowest priced sell order
+									if limit = pricing.Multiply(orders[0].Price(), 0.99, func() int {
+										prec, err := self.GetPricePrec(client, order.MarketName())
+										if err != nil {
+											return 8
+										}
+										return prec
+									}()); limit == 0 {
+										return new, err
 									}
-									// re-place your market buy order
+								} else if strings.Contains(err.Error(), "ORDERBOOK_DEPTH") {
+									// not enough liquidity to buy this order. lower this order size until we can.
+									fewer := size
+									for {
+										fewer = fewer * 0.99
+										if precision.Round(fewer, prec) < size {
+											break
+										}
+									}
+									size = fewer
+								} else {
+									return new, err
 								}
 							}
 						}
@@ -547,8 +568,7 @@ func (self *Bittrex) sell(
 					base, quote, err = model.ParseMarket(markets, order.MarketName())
 					// --- BEGIN --- svanas 2021-05-28 --- do not error on new listings ---
 					if err != nil {
-						markets, err = self.GetMarkets(false, sandbox)
-						if err == nil {
+						if markets, err = self.GetMarkets(false, sandbox); err == nil {
 							base, quote, err = model.ParseMarket(markets, order.MarketName())
 						}
 					}
@@ -566,6 +586,7 @@ func (self *Bittrex) sell(
 										qty,
 										tgt,
 										pricing.Multiply(bought, stop, prec),
+										fmt.Sprintf("%g", bought),
 									)
 								} else {
 									_, _, err = self.Order(
@@ -574,6 +595,7 @@ func (self *Bittrex) sell(
 										qty,
 										tgt,
 										model.LIMIT,
+										fmt.Sprintf("%g", bought),
 									)
 								}
 							}
@@ -652,19 +674,19 @@ func (self *Bittrex) Sell(
 			stop  multiplier.Mult
 		)
 		if level, err = notify.Level(); err != nil {
-			bittrexLogErr(err, level, service)
+			bittrexLogError(err, level, service)
 		} else if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
-			bittrexLogErr(err, level, service)
+			bittrexLogError(err, level, service)
 		} else if stop, err = multiplier.Stop(); err != nil {
-			bittrexLogErr(err, level, service)
+			bittrexLogError(err, level, service)
 		} else
 		// listens to the order history, look for newly filled orders, automatically place new LIMIT SELL orders.
 		if history, err = self.sell(client, strategy, mult, stop, hold, service, twitter, level, history, sandbox); err != nil {
-			bittrexLogErr(err, level, service)
+			bittrexLogError(err, level, service)
 		} else
 		// listens to the open orders, look for cancelled orders, send a notification.
 		if open, err = self.listen(client, service, level, open, history); err != nil {
-			bittrexLogErr(err, level, service)
+			bittrexLogError(err, level, service)
 		} else
 		// Effective 25-nov-2017, Bittrex will be removing orders that are older than 28 days. Here we will...
 		// 1. check for those every hour, and then
@@ -675,7 +697,7 @@ func (self *Bittrex) Sell(
 				if side != model.ORDER_SIDE_NONE {
 					var openedAt time.Time
 					if openedAt, err = time.Parse(exchange.TIME_FORMAT, order.CreatedAt); err != nil {
-						bittrexLogErrEx(errors.Wrap(err, 1), &order, level, service)
+						bittrexLogErrorEx(errors.Wrap(err, 1), &order, level, service)
 					} else if time.Since(openedAt).Hours() >= float64(reopenAfterDays*24) {
 						msg := fmt.Sprintf(
 							"Cancelling (and reopening) limit %s %s (market: %s, price: %g, qty: %f, opened at %s) because it is older than %d days.",
@@ -691,14 +713,14 @@ func (self *Bittrex) Sell(
 						var ocoTriggerPrice float64
 						if ocoTriggerPrice, err = bittrexCancelOrder(client, &order); err == nil {
 							if ocoTriggerPrice > 0 {
-								_, err = self.OCO(client, order.MarketName(), order.Quantity, order.Price(), ocoTriggerPrice)
+								_, err = self.OCO(client, order.MarketName(), order.Quantity, order.Price(), ocoTriggerPrice, "")
 							} else {
-								_, _, err = self.Order(client, side, order.MarketName(), order.Quantity, order.Price(), model.LIMIT)
+								_, _, err = self.Order(client, side, order.MarketName(), order.Quantity, order.Price(), model.LIMIT, "")
 							}
 						}
 
 						if err != nil {
-							bittrexLogErrEx(errors.Wrap(err, 1), &order, level, service)
+							bittrexLogErrorEx(errors.Wrap(err, 1), &order, level, service)
 						}
 					}
 				}
@@ -715,6 +737,7 @@ func (self *Bittrex) Order(
 	size float64,
 	price float64,
 	kind model.OrderType,
+	metadata string,
 ) (oid []byte, raw []byte, err error) {
 	bittrex, ok := client.(*exchange.Client)
 	if !ok {
@@ -753,17 +776,17 @@ func (self *Bittrex) Order(
 	return []byte(order.Id), out, nil
 }
 
-func (self *Bittrex) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType) ([]byte, error) {
+func (self *Bittrex) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType, metadata string) ([]byte, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (self *Bittrex) OCO(client interface{}, market1 string, size float64, price, stop float64) ([]byte, error) {
+func (self *Bittrex) OCO(client interface{}, market1 string, size float64, price, stop float64, metadata string) ([]byte, error) {
 	var (
 		err error
 		id  []byte
 	)
 
-	if id, _, err = self.Order(client, model.SELL, market1, size, price, model.LIMIT); err != nil {
+	if id, _, err = self.Order(client, model.SELL, market1, size, price, model.LIMIT, metadata); err != nil {
 		return nil, err
 	}
 
@@ -785,6 +808,7 @@ func (self *Bittrex) OCO(client interface{}, market1 string, size float64, price
 			// the above limit sell order probably got filled before we had the
 			// opportunity to create this conditional order. ignore this error.
 			log.Printf("[ERROR] %v", err)
+			return nil, nil
 		} else {
 			return nil, errors.Wrap(err, 1)
 		}
@@ -1090,7 +1114,7 @@ func (self *Bittrex) Buy(client interface{}, cancel bool, market1 string, calls 
 				market1,
 				size,
 				limit,
-				kind,
+				kind, "",
 			)
 			if err != nil {
 				// --- BEGIN --- svanas 2019-05-12 ------------------------------------
@@ -1118,7 +1142,26 @@ func (self *Bittrex) IsLeveragedToken(name string) bool {
 	return len(name) > 4 && (strings.HasSuffix(strings.ToUpper(name), "BEAR") || strings.HasSuffix(strings.ToUpper(name), "BULL"))
 }
 
-func NewBittrex() model.Exchange {
+func (self *Bittrex) HasAlgoOrder(client interface{}, market1 string) (bool, error) {
+	bittrex, ok := client.(*exchange.Client)
+	if !ok {
+		return false, errors.New("arg is not a valid v3 client")
+	}
+
+	market3, err := self.convertMarket(market1)
+	if err != nil {
+		return false, err
+	}
+
+	conditionals, err := bittrex.GetOpenConditionalOrders(market3)
+	if err != nil {
+		return false, errors.Wrap(err, 1)
+	}
+
+	return len(conditionals) > 0, nil
+}
+
+func newBittrex() model.Exchange {
 	return &Bittrex{
 		ExchangeInfo: &model.ExchangeInfo{
 			Code: "BTRX",

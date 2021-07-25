@@ -584,6 +584,7 @@ func (self *Bitstamp) Order(
 	size float64,
 	price float64,
 	kind model.OrderType,
+	metadata string,
 ) (oid []byte, raw []byte, err error) {
 	bitstamp, ok := client.(*exchange.Client)
 	if !ok {
@@ -609,11 +610,11 @@ func (self *Bitstamp) Order(
 	return []byte(order.Id), out, nil
 }
 
-func (self *Bitstamp) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType) ([]byte, error) {
+func (self *Bitstamp) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType, metadata string) ([]byte, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (self *Bitstamp) OCO(client interface{}, market string, size float64, price, stop float64) ([]byte, error) {
+func (self *Bitstamp) OCO(client interface{}, market string, size float64, price, stop float64, metadata string) ([]byte, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -723,7 +724,6 @@ func (self *Bitstamp) Aggregate(client, book interface{}, market string, agg flo
 			}
 			out = append(out, *entry)
 		}
-
 	}
 
 	return out, nil
@@ -947,7 +947,11 @@ func (self *Bitstamp) IsLeveragedToken(name string) bool {
 	return false
 }
 
-func NewBitstamp() model.Exchange {
+func (self *Bitstamp) HasAlgoOrder(client interface{}, market string) (bool, error) {
+	return false, nil
+}
+
+func newBitstamp() model.Exchange {
 	return &Bitstamp{
 		ExchangeInfo: &model.ExchangeInfo{
 			Code: "BITS",

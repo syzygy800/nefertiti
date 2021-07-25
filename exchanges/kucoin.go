@@ -98,7 +98,7 @@ func (self *Kucoin) error(err error, level int64, service model.Notify) {
 
 	msg := fmt.Sprintf("%s %v", prefix, err)
 
-	if strings.Contains(err.Error(), "no such host") {
+	if strings.Contains(err.Error(), "no such host") || strings.Contains(err.Error(), "network is unreachable") {
 		log.Printf("[ERROR] %s", msg)
 		return
 	}
@@ -476,7 +476,7 @@ func (self *Kucoin) sell(
 							_, _, err = self.Order(client,
 								model.BUY, symbol,
 								precision.Round(size, prec),
-								0, model.MARKET,
+								0, model.MARKET, "",
 							)
 						}
 						if err != nil {
@@ -537,6 +537,7 @@ func (self *Kucoin) sell(
 								symbol,
 								amount,
 								0, model.MARKET,
+								fmt.Sprintf("%g", bought),
 							)
 						} else {
 							if strategy == model.STRATEGY_STOP_LOSS {
@@ -545,6 +546,7 @@ func (self *Kucoin) sell(
 									amount,
 									pricing.Multiply(bought, stop, pp),
 									model.MARKET,
+									fmt.Sprintf("%g", bought),
 								)
 							} else {
 								_, _, err = self.Order(client,
@@ -553,6 +555,7 @@ func (self *Kucoin) sell(
 									amount,
 									pricing.Multiply(bought, mult, pp),
 									model.LIMIT,
+									fmt.Sprintf("%g", bought),
 								)
 							}
 						}
@@ -743,7 +746,7 @@ func (self *Kucoin) Sell(
 										model.SELL,
 										order.Symbol,
 										order.ParseSize(),
-										0, model.MARKET,
+										0, model.MARKET, "",
 									)
 								}
 							}
@@ -770,6 +773,7 @@ func (self *Kucoin) Order(
 	size float64,
 	price float64,
 	kind model.OrderType,
+	metadata string,
 ) (oid []byte, raw []byte, err error) {
 	var (
 		resp  *exchange.ApiResponse
@@ -805,7 +809,7 @@ func (self *Kucoin) Order(
 	return []byte(order.OrderId), raw, nil
 }
 
-func (self *Kucoin) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType) ([]byte, error) {
+func (self *Kucoin) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType, metadata string) ([]byte, error) {
 	var (
 		err   error
 		out   []byte
@@ -844,7 +848,7 @@ func (self *Kucoin) StopLoss(client interface{}, market string, size float64, pr
 	return out, nil
 }
 
-func (self *Kucoin) OCO(client interface{}, market string, size float64, price, stop float64) ([]byte, error) {
+func (self *Kucoin) OCO(client interface{}, market string, size float64, price, stop float64, metadata string) ([]byte, error) {
 	return nil, errors.New("Not implemented")
 }
 
@@ -1186,7 +1190,7 @@ func (self *Kucoin) Buy(client interface{}, cancel bool, market string, calls mo
 				market,
 				qty,
 				limit,
-				kind,
+				kind, "",
 			)
 			if err != nil {
 				return err
@@ -1201,7 +1205,11 @@ func (self *Kucoin) IsLeveragedToken(name string) bool {
 	return len(name) > 2 && (strings.HasSuffix(strings.ToUpper(name), "3L") || strings.HasSuffix(strings.ToUpper(name), "3S"))
 }
 
-func NewKucoin() model.Exchange {
+func (self *Kucoin) HasAlgoOrder(client interface{}, market string) (bool, error) {
+	return false, nil
+}
+
+func newKucoin() model.Exchange {
 	return &Kucoin{
 		ExchangeInfo: &model.ExchangeInfo{
 			Code: "KUCN",

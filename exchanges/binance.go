@@ -284,7 +284,7 @@ func (self *Binance) GetMarkets(cached, sandbox bool) ([]model.Market, error) {
 	return out, nil
 }
 
-func (self *Binance) GetMarketsEx(cached, sandbox bool, quotes []string) ([]model.Market, error) {
+func (self *Binance) getMarketsEx(cached, sandbox bool, quotes []string) ([]model.Market, error) {
 	markets, err := self.GetMarkets(cached, sandbox)
 
 	if err != nil {
@@ -368,7 +368,7 @@ func (self *Binance) sell(
 		new     []binance.Order
 		markets []model.Market
 	)
-	if markets, err = self.GetMarketsEx(true, sandbox, quotes); err != nil {
+	if markets, err = self.getMarketsEx(true, sandbox, quotes); err != nil {
 		return old, err
 	}
 	for _, market := range markets {
@@ -428,7 +428,7 @@ func (self *Binance) sell(
 										model.BUY,
 										order.Symbol,
 										precision.Round(size, prec),
-										0, model.MARKET,
+										0, model.MARKET, "",
 									)
 								}
 								if err != nil {
@@ -487,6 +487,7 @@ func (self *Binance) sell(
 											order.Symbol,
 											order.GetSize(),
 											0, model.MARKET,
+											fmt.Sprintf("%g", bought),
 										)
 									} else {
 										limit := func() error {
@@ -496,6 +497,7 @@ func (self *Binance) sell(
 												qty,
 												target,
 												model.LIMIT,
+												fmt.Sprintf("%g", bought),
 											)
 											return err
 										}
@@ -514,6 +516,7 @@ func (self *Binance) sell(
 															}
 															return pricing.Multiply(bought, stop, prec)
 														}(),
+														fmt.Sprintf("%g", bought),
 													); err != nil {
 														err = limit()
 													}
@@ -593,7 +596,7 @@ func (self *Binance) Sell(
 	} else {
 		flag.Set("quote", strings.Join(quotes, ","))
 	}
-	if markets, err = self.GetMarketsEx(true, sandbox, quotes); err != nil {
+	if markets, err = self.getMarketsEx(true, sandbox, quotes); err != nil {
 		return err
 	}
 	for _, market := range markets {
@@ -646,6 +649,7 @@ func (self *Binance) Order(
 	size float64,
 	price float64,
 	kind model.OrderType,
+	metadata string,
 ) (oid []byte, raw []byte, err error) {
 	binanceClient, ok := client.(*binance.Client)
 	if !ok {
@@ -655,7 +659,14 @@ func (self *Binance) Order(
 	service := binanceClient.NewCreateOrderService().
 		Symbol(market).
 		Quantity(size).
-		NewClientOrderID(binance.NewClientOrderID())
+		NewClientOrderID(func() string {
+			if metadata != "" {
+				if out, err := binance.NewClientOrderMetadata(metadata); err != nil {
+					return out
+				}
+			}
+			return binance.NewClientOrderID()
+		}())
 
 	if kind == model.MARKET {
 		service.Type(exchange.OrderTypeMarket)
@@ -682,7 +693,7 @@ func (self *Binance) Order(
 	return []byte(order.ClientOrderID), out, nil
 }
 
-func (self *Binance) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType) ([]byte, error) {
+func (self *Binance) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType, metadata string) ([]byte, error) {
 	var err error
 
 	binanceClient, ok := client.(*binance.Client)
@@ -695,7 +706,14 @@ func (self *Binance) StopLoss(client interface{}, market string, size float64, p
 		Side(exchange.SideTypeSell).
 		Quantity(size).
 		StopPrice(price).
-		NewClientOrderID(binance.NewClientOrderID())
+		NewClientOrderID(func() string {
+			if metadata != "" {
+				if out, err := binance.NewClientOrderMetadata(metadata); err != nil {
+					return out
+				}
+			}
+			return binance.NewClientOrderID()
+		}())
 
 	if kind == model.MARKET {
 		service.Type(exchange.OrderTypeStopLoss)
@@ -722,7 +740,7 @@ func (self *Binance) StopLoss(client interface{}, market string, size float64, p
 			self.warn(err)
 			// -1013 stop loss orders are not supported for this symbol
 			if kind != model.LIMIT {
-				return self.StopLoss(client, market, size, price, model.LIMIT)
+				return self.StopLoss(client, market, size, price, model.LIMIT, metadata)
 			}
 			// -2010 order would trigger immediately
 			if strings.Contains(err.Error(), "would trigger immediately") {
@@ -735,7 +753,7 @@ func (self *Binance) StopLoss(client interface{}, market string, size float64, p
 							break
 						}
 					}
-					return self.StopLoss(client, market, size, precision.Round(lower, prec), kind)
+					return self.StopLoss(client, market, size, precision.Round(lower, prec), kind, metadata)
 				}
 			}
 		}
@@ -751,11 +769,20 @@ func (self *Binance) StopLoss(client interface{}, market string, size float64, p
 	return out, nil
 }
 
-func (self *Binance) OCO(client interface{}, market string, size float64, price, stop float64) ([]byte, error) {
+func (self *Binance) OCO(client interface{}, market string, size float64, price, stop float64, metadata string) ([]byte, error) {
 	binanceClient, ok := client.(*binance.Client)
 	if !ok {
 		return nil, errors.New("invalid argument: client")
 	}
+
+	clientOrderID := func() string {
+		if metadata != "" {
+			if out, err := binance.NewClientOrderMetadata(metadata); err != nil {
+				return out
+			}
+		}
+		return binance.NewClientOrderID()
+	}()
 
 	svc := binanceClient.NewCreateOCOService().
 		Symbol(market).
@@ -763,8 +790,8 @@ func (self *Binance) OCO(client interface{}, market string, size float64, price,
 		Price(price).
 		StopPrice(stop).
 		Side(exchange.SideTypeSell).
-		StopClientOrderID(binance.NewClientOrderID()).
-		LimitClientOrderID(binance.NewClientOrderID())
+		StopClientOrderID(clientOrderID).
+		LimitClientOrderID(clientOrderID)
 
 	var (
 		err  error
@@ -777,7 +804,7 @@ func (self *Binance) OCO(client interface{}, market string, size float64, price,
 			// -2010 Filter failure: MAX_NUM_ALGO_ORDERS
 			if strings.Contains(err.Error(), "MAX_NUM_ALGO_ORDERS") {
 				var out []byte
-				if _, out, err = self.Order(client, model.SELL, market, size, price, model.LIMIT); err != nil {
+				if _, out, err = self.Order(client, model.SELL, market, size, price, model.LIMIT, metadata); err != nil {
 					return nil, err
 				}
 				return out, nil
@@ -1130,7 +1157,7 @@ func (self *Binance) Buy(client interface{}, cancel bool, market string, calls m
 				market,
 				qty,
 				limit,
-				kind,
+				kind, "",
 			)
 			if err != nil {
 				return err
@@ -1168,7 +1195,11 @@ func (self *Binance) IsLeveragedToken(name string) bool {
 		(len(name) > 4 && strings.HasSuffix(strings.ToUpper(name), "BULL"))
 }
 
-func NewBinance() model.Exchange {
+func (self *Binance) HasAlgoOrder(client interface{}, market string) (bool, error) {
+	return false, nil
+}
+
+func newBinance() model.Exchange {
 	return &Binance{
 		ExchangeInfo: &model.ExchangeInfo{
 			Code: "BINA",
@@ -1187,7 +1218,7 @@ func NewBinance() model.Exchange {
 	}
 }
 
-func NewBinanceUS() model.Exchange {
+func newBinanceUS() model.Exchange {
 	return &Binance{
 		ExchangeInfo: &model.ExchangeInfo{
 			Code: "BIUS",

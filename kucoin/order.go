@@ -63,7 +63,7 @@ type OrderModel struct {
 	Hidden        bool   `json:"hidden,omitempty"`
 	IceBerg       bool   `json:"iceberg,omitempty"`
 	VisibleSize   string `json:"visibleSize,omitempty"`
-	CancelAfter   uint64 `json:"cancelAfter,omitempty"`
+	CancelAfter   int64  `json:"cancelAfter,omitempty"`
 	Channel       string `json:"channel,omitempty"`
 	ClientOid     string `json:"clientOid,omitempty"`
 	Remark        string `json:"remark,omitempty"`

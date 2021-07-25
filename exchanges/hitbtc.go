@@ -372,6 +372,7 @@ func (self *HitBTC) sell(
 							self.GetMaxSize(client, base, quote, hold.HasMarket(new[i].Symbol), qty),
 							pricing.Multiply(price, mult, prec),
 							model.LIMIT,
+							fmt.Sprintf("%g", price),
 						)
 					}
 				}
@@ -472,6 +473,7 @@ func (self *HitBTC) Order(
 	size float64,
 	price float64,
 	kind model.OrderType,
+	metadata string,
 ) (oid []byte, raw []byte, err error) {
 	hitbtc, ok := client.(*exchange.HitBtc)
 	if !ok {
@@ -514,7 +516,7 @@ func (self *HitBTC) Order(
 	return []byte(order.ClientOrderId), out, nil
 }
 
-func (self *HitBTC) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType) ([]byte, error) {
+func (self *HitBTC) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType, metadata string) ([]byte, error) {
 	var err error
 
 	hitbtc, ok := client.(*exchange.HitBtc)
@@ -558,7 +560,7 @@ func (self *HitBTC) StopLoss(client interface{}, market string, size float64, pr
 	return out, nil
 }
 
-func (self *HitBTC) OCO(client interface{}, market string, size float64, price, stop float64) ([]byte, error) {
+func (self *HitBTC) OCO(client interface{}, market string, size float64, price, stop float64, metadata string) ([]byte, error) {
 	return nil, errors.New("Not implemented")
 }
 
@@ -815,7 +817,7 @@ func (self *HitBTC) Buy(client interface{}, cancel bool, market string, calls mo
 				market,
 				size,
 				limit,
-				kind,
+				kind, "",
 			)
 			if err != nil {
 				return err
@@ -830,7 +832,11 @@ func (self *HitBTC) IsLeveragedToken(name string) bool {
 	return false
 }
 
-func NewHitBTC() model.Exchange {
+func (self *HitBTC) HasAlgoOrder(client interface{}, market string) (bool, error) {
+	return false, nil
+}
+
+func newHitBTC() model.Exchange {
 	return &HitBTC{
 		ExchangeInfo: &model.ExchangeInfo{
 			Code: "HITB",

@@ -140,6 +140,15 @@ func buy(
 	}
 
 	for _, market := range enumerable {
+		// "algo" orders are stop-loss, take-profit, and OCO (aka one-cancels-the-other) orders
+		if hasAlgoOrder, _ := exchange.HasAlgoOrder(client, market); hasAlgoOrder {
+			log.Printf("[INFO] Ignoring %s because you have at least one \"algo\" order open on this market.\n", market)
+			if err = exchange.Cancel(client, market, model.BUY); err != nil {
+				log.Printf("[ERROR] Cannot cancel your open %s buy orders. %v\n", market, err)
+			}
+			continue
+		}
+
 		var (
 			ticker float64
 			stats  *model.Stats // 24-hour statistics
@@ -161,14 +170,16 @@ func buy(
 		var (
 			magg float64
 			mdip float64
+			mpip float64
 			mqty float64
 			mmin float64
 		)
 
 		magg = agg
 		mdip = dip
+		mpip = pip
 		if magg == 0 {
-			if magg, mdip, err = aggregation.GetEx(exchange, client, market, ticker, avg, dip, pip, max, min, int(top), strict); err != nil {
+			if magg, mdip, mpip, err = aggregation.GetEx(exchange, client, market, ticker, avg, dip, pip, max, min, int(top), strict); err != nil {
 				if errors.Is(err, aggregation.EOrderBookTooThin) {
 					if len(enumerable) > 1 {
 						report(err, market, nil, service, exchange)
@@ -218,7 +229,7 @@ func buy(
 		// ignore orders that are cheaper than ticker minus 30%
 		mmin = min
 		if mmin == 0 {
-			mmin = ticker - ((pip / 100) * ticker)
+			mmin = ticker - ((mpip / 100) * ticker)
 		}
 		if mmin > 0 {
 			i = 0
@@ -231,7 +242,7 @@ func buy(
 			}
 		}
 
-		// ignore orders that are more expensive than 24h high minus 5%
+		// ignore orders that are more expensive than 24h average minus 5%
 		if mdip > 0 {
 			i = 0
 			for i < len(book2) {

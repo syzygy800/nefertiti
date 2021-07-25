@@ -95,7 +95,7 @@ func (c *OrderCommand) Run(args []string) int {
 		market,
 		size,
 		price,
-		kind,
+		kind, "",
 	); err != nil {
 		return c.ReturnError(err)
 	}

@@ -17,7 +17,7 @@ func Round(input, agg float64) float64 {
 	return float64(int64(((input / agg) + 0.5))) * agg
 }
 
-// returns (agg, dip, error)
+// returns (agg, dip, pip, error)
 func Get(
 	exchange model.Exchange,
 	market string,
@@ -25,7 +25,7 @@ func Get(
 	max, min float64,
 	top int,
 	strict, sandbox bool,
-) (float64, float64, error) {
+) (float64, float64, float64, error) {
 	var (
 		err    error
 		client interface{}
@@ -35,25 +35,25 @@ func Get(
 	)
 
 	if client, err = exchange.GetClient(model.BOOK, sandbox); err != nil {
-		return 0, dip, err
+		return 0, dip, pip, err
 	}
 
 	if ticker, err = exchange.GetTicker(client, market); err != nil {
-		return 0, dip, err
+		return 0, dip, pip, err
 	}
 
 	if stats, err = exchange.Get24h(client, market); err != nil {
-		return 0, dip, err
+		return 0, dip, pip, err
 	}
 
 	if avg, err = stats.Avg(exchange, sandbox); err != nil {
-		return 0, dip, err
+		return 0, dip, pip, err
 	}
 
 	return GetEx(exchange, client, market, ticker, avg, dip, pip, max, min, top, strict)
 }
 
-// returns (agg, dip, error)
+// returns (agg, dip, pip, error)
 func GetEx(
 	exchange model.Exchange,
 	client interface{},
@@ -64,7 +64,7 @@ func GetEx(
 	max, min float64,
 	top int,
 	strict bool,
-) (float64, float64, error) {
+) (float64, float64, float64, error) {
 	var (
 		err  error
 		out  float64
@@ -79,32 +79,54 @@ func GetEx(
 	}
 
 	if book, err = exchange.GetBook(client, market, model.BOOK_SIDE_BIDS); err != nil {
-		return 0, dip, err
+		return 0, dip, pip, err
 	}
 
 	for cnt := Max(top, 4); cnt > 0; cnt-- {
 		if out, err = get(exchange, client, market, ticker, avg, book, dip, pip, max, min, cnt); err == nil {
-			return out, dip, err
+			return out, dip, pip, err
 		}
 	}
 
-	if !strict && dip > 0 {
-		n := math.Round(dip) - 1
-		if n > 0 {
-			for i := n; i >= 0; i-- {
-				for cnt := Max(top, 4); cnt >= top; cnt-- {
-					if out, err = get(exchange, client, market, ticker, avg, book, i, pip, max, min, cnt); err == nil {
-						return out, i, err
-					}
+	if !strict {
+		x := math.Round(dip)
+		y := math.Round(pip)
+		// if we cannot find any supports, upper your pip setting one percentage at a time until (a) we can, or (b) 50%
+		if y < 50 {
+			y++
+			for y <= 50 {
+				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, top); err == nil {
+					return out, x, y, err
 				}
+				y++
+			}
+		}
+		// if we cannot find any supports, lower your dip setting one percentage at a time until (a) we can, or (b) 0%
+		if x > 0 {
+			x--
+			for x >= 0 {
+				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, top); err == nil {
+					return out, x, y, err
+				}
+				x--
+			}
+		}
+		// if we cannot find any supports, upper your pip setting one percentage at a time until (a) we can, or (b) 100%
+		if y < 100 {
+			y++
+			for y <= 100 {
+				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, top); err == nil {
+					return out, x, y, err
+				}
+				y++
 			}
 		}
 	}
 
 	if err != nil {
-		return 0, dip, err
+		return 0, dip, pip, err
 	} else {
-		return 0, dip, EOrderBookTooThin
+		return 0, dip, pip, EOrderBookTooThin
 	}
 }
 
@@ -136,7 +158,7 @@ func get(
 
 	for {
 		for _, step := range steps {
-			agg = precision.Round(agg*step, 8)
+			agg = precision.Round((agg * step), 8)
 
 			var book2 model.Book
 			if book2, err = exchange.Aggregate(client, book1, market, agg); err != nil {

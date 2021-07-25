@@ -589,6 +589,7 @@ func (self *Gdax) Order(
 	size float64,
 	price float64,
 	kind model.OrderType,
+	metadata string,
 ) (oid []byte, raw []byte, err error) {
 	gdaxClient, ok := client.(*gdax.Client)
 	if !ok {
@@ -616,7 +617,7 @@ func (self *Gdax) Order(
 	return []byte(saved.ID), out, nil
 }
 
-func (self *Gdax) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType) ([]byte, error) {
+func (self *Gdax) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType, metadata string) ([]byte, error) {
 	var err error
 
 	gdaxClient, ok := client.(*gdax.Client)
@@ -661,7 +662,7 @@ func (self *Gdax) StopLoss(client interface{}, market string, size float64, pric
 	return out, nil
 }
 
-func (self *Gdax) OCO(client interface{}, market string, size float64, price, stop float64) ([]byte, error) {
+func (self *Gdax) OCO(client interface{}, market string, size float64, price, stop float64, metadata string) ([]byte, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -832,27 +833,27 @@ func (self *Gdax) Get24h(client interface{}, market string) (*model.Stats, error
 func (self *Gdax) GetPricePrec(client interface{}, market string) (int, error) {
 	products, err := self.getProducts(client, true)
 	if err != nil {
-		return 0, err
+		return 8, err
 	}
 	for _, p := range products {
 		if p.ID == market {
-			return precision.Parse(p.QuoteIncrement, 0), nil
+			return precision.Parse(p.QuoteIncrement, 8), nil
 		}
 	}
-	return 0, errors.Errorf("market %s not found", market)
+	return 8, errors.Errorf("market %s not found", market)
 }
 
 func (self *Gdax) GetSizePrec(client interface{}, market string) (int, error) {
 	products, err := self.getProducts(client, true)
 	if err != nil {
-		return 8, err
+		return 0, err
 	}
 	for _, p := range products {
 		if p.ID == market {
-			return precision.Parse(p.BaseIncrement, 8), nil
+			return precision.Parse(p.BaseIncrement, 0), nil
 		}
 	}
-	return 8, errors.Errorf("market %s not found", market)
+	return 0, errors.Errorf("market %s not found", market)
 }
 
 func (self *Gdax) GetMaxSize(client interface{}, base, quote string, hold bool, def float64) float64 {
@@ -984,7 +985,11 @@ func (self *Gdax) IsLeveragedToken(name string) bool {
 	return false
 }
 
-func NewGdax() model.Exchange {
+func (self *Gdax) HasAlgoOrder(client interface{}, market string) (bool, error) {
+	return false, nil
+}
+
+func newGdax() model.Exchange {
 	return &Gdax{
 		ExchangeInfo: &model.ExchangeInfo{
 			Code: "GDAX",

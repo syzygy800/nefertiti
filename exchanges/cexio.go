@@ -401,6 +401,7 @@ func (self *CexIo) Order(
 	size float64,
 	price float64,
 	kind model.OrderType,
+	metadata string,
 ) (oid []byte, raw []byte, err error) {
 	cexio, ok := client.(*exchange.Client)
 	if !ok {
@@ -432,11 +433,11 @@ func (self *CexIo) Order(
 	return []byte(order.Id), out, nil
 }
 
-func (self *CexIo) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType) ([]byte, error) {
+func (self *CexIo) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType, metadata string) ([]byte, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (self *CexIo) OCO(client interface{}, market string, size float64, price, stop float64) ([]byte, error) {
+func (self *CexIo) OCO(client interface{}, market string, size float64, price, stop float64, metadata string) ([]byte, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -798,7 +799,11 @@ func (self *CexIo) IsLeveragedToken(name string) bool {
 	return false
 }
 
-func NewCexIo() model.Exchange {
+func (self *CexIo) HasAlgoOrder(client interface{}, market string) (bool, error) {
+	return false, nil
+}
+
+func newCexIo() model.Exchange {
 	return &CexIo{
 		ExchangeInfo: &model.ExchangeInfo{
 			Code: "CXIO",

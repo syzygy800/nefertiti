@@ -41,9 +41,9 @@ type Exchange interface {
 	GetMarkets(cached, sandbox bool) ([]Market, error)
 	FormatMarket(base, quote string) string
 	Sell(stategy Strategy, hold Markets, sandbox, tweet, debug bool, success OnSuccess) error
-	Order(client interface{}, side OrderSide, market string, size float64, price float64, kind OrderType) (oid []byte, raw []byte, err error)
-	StopLoss(client interface{}, market string, size float64, price float64, kind OrderType) ([]byte, error)
-	OCO(client interface{}, market string, size float64, price, stop float64) ([]byte, error)
+	Order(client interface{}, side OrderSide, market string, size float64, price float64, kind OrderType, metadata string) (oid []byte, raw []byte, err error)
+	StopLoss(client interface{}, market string, size float64, price float64, kind OrderType, metadata string) ([]byte, error)
+	OCO(client interface{}, market string, size float64, price, stop float64, metadata string) ([]byte, error)
 	GetClosed(client interface{}, market string) (Orders, error)
 	GetOpened(client interface{}, market string) (Orders, error)
 	GetBook(client interface{}, market string, side BookSide) (interface{}, error)
@@ -56,4 +56,5 @@ type Exchange interface {
 	Cancel(client interface{}, market string, side OrderSide) error
 	Buy(client interface{}, cancel bool, market string, calls Calls, size, deviation float64, kind OrderType) error
 	IsLeveragedToken(name string) bool
+	HasAlgoOrder(client interface{}, market string) (bool, error)
 }

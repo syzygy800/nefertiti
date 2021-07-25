@@ -160,9 +160,14 @@ func (order *Order) QuantityFilled() float64 {
 func (order *Order) Price() float64 {
 	if order.Limit > 0 {
 		return order.Limit
-	} else {
-		return order.Proceeds / order.QuantityFilled()
 	}
+	if order.Proceeds > 0 {
+		quantityFilled := order.QuantityFilled()
+		if quantityFilled > 0 {
+			return order.Proceeds / quantityFilled
+		}
+	}
+	return 0
 }
 
 //------------------------ Orders -------------------------

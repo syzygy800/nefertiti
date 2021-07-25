@@ -539,6 +539,7 @@ func (self *CryptoDotCom) Order(
 	size float64,
 	price float64,
 	kind model.OrderType,
+	metadata string,
 ) (oid []byte, raw []byte, err error) {
 	var out int64
 
@@ -568,11 +569,11 @@ func (self *CryptoDotCom) Order(
 	return []byte(strconv.FormatInt(out, 10)), nil, nil
 }
 
-func (self *CryptoDotCom) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType) ([]byte, error) {
+func (self *CryptoDotCom) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType, metadata string) ([]byte, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (self *CryptoDotCom) OCO(client interface{}, market string, size float64, price, stop float64) ([]byte, error) {
+func (self *CryptoDotCom) OCO(client interface{}, market string, size float64, price, stop float64, metadata string) ([]byte, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -844,7 +845,11 @@ func (self *CryptoDotCom) IsLeveragedToken(name string) bool {
 	return false
 }
 
-func NewCryptoDotCom() model.Exchange {
+func (self *CryptoDotCom) HasAlgoOrder(client interface{}, market string) (bool, error) {
+	return false, nil
+}
+
+func newCryptoDotCom() model.Exchange {
 	return &CryptoDotCom{
 		ExchangeInfo: &model.ExchangeInfo{
 			Code: "CRO",

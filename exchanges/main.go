@@ -20,15 +20,16 @@ func (exchanges *Exchanges) findByName(name string) model.Exchange {
 
 func New() *Exchanges {
 	var out Exchanges
-	out = append(out, NewGdax())
-	out = append(out, NewBittrex())
-	out = append(out, NewBitstamp())
-	out = append(out, NewCexIo())
-	out = append(out, NewBinance())
-	out = append(out, NewBinanceUS())
-	out = append(out, NewHitBTC())
-	out = append(out, NewKucoin())
-	out = append(out, NewCryptoDotCom())
+	out = append(out, newGdax())
+	out = append(out, newBittrex())
+	out = append(out, newBitstamp())
+	out = append(out, newCexIo())
+	out = append(out, newBinance())
+	out = append(out, newBinanceUS())
+	out = append(out, newHitBTC())
+	out = append(out, newKucoin())
+	out = append(out, newCryptoDotCom())
+	out = append(out, newWoo())
 	return &out
 }
 
