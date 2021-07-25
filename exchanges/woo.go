@@ -8,15 +8,15 @@ import (
 	"runtime"
 	"strconv"
 
-	"bitbucket.com/svanas/cryptotrader/aggregation"
-	"bitbucket.com/svanas/cryptotrader/errors"
-	"bitbucket.com/svanas/cryptotrader/flag"
-	"bitbucket.com/svanas/cryptotrader/model"
-	"bitbucket.com/svanas/cryptotrader/multiplier"
-	"bitbucket.com/svanas/cryptotrader/notify"
-	"bitbucket.com/svanas/cryptotrader/precision"
-	"bitbucket.com/svanas/cryptotrader/pricing"
-	exchange "bitbucket.com/svanas/cryptotrader/woo"
+	"github.com/svanas/nefertiti/aggregation"
+	"github.com/svanas/nefertiti/errors"
+	"github.com/svanas/nefertiti/flag"
+	"github.com/svanas/nefertiti/model"
+	"github.com/svanas/nefertiti/multiplier"
+	"github.com/svanas/nefertiti/notify"
+	"github.com/svanas/nefertiti/precision"
+	"github.com/svanas/nefertiti/pricing"
+	exchange "github.com/svanas/nefertiti/woo"
 )
 
 type Woo struct {
