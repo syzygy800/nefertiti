@@ -54,17 +54,17 @@ func (self *Listings) getClient(exchange model.Exchange, sandbox bool) (interfac
 func (self *Listings) GetMarkets(
 	exchange model.Exchange,
 	quote model.Assets,
-	btc_volume_min,
-	btc_pump_max float64,
+	btcVolumeMin float64,
 	valid time.Duration,
 	sandbox, debug bool,
+	ignore []string,
 ) (model.Markets, error) {
 	// get the (non-cached) markets
 	var (
 		err error
 		new []model.Market
 	)
-	if new, err = exchange.GetMarkets(false, sandbox); err != nil {
+	if new, err = exchange.GetMarkets(false, sandbox, ignore); err != nil {
 		return nil, err
 	}
 

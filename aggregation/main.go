@@ -82,7 +82,7 @@ func GetEx(
 		return 0, dip, pip, err
 	}
 
-	for cnt := Max(top, 4); cnt > 0; cnt-- {
+	for cnt := Max(top, 4); cnt >= top; cnt-- {
 		if out, err = get(exchange, client, market, ticker, avg, book, dip, pip, max, min, cnt); err == nil {
 			return out, dip, pip, err
 		}
@@ -92,33 +92,30 @@ func GetEx(
 		x := math.Round(dip)
 		y := math.Round(pip)
 		// if we cannot find any supports, upper your pip setting one percentage at a time until (a) we can, or (b) 50%
-		if y < 50 {
+		for y < 50 {
 			y++
-			for y <= 50 {
-				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, top); err == nil {
+			for cnt := Max(top, 4); cnt >= top; cnt-- {
+				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, cnt); err == nil {
 					return out, x, y, err
 				}
-				y++
 			}
 		}
 		// if we cannot find any supports, lower your dip setting one percentage at a time until (a) we can, or (b) 0%
-		if x > 0 {
+		for x > 0 {
 			x--
-			for x >= 0 {
-				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, top); err == nil {
+			for cnt := Max(top, 4); cnt >= top; cnt-- {
+				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, cnt); err == nil {
 					return out, x, y, err
 				}
-				x--
 			}
 		}
 		// if we cannot find any supports, upper your pip setting one percentage at a time until (a) we can, or (b) 100%
-		if y < 100 {
+		for y < 100 {
 			y++
-			for y <= 100 {
-				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, top); err == nil {
+			for cnt := Max(top, 4); cnt >= top; cnt-- {
+				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, cnt); err == nil {
 					return out, x, y, err
 				}
-				y++
 			}
 		}
 	}
@@ -176,7 +173,7 @@ func get(
 			}
 
 			// ignore orders that are cheaper than ticker minus 30%
-			if min == 0 {
+			if min == 0 && pip < 100 {
 				min = ticker - ((pip / 100) * ticker)
 			}
 			if min > 0 {

@@ -5,43 +5,24 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 )
 
 const (
-	REQUESTS_PER_SECOND = 30 // 1800 reqs per minute
+	requestsPerSecond = 30 // 1800 reqs per minute
 )
 
 var (
 	lastRequest   time.Time
-	BeforeRequest func(client *ApiService, request *Request) error = nil
-	AfterRequest  func()                                           = nil
+	BeforeRequest func(client *ApiService, request *Request, rps float64) error = nil
+	AfterRequest  func()                                                        = nil
 )
 
-func RequestsPerSecond(request *Request) float64 {
-	if request.Path == "/api/v1/fills" { // list fills
-		return 10 // 100 reqs per 10 seconds
-	}
-	if request.Path == "/api/v1/limit/fills" { // recent fills
-		return 10 // 100 reqs per 10 seconds
-	}
-	if request.Path == "/api/v1/orders" { // list orders
-		return 20 // 200 reqs per 10 seconds
-	}
-	if request.Path == "/api/v1/limit/orders" { // recent orders
-		return 20 // 200 reqs per 10 seconds
-	}
-	if request.Path == "/api/v1/stop-order" { // stop-loss orders
-		return 20 // 200 reqs per 10 seconds
-	}
-	return REQUESTS_PER_SECOND
-}
-
 func init() {
-	BeforeRequest = func(client *ApiService, request *Request) error {
+	BeforeRequest = func(client *ApiService, request *Request, rps float64) error {
 		elapsed := time.Since(lastRequest)
-		rps := RequestsPerSecond(request)
 		if elapsed.Seconds() < (float64(1) / rps) {
 			time.Sleep(time.Duration((float64(time.Second) / rps)) - elapsed)
 		}
@@ -114,9 +95,9 @@ func NewApiService(opts ...ApiServiceOption) *ApiService {
 }
 
 // Call calls the API by passing *Request and returns *ApiResponse.
-func (as *ApiService) Call(request *Request) (*ApiResponse, error) {
+func (as *ApiService) call(request *Request, rps float64) (*ApiResponse, error) {
 	// --- BEGIN --- svanas 2019-02-13 --- satisfy the rate limiter -------
-	if err := BeforeRequest(as, request); err != nil {
+	if err := BeforeRequest(as, request, rps); err != nil {
 		return nil, err
 	}
 	defer func() {
@@ -144,26 +125,26 @@ func (as *ApiService) Call(request *Request) (*ApiResponse, error) {
 		err error
 		rsp *Response
 	)
-	// --- BEGIN --- svanas 2020-02-18 --- no such host? wait a few secs, then try again. for a max of 10 attempts ----
-	attempts := 0
-	for {
+	// --- BEGIN --- svanas 2020-02-18 --- no such host? wait a sec, then try again. for a max of 10 attempts ----
+	for i := 0; i < 10; i++ {
 		rsp, err = as.requester.Request(request, request.Timeout)
+		// --- BEGIN --- svanas 2021-07-31 --- rate limit is exceeded? cool down for 10 seconds ------------------
+		if rsp != nil && rsp.StatusCode == http.StatusTooManyRequests {
+			time.Sleep(10 * time.Second)
+		} else
+		// ---- END ---- svanas 2021-07-31 -----------------------------------------------------------------------
 		if err == nil {
 			break
+		} else if strings.Contains(err.Error(), "no such host") || strings.Contains(err.Error(), "network is unreachable") {
+			time.Sleep(time.Second)
 		} else {
-			if strings.Contains(err.Error(), "no such host") || strings.Contains(err.Error(), "network is unreachable") {
-				attempts++
-				if attempts >= 10 {
-					return nil, err
-				} else {
-					time.Sleep(6 * time.Second)
-				}
-			} else {
-				return nil, err
-			}
+			return nil, err
 		}
 	}
-	// ---- END ---- svanas 2020-02-18 --------------------------------------------------------------------------------
+	// ---- END ---- svanas 2020-02-18 ---------------------------------------------------------------------------
+	if err != nil {
+		return nil, err
+	}
 
 	ar := &ApiResponse{response: rsp}
 	if err := rsp.ReadJsonBody(ar); err != nil {

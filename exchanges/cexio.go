@@ -142,7 +142,7 @@ func (self *CexIo) GetClient(permission model.Permission, sandbox bool) (interfa
 	return exchange.New(apiKey, apiSecret, userName), nil
 }
 
-func (self *CexIo) GetMarkets(cached, sandbox bool) ([]model.Market, error) {
+func (self *CexIo) GetMarkets(cached, sandbox bool, ignore []string) ([]model.Market, error) {
 	var (
 		err error
 		out []model.Market
@@ -257,7 +257,7 @@ func (self *CexIo) sell(
 	var err error
 
 	var markets []model.Market
-	if markets, err = self.GetMarkets(true, sandbox); err != nil {
+	if markets, err = self.GetMarkets(true, sandbox, nil); err != nil {
 		return old, err
 	}
 

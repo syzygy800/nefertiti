@@ -66,10 +66,11 @@ func (self *Volume) GetOrderType() model.OrderType {
 func (self *Volume) get(
 	exchange model.Exchange,
 	quote model.Assets,
-	btc_volume_min,
+	btcVolumeMin,
 	diff float64,
 	valid time.Duration,
 	sandbox, debug bool,
+	ignore []string,
 ) error {
 	var err error
 
@@ -88,7 +89,7 @@ func (self *Volume) get(
 	for _, token := range top {
 		if token.Buy(diff) {
 			var markets []model.Market
-			if markets, err = exchange.GetMarkets(true, sandbox); err != nil {
+			if markets, err = exchange.GetMarkets(true, sandbox, ignore); err != nil {
 				return err
 			}
 			for _, asset := range quote {
@@ -126,10 +127,10 @@ func (self *Volume) get(
 func (self *Volume) GetMarkets(
 	exchange model.Exchange,
 	quote model.Assets,
-	btc_volume_min,
-	btc_pump_max float64,
+	btcVolumeMin float64,
 	valid time.Duration,
 	sandbox, debug bool,
+	ignore []string,
 ) (model.Markets, error) {
 	var (
 		err error
@@ -148,7 +149,7 @@ func (self *Volume) GetMarkets(
 		}
 	}
 
-	if err = self.get(exchange, quote, btc_volume_min, diff, valid, sandbox, debug); err != nil {
+	if err = self.get(exchange, quote, btcVolumeMin, diff, valid, sandbox, debug, ignore); err != nil {
 		return nil, err
 	}
 

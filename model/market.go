@@ -15,20 +15,25 @@ type Market struct {
 	Quote string `json:"-"`
 }
 
+// get the --market=X arg. verifies whether the specific market exists (or not).
 func GetMarket(exchange Exchange) (string, error) {
 	arg := flag.Get("market")
 	if !arg.Exists {
 		return "", errors.New("missing argument: market")
 	}
 
-	markets, err := exchange.GetMarkets(true, flag.Sandbox())
+	market := arg.String()
+	if market == "all" {
+		return market, nil
+	}
+
+	markets, err := exchange.GetMarkets(true, flag.Sandbox(), flag.Get("ignore").Split())
 	if err != nil {
 		return "", err
 	}
 
-	market := arg.String()
 	if !HasMarket(markets, market) {
-		markets, err = exchange.GetMarkets(false, flag.Sandbox())
+		markets, err = exchange.GetMarkets(false, flag.Sandbox(), flag.Get("ignore").Split())
 		if err != nil {
 			return "", err
 		}

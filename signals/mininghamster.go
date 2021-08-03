@@ -93,10 +93,10 @@ func (self *MiningHamster) GetOrderType() model.OrderType {
 func (self *MiningHamster) GetMarkets(
 	exchange model.Exchange,
 	quote model.Assets,
-	btc_volume_min,
-	btc_pump_max float64,
+	btcVolumeMin float64,
 	valid time.Duration,
 	sandbox, debug bool,
+	ignore []string,
 ) (model.Markets, error) {
 	var (
 		err error

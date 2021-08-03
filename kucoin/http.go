@@ -2,7 +2,6 @@ package kucoin
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -125,9 +124,6 @@ type BasicRequester struct {
 // Request makes a http request.
 func (br *BasicRequester) Request(request *Request, timeout time.Duration) (*Response, error) {
 	cli := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{},
-		},
 		Timeout: timeout,
 	}
 

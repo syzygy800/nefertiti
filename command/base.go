@@ -21,7 +21,7 @@ func (c *BaseCommand) Run(args []string) int {
 		return c.ReturnError(err)
 	}
 
-	markets, err := exchange.GetMarkets(true, flag.Sandbox())
+	markets, err := exchange.GetMarkets(true, flag.Sandbox(), flag.Get("ignore").Split())
 	if err != nil {
 		return c.ReturnError(err)
 	}

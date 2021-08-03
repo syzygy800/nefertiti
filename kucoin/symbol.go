@@ -34,7 +34,7 @@ func (as *ApiService) Symbols(market string) (*ApiResponse, error) {
 		p["market"] = market
 	}
 	req := NewRequest(http.MethodGet, "/api/v1/symbols", p)
-	return as.Call(req)
+	return as.call(req, requestsPerSecond)
 }
 
 // A TickerLevel1Model represents ticker include only the inside (i.e. best) bid and ask data, last price and last trade size.
@@ -52,7 +52,7 @@ type TickerLevel1Model struct {
 // TickerLevel1 returns the ticker include only the inside (i.e. best) bid and ask data, last price and last trade size.
 func (as *ApiService) TickerLevel1(symbol string) (*ApiResponse, error) {
 	req := NewRequest(http.MethodGet, "/api/v1/market/orderbook/level1", map[string]string{"symbol": symbol})
-	return as.Call(req)
+	return as.call(req, requestsPerSecond)
 }
 
 // A TickerModel represents a market ticker for all trading pairs in the market (including 24h volume).
@@ -87,7 +87,7 @@ type TickersResponseModel struct {
 // Tickers returns all tickers as TickersResponseModel for all trading pairs in the market (including 24h volume).
 func (as *ApiService) Tickers() (*ApiResponse, error) {
 	req := NewRequest(http.MethodGet, "/api/v1/market/allTickers", nil)
-	return as.Call(req)
+	return as.call(req, requestsPerSecond)
 }
 
 // A Stats24hrModel represents 24 hr stats for the symbol.
@@ -108,13 +108,13 @@ type Stats24hrModel struct {
 // Stats24hr returns 24 hr stats for the symbol. volume is in base currency units. open, high, low are in quote currency units.
 func (as *ApiService) Stats24hr(symbol string) (*ApiResponse, error) {
 	req := NewRequest(http.MethodGet, "/api/v1/market/stats", map[string]string{"symbol": symbol})
-	return as.Call(req)
+	return as.call(req, requestsPerSecond)
 }
 
 // Markets returns the transaction currencies for the entire trading market.
 func (as *ApiService) Markets() (*ApiResponse, error) {
 	req := NewRequest(http.MethodGet, "/api/v1/markets", nil)
-	return as.Call(req)
+	return as.call(req, requestsPerSecond)
 }
 
 // BookEntry = bid or ask info with price and size
@@ -142,5 +142,5 @@ type FullOrderBookModel struct {
 // AggregatedFullOrderBook returns a list of open orders(aggregated) for a symbol.
 func (as *ApiService) AggregatedFullOrderBook(symbol string) (*ApiResponse, error) {
 	req := NewRequest(http.MethodGet, "/api/v3/market/orderbook/level2", map[string]string{"symbol": symbol})
-	return as.Call(req)
+	return as.call(req, 10)
 }

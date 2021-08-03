@@ -3,6 +3,7 @@ package binance
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	exchange "github.com/adshao/go-binance/v2"
@@ -129,7 +130,12 @@ var (
 
 func New(baseURL, apiKey, apiSecret string) *Client {
 	client := exchange.NewClient(apiKey, apiSecret)
+
 	client.BaseURL = baseURL
+	client.HTTPClient = &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
 	if SERVER_TIME_OFFSET == 0 || time.Since(SERVER_TIME_UPDATE).Minutes() > 15 {
 		if offset, err := client.NewSetServerTimeService().Do(context.Background()); err == nil {
 			SERVER_TIME_OFFSET = offset
@@ -138,5 +144,6 @@ func New(baseURL, apiKey, apiSecret string) *Client {
 	} else {
 		client.TimeOffset = SERVER_TIME_OFFSET
 	}
+
 	return &Client{inner: client}
 }

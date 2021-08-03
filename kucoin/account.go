@@ -28,11 +28,5 @@ func (as *ApiService) Accounts(currency, typo string) (*ApiResponse, error) {
 		p["type"] = typo
 	}
 	req := NewRequest(http.MethodGet, "/api/v1/accounts", p)
-	return as.Call(req)
-}
-
-// Account returns an account when you know the accountId.
-func (as *ApiService) Account(accountId string) (*ApiResponse, error) {
-	req := NewRequest(http.MethodGet, "/api/v1/accounts/"+accountId, nil)
-	return as.Call(req)
+	return as.call(req, requestsPerSecond)
 }

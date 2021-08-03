@@ -34,7 +34,7 @@ const (
 )
 
 func init() {
-	exchange.BeforeRequest = func(client *exchange.ApiService, request *exchange.Request) error {
+	exchange.BeforeRequest = func(client *exchange.ApiService, request *exchange.Request, rps float64) error {
 		var err error
 
 		if kucoinMutex == nil {
@@ -54,7 +54,6 @@ func init() {
 
 		if lastRequest != nil {
 			elapsed := time.Since(*lastRequest)
-			rps := exchange.RequestsPerSecond(request)
 			if elapsed.Seconds() < (float64(1) / rps) {
 				sleep := time.Duration((float64(time.Second) / rps)) - elapsed
 				if flag.Debug() {
@@ -296,7 +295,7 @@ func (self *Kucoin) GetClient(permission model.Permission, sandbox bool) (interf
 	), nil
 }
 
-func (self *Kucoin) GetMarkets(cached, sandbox bool) ([]model.Market, error) {
+func (self *Kucoin) GetMarkets(cached, sandbox bool, ignore []string) ([]model.Market, error) {
 	var out []model.Market
 
 	client := exchange.NewApiService(
@@ -363,7 +362,7 @@ func (self *Kucoin) sell(
 
 	// get the markets
 	var markets []model.Market
-	if markets, err = self.GetMarkets(false, sandbox); err != nil {
+	if markets, err = self.GetMarkets(false, sandbox, nil); err != nil {
 		return old, err
 	}
 
@@ -537,7 +536,7 @@ func (self *Kucoin) sell(
 								symbol,
 								amount,
 								0, model.MARKET,
-								fmt.Sprintf("%g", bought),
+								strconv.FormatFloat(bought, 'f', -1, 64),
 							)
 						} else {
 							if strategy == model.STRATEGY_STOP_LOSS {
@@ -546,7 +545,7 @@ func (self *Kucoin) sell(
 									amount,
 									pricing.Multiply(bought, stop, pp),
 									model.MARKET,
-									fmt.Sprintf("%g", bought),
+									strconv.FormatFloat(bought, 'f', -1, 64),
 								)
 							} else {
 								_, _, err = self.Order(client,
@@ -555,7 +554,7 @@ func (self *Kucoin) sell(
 									amount,
 									pricing.Multiply(bought, mult, pp),
 									model.LIMIT,
-									fmt.Sprintf("%g", bought),
+									strconv.FormatFloat(bought, 'f', -1, 64),
 								)
 							}
 						}

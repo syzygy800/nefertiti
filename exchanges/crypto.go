@@ -239,7 +239,7 @@ func (self *CryptoDotCom) GetClient(permission model.Permission, sandbox bool) (
 	return exchange.New(apiKey, apiSecret), nil
 }
 
-func (self *CryptoDotCom) GetMarkets(cached, sandbox bool) ([]model.Market, error) {
+func (self *CryptoDotCom) GetMarkets(cached, sandbox bool, ignore []string) ([]model.Market, error) {
 	var out []model.Market
 
 	symbols, err := self.getSymbols(exchange.New("", ""), nil, cached)
@@ -479,7 +479,7 @@ func (self *CryptoDotCom) Sell(
 
 	flg := flag.Get("quote")
 	if flg.Exists {
-		quotes = flg.Split(",")
+		quotes = flg.Split()
 	} else {
 		flag.Set("quote", strings.Join(quotes, ","))
 	}

@@ -121,7 +121,7 @@ func buy(
 		enumerable []string       // the markets we enumerate/buy
 	)
 
-	if available, err = exchange.GetMarkets(!wildcard, sandbox); err != nil {
+	if available, err = exchange.GetMarkets(!wildcard, sandbox, flag.Get("ignore").Split()); err != nil {
 		return "", err
 	}
 
@@ -228,7 +228,7 @@ func buy(
 
 		// ignore orders that are cheaper than ticker minus 30%
 		mmin = min
-		if mmin == 0 {
+		if mmin == 0 && mpip < 100 {
 			mmin = ticker - ((mpip / 100) * ticker)
 		}
 		if mmin > 0 {
@@ -409,8 +409,7 @@ func buySignalsEvery(
 	valid time.Duration,
 	calls model.Calls,
 	min float64,
-	btc_volume_min,
-	btc_pump_max float64,
+	btcVolumeMin,
 	deviation float64,
 	service model.Notify,
 	sandbox bool,
@@ -418,7 +417,7 @@ func buySignalsEvery(
 ) {
 	var err error
 	for range time.Tick(d) {
-		calls, err = buySignals(channel, client, exchange, quote, price, valid, calls, min, btc_volume_min, btc_pump_max, deviation, service, sandbox, false, debug)
+		calls, err = buySignals(channel, client, exchange, quote, price, valid, calls, min, btcVolumeMin, deviation, service, sandbox, false, debug)
 		if err != nil {
 			report(err, "", channel, service, exchange)
 		}
@@ -434,8 +433,7 @@ func buySignals(
 	valid time.Duration,
 	old model.Calls,
 	min float64,
-	btc_volume_min,
-	btc_pump_max float64,
+	btcVolumeMin,
 	deviation float64,
 	service model.Notify,
 	sandbox bool,
@@ -452,19 +450,19 @@ func buySignals(
 	}
 
 	var all []model.Market
-	if all, err = exchange.GetMarkets(true, sandbox); err != nil {
+	if all, err = exchange.GetMarkets(true, sandbox, flag.Get("ignore").Split()); err != nil {
 		return old, err
 	}
 
 	var markets []string
-	if markets, err = channel.GetMarkets(exchange, quote, btc_volume_min, btc_pump_max, valid, sandbox, debug); err != nil {
+	if markets, err = channel.GetMarkets(exchange, quote, btcVolumeMin, valid, sandbox, debug, flag.Get("ignore").Split()); err != nil {
 		return old, err
 	}
 
 	// --- BEGIN --- svanas 2018-12-06 --- allow for signals to buy new listings ---
 	for _, market := range markets {
 		if !model.HasMarket(all, market) {
-			if all, err = exchange.GetMarkets(false, sandbox); err != nil {
+			if all, err = exchange.GetMarkets(false, sandbox, flag.Get("ignore").Split()); err != nil {
 				return old, err
 			}
 			break
@@ -474,7 +472,7 @@ func buySignals(
 
 	for _, market := range markets {
 		if model.HasMarket(all, market) {
-			if flag.Get("ignore").Contains(",", "leveraged") {
+			if flag.Get("ignore").Contains("leveraged") {
 				var base string
 				if base, err = model.GetBaseCurr(all, market); err == nil {
 					if exchange.IsLeveragedToken(base) {
@@ -538,7 +536,7 @@ func buySignals(
 				}
 			}
 
-			if btc_volume_min > 0 {
+			if btcVolumeMin > 0 {
 				for i := range calls {
 					if !calls[i].Skip {
 						var stats *model.Stats
@@ -546,8 +544,8 @@ func buySignals(
 							return old, err
 						}
 						if stats.BtcVolume > 0 {
-							if stats.BtcVolume < btc_volume_min {
-								log.Printf("[INFO] Ignoring %s because volume %.2f is lower than %.2f %s\n", calls[i].Market, stats.BtcVolume, btc_volume_min, quote)
+							if stats.BtcVolume < btcVolumeMin {
+								log.Printf("[INFO] Ignoring %s because volume %.2f is lower than %.2f %s\n", calls[i].Market, stats.BtcVolume, btcVolumeMin, quote)
 								calls[i].Skip = true
 							}
 						}
@@ -688,17 +686,12 @@ func (c *BuyCommand) Run(args []string) int {
 			duration2 = time.Duration(valid * float64(time.Hour))
 		}
 		// --volume=x
-		var btc_volume_min float64 = 0
+		var btcVolumeMin float64 = 0
 		flg = flag.Get("volume")
 		if flg.Exists {
-			if btc_volume_min, err = flg.Float64(); err != nil {
+			if btcVolumeMin, err = flg.Float64(); err != nil {
 				return c.ReturnError(errors.Errorf("volume %v is invalid", flg))
 			}
-		}
-		// --ignore-pump
-		var btc_pump_max float64 = 1.05
-		if flag.Exists("ignore-pump") {
-			btc_pump_max = 0
 		}
 		// --devn=x
 		var deviation float64 = 1.0
@@ -710,8 +703,8 @@ func (c *BuyCommand) Run(args []string) int {
 		}
 		// initial run starts here
 		var calls model.Calls
-		if calls, err = buySignals(channel, client, exchange, flag.Get("quote").Split(","), price, duration2, nil, min, btc_volume_min, btc_pump_max, deviation, service, flag.Sandbox(), test, flag.Debug()); err != nil {
-			if flag.Exists("ignore-error") {
+		if calls, err = buySignals(channel, client, exchange, flag.Get("quote").Split(), price, duration2, nil, min, btcVolumeMin, deviation, service, flag.Sandbox(), test, flag.Debug()); err != nil {
+			if flag.Get("ignore").Contains("error") {
 				log.Printf("[ERROR] %v\n", err)
 			} else {
 				return c.ReturnError(err)
@@ -745,7 +738,7 @@ func (c *BuyCommand) Run(args []string) int {
 					if err = c.ReturnSuccess(); err != nil {
 						return c.ReturnError(err)
 					}
-					buySignalsEvery(duration1, channel, client, exchange, flag.Get("quote").Split(","), price, duration2, calls, min, btc_volume_min, btc_pump_max, deviation, service, flag.Sandbox(), flag.Debug())
+					buySignalsEvery(duration1, channel, client, exchange, flag.Get("quote").Split(), price, duration2, calls, min, btcVolumeMin, deviation, service, flag.Sandbox(), flag.Debug())
 				}
 			}
 		}
@@ -753,7 +746,7 @@ func (c *BuyCommand) Run(args []string) int {
 	}
 
 	var all []model.Market
-	if all, err = exchange.GetMarkets(true, flag.Sandbox()); err != nil {
+	if all, err = exchange.GetMarkets(true, flag.Sandbox(), flag.Get("ignore").Split()); err != nil {
 		return c.ReturnError(err)
 	}
 
@@ -761,7 +754,7 @@ func (c *BuyCommand) Run(args []string) int {
 	if !flg.Exists {
 		return c.ReturnError(errors.New("missing argument: market"))
 	}
-	splitted := flg.Split(",")
+	splitted := flg.Split()
 	if len(splitted) > 1 || (len(splitted) == 1 && splitted[0] != "all") {
 		for _, market := range splitted {
 			if !model.HasMarket(all, market) {
@@ -770,7 +763,7 @@ func (c *BuyCommand) Run(args []string) int {
 		}
 	}
 
-	hold := flag.Get("hold").Split(",")
+	hold := flag.Get("hold").Split()
 	if len(hold) > 0 && hold[0] != "" {
 		for _, market := range hold {
 			if market != "" && !model.HasMarket(all, market) {
@@ -846,7 +839,7 @@ func (c *BuyCommand) Run(args []string) int {
 	}
 
 	if _, err = buy(client, exchange, splitted, hold, agg, size, dip, pip, mult, dist, top, max, min, price, service, flag.Strict(), flag.Sandbox(), test, flag.Debug()); err != nil {
-		if flag.Exists("ignore-error") {
+		if flag.Get("ignore").Contains("error") {
 			log.Printf("[ERROR] %v\n", err)
 		} else {
 			return c.ReturnError(err)

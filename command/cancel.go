@@ -16,37 +16,46 @@ type (
 )
 
 func (c *CancelCommand) Run(args []string) int {
-	var (
-		err error
-		flg *flag.Flag
-	)
-
-	var exchange model.Exchange
-	if exchange, err = exchanges.GetExchange(); err != nil {
+	exchange, err := exchanges.GetExchange()
+	if err != nil {
 		return c.ReturnError(err)
 	}
 
-	var market string
-	if market, err = model.GetMarket(exchange); err != nil {
+	market, err := model.GetMarket(exchange)
+	if err != nil {
 		return c.ReturnError(err)
 	}
 
-	flg = flag.Get("side")
-	if !flg.Exists {
+	arg := flag.Get("side")
+	if !arg.Exists {
 		return c.ReturnError(errors.New("missing argument: side"))
 	}
-	side := model.NewOrderSide(flg.String())
+	side := model.NewOrderSide(arg.String())
 	if side == model.ORDER_SIDE_NONE {
-		return c.ReturnError(errors.Errorf("side %v is invalid", flg))
+		return c.ReturnError(errors.Errorf("side %v is invalid", arg))
 	}
 
-	var client interface{}
-	if client, err = exchange.GetClient(model.PRIVATE, flag.Sandbox()); err != nil {
+	client, err := exchange.GetClient(model.PRIVATE, flag.Sandbox())
+	if err != nil {
 		return c.ReturnError(err)
 	}
 
-	if err = exchange.Cancel(client, market, side); err != nil {
+	if market != "all" {
+		if err = exchange.Cancel(client, market, side); err != nil {
+			return c.ReturnError(err)
+		}
+		return 0
+	}
+
+	markets, err := exchange.GetMarkets(true, flag.Sandbox(), flag.Get("ignore").Split())
+	if err != nil {
 		return c.ReturnError(err)
+	}
+
+	for _, market := range markets {
+		if err = exchange.Cancel(client, market.Name, side); err != nil {
+			return c.ReturnError(err)
+		}
 	}
 
 	return 0

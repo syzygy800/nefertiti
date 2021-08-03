@@ -189,7 +189,7 @@ func (self *Gdax) getProducts(client interface{}, cached bool) ([]exchange.Produ
 	return self.products, nil
 }
 
-func (self *Gdax) GetMarkets(cached, sandbox bool) ([]model.Market, error) {
+func (self *Gdax) GetMarkets(cached, sandbox bool, ignore []string) ([]model.Market, error) {
 	var out []model.Market
 
 	products, err := self.getProducts(gdax.New(sandbox), cached)
@@ -238,7 +238,7 @@ func (self *Gdax) sell(
 	}
 
 	var markets []model.Market
-	if markets, err = self.GetMarkets(true, sandbox); err != nil {
+	if markets, err = self.GetMarkets(true, sandbox, nil); err != nil {
 		return err
 	}
 
@@ -371,7 +371,7 @@ func (self *Gdax) sell(
 								quote string
 							)
 							if base, quote, err = model.ParseMarket(markets, msg.ProductID); err != nil {
-								if markets, err = self.GetMarkets(false, sandbox); err == nil {
+								if markets, err = self.GetMarkets(false, sandbox, nil); err == nil {
 									base, quote, err = model.ParseMarket(markets, msg.ProductID)
 								}
 								if err != nil {

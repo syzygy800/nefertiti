@@ -65,11 +65,11 @@ func (fills FillsModel) IndexOfOrderId(orderId string) int {
 func (as *ApiService) Fills(params map[string]string, pagination *PaginationParam) (*ApiResponse, error) {
 	pagination.ReadParam(params)
 	req := NewRequest(http.MethodGet, "/api/v1/fills", params)
-	return as.Call(req)
+	return as.call(req, 3)
 }
 
 // RecentFills returns the recent fills of the latest transactions within 24 hours.
 func (as *ApiService) RecentFills() (*ApiResponse, error) {
 	req := NewRequest(http.MethodGet, "/api/v1/limit/fills", nil)
-	return as.Call(req)
+	return as.call(req, 3)
 }

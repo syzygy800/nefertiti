@@ -104,7 +104,7 @@ func (self *Woo) GetClient(permission model.Permission, sandbox bool) (interface
 	return exchange.New(self.getBaseURL(sandbox), apiKey, apiSecret), nil
 }
 
-func (self *Woo) GetMarkets(cached, sandbox bool) ([]model.Market, error) {
+func (self *Woo) GetMarkets(cached, sandbox bool, ignore []string) ([]model.Market, error) {
 	var out []model.Market
 
 	symbols, err := self.getSymbols(exchange.New(self.getBaseURL(sandbox), "", ""), cached)

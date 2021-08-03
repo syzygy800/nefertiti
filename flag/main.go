@@ -25,12 +25,20 @@ func (self *Flag) String() string {
 	return self.value
 }
 
-func (self *Flag) Split(sep string) []string {
+func (self *Flag) Split() []string {
+	return self.SplitEx(",")
+}
+
+func (self *Flag) SplitEx(sep string) []string {
 	return strings.Split(self.value, sep)
 }
 
-func (self *Flag) Contains(sep, value string) bool {
-	for _, sub := range self.Split(sep) {
+func (self *Flag) Contains(value string) bool {
+	return self.ContainsEx(",", value)
+}
+
+func (self *Flag) ContainsEx(sep, value string) bool {
+	for _, sub := range self.SplitEx(sep) {
 		if strings.EqualFold(sub, value) {
 			return true
 		}

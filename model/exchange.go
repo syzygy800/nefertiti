@@ -38,7 +38,7 @@ func (info *ExchangeInfo) Equals(name string) bool {
 type Exchange interface {
 	GetInfo() *ExchangeInfo
 	GetClient(permission Permission, sandbox bool) (interface{}, error)
-	GetMarkets(cached, sandbox bool) ([]Market, error)
+	GetMarkets(cached, sandbox bool, ignore []string) ([]Market, error)
 	FormatMarket(base, quote string) string
 	Sell(stategy Strategy, hold Markets, sandbox, tweet, debug bool, success OnSuccess) error
 	Order(client interface{}, side OrderSide, market string, size float64, price float64, kind OrderType, metadata string) (oid []byte, raw []byte, err error)

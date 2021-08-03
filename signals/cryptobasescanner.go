@@ -107,7 +107,7 @@ func (self *CryptoBase) GetCrackedAt() (*time.Time, error) {
 	return &out, nil
 }
 
-func (self *CryptoBase) Buy(exchange model.Exchange, algorithm CryptoBaseScannerAlgo, btc_volume_min, success_ratio float64, sandbox, debug bool) (bool, error) {
+func (self *CryptoBase) Buy(exchange model.Exchange, algorithm CryptoBaseScannerAlgo, btcVolumeMin, successRatio float64, sandbox, debug bool) (bool, error) {
 	market := self.Market(exchange)
 
 	medianDrop, err := self.MarketStats.medianDrop(algorithm)
@@ -117,18 +117,18 @@ func (self *CryptoBase) Buy(exchange model.Exchange, algorithm CryptoBaseScanner
 
 	if medianDrop < 0 && medianDrop > -100 {
 		if self.LatestBase.CurrentDrop < medianDrop {
-			if self.BtcVolume < btc_volume_min {
-				log.Printf("[INFO] Ignoring %s because volume %f is lower than %.2f BTC\n", market, self.BtcVolume, btc_volume_min)
+			if self.BtcVolume < btcVolumeMin {
+				log.Printf("[INFO] Ignoring %s because volume %f is lower than %.2f BTC\n", market, self.BtcVolume, btcVolumeMin)
 				return false, nil
 			}
 
-			if success_ratio > 0 {
+			if successRatio > 0 {
 				ratio, err := self.MarketStats.ratio(algorithm)
 				if err != nil {
 					return false, errors.Errorf("%v. Market: %s", err, market)
 				}
-				if ratio < success_ratio {
-					log.Printf("[INFO] Ignoring %s because success ratio %f is lower than %.2f\n", market, ratio, success_ratio)
+				if ratio < successRatio {
+					log.Printf("[INFO] Ignoring %s because success ratio %f is lower than %.2f\n", market, ratio, successRatio)
 					return false, nil
 				}
 			}
@@ -175,8 +175,8 @@ func (self *CryptoBaseScanner) get(
 	exchange model.Exchange,
 	quote model.Assets,
 	algorithm CryptoBaseScannerAlgo,
-	btc_volume_min,
-	success_ratio float64,
+	btcVolumeMin,
+	successRatio float64,
 	validity time.Duration,
 	sandbox, debug bool,
 ) error {
@@ -231,7 +231,7 @@ func (self *CryptoBaseScanner) get(
 		if exchange.GetInfo().Equals(base.ExchangeName) {
 			if quote.HasAsset(base.QuoteCurrency) {
 				var buy bool
-				if buy, err = base.Buy(exchange, algorithm, btc_volume_min, success_ratio, sandbox, debug); err != nil {
+				if buy, err = base.Buy(exchange, algorithm, btcVolumeMin, successRatio, sandbox, debug); err != nil {
 					log.Printf("[ERROR] %v\n", err)
 				} else {
 					if buy {
@@ -295,10 +295,10 @@ func (self *CryptoBaseScanner) GetOrderType() model.OrderType {
 func (self *CryptoBaseScanner) GetMarkets(
 	exchange model.Exchange,
 	quote model.Assets,
-	btc_volume_min,
-	btc_pump_max float64,
+	btcVolumeMin float64,
 	valid time.Duration,
 	sandbox, debug bool,
+	ignore []string,
 ) (model.Markets, error) {
 	var (
 		err error
@@ -324,7 +324,7 @@ func (self *CryptoBaseScanner) GetMarkets(
 		}
 	}
 
-	if err = self.get(exchange, quote, algo, btc_volume_min, success_ratio, valid, sandbox, debug); err != nil {
+	if err = self.get(exchange, quote, algo, btcVolumeMin, success_ratio, valid, sandbox, debug); err != nil {
 		return nil, err
 	}
 

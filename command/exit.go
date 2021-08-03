@@ -63,7 +63,7 @@ func exit(
 		return false
 	}
 
-	markets, err := exchange.GetMarkets(true, false)
+	markets, err := exchange.GetMarkets(true, flag.Sandbox(), flag.Get("ignore").Split())
 	if err != nil {
 		return err
 	}

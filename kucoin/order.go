@@ -14,13 +14,13 @@ type CreateOrderResultModel struct {
 // CreateOrder places a new order.
 func (as *ApiService) CreateOrder(params map[string]string) (*ApiResponse, error) {
 	req := NewRequest(http.MethodPost, "/api/v1/orders", params)
-	return as.Call(req)
+	return as.call(req, 15)
 }
 
 // CreateStopOrder places a new stop-order.
 func (as *ApiService) CreateStopOrder(params map[string]string) (*ApiResponse, error) {
 	req := NewRequest(http.MethodPost, "/api/v1/stop-order", params)
-	return as.Call(req)
+	return as.call(req, 15)
 }
 
 // A CancelOrderResultModel represents the result of CancelOrder().
@@ -31,13 +31,13 @@ type CancelOrderResultModel struct {
 // CancelOrder cancels a previously placed order.
 func (as *ApiService) CancelOrder(orderId string) (*ApiResponse, error) {
 	req := NewRequest(http.MethodDelete, "/api/v1/orders/"+orderId, nil)
-	return as.Call(req)
+	return as.call(req, 20)
 }
 
 // CancelStopOrder cancels a previously placed stop-order.
 func (as *ApiService) CancelStopOrder(orderId string) (*ApiResponse, error) {
 	req := NewRequest(http.MethodDelete, "/api/v1/stop-order/"+orderId, nil)
-	return as.Call(req)
+	return as.call(req, 20)
 }
 
 // An OrderModel represents an order.
@@ -135,30 +135,30 @@ func (orders OrdersModel) IndexOfId(Id string) int {
 func (as *ApiService) Orders(params map[string]string, pagination *PaginationParam) (*ApiResponse, error) {
 	pagination.ReadParam(params)
 	req := NewRequest(http.MethodGet, "/api/v1/orders", params)
-	return as.Call(req)
+	return as.call(req, 10)
 }
 
 // StopOrders returns a list your current stop-orders.
 func (as *ApiService) StopOrders(params map[string]string, pagination *PaginationParam) (*ApiResponse, error) {
 	pagination.ReadParam(params)
 	req := NewRequest(http.MethodGet, "/api/v1/stop-order", params)
-	return as.Call(req)
+	return as.call(req, 10)
 }
 
 // Order returns a single order by order id.
 func (as *ApiService) Order(orderId string) (*ApiResponse, error) {
 	req := NewRequest(http.MethodGet, "/api/v1/orders/"+orderId, nil)
-	return as.Call(req)
+	return as.call(req, requestsPerSecond)
 }
 
 // StopOrder returns a single order by stop-order id.
 func (as *ApiService) StopOrder(orderId string) (*ApiResponse, error) {
 	req := NewRequest(http.MethodGet, "/api/v1/stop-order/"+orderId, nil)
-	return as.Call(req)
+	return as.call(req, requestsPerSecond)
 }
 
 // RecentOrders returns the recent orders of the latest transactions within 24 hours.
 func (as *ApiService) RecentOrders() (*ApiResponse, error) {
 	req := NewRequest(http.MethodGet, "/api/v1/limit/orders", nil)
-	return as.Call(req)
+	return as.call(req, requestsPerSecond)
 }

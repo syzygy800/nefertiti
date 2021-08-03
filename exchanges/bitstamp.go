@@ -136,7 +136,7 @@ func (self *Bitstamp) GetClient(permission model.Permission, sandbox bool) (inte
 	return exchange.New(apiKey, apiSecret), nil
 }
 
-func (self *Bitstamp) GetMarkets(cached, sandbox bool) ([]model.Market, error) {
+func (self *Bitstamp) GetMarkets(cached, sandbox bool, ignore []string) ([]model.Market, error) {
 	var out []model.Market
 
 	markets, err := exchange.GetMarkets(exchange.New("", ""), cached)
@@ -240,7 +240,7 @@ func (self *Bitstamp) sell(
 		markets []model.Market
 	)
 
-	if markets, err = self.GetMarkets(true, sandbox); err != nil {
+	if markets, err = self.GetMarkets(true, sandbox, nil); err != nil {
 		return old, err
 	}
 

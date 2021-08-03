@@ -36,11 +36,11 @@ func (c *SellCommand) Run(args []string) int {
 	}
 
 	var all []model.Market
-	if all, err = exchange.GetMarkets(true, flag.Sandbox()); err != nil {
+	if all, err = exchange.GetMarkets(true, flag.Sandbox(), flag.Get("ignore").Split()); err != nil {
 		return c.ReturnError(err)
 	}
 
-	hold := flag.Get("hold").Split(",")
+	hold := flag.Get("hold").Split()
 	if len(hold) > 0 && hold[0] != "" {
 		for _, market := range hold {
 			if market != "" && !model.HasMarket(all, market) {

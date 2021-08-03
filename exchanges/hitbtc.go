@@ -189,7 +189,7 @@ func (self *HitBTC) GetClient(permission model.Permission, sandbox bool) (interf
 	return exchange.New(apiKey, apiSecret), nil
 }
 
-func (self *HitBTC) GetMarkets(cached, sandbox bool) ([]model.Market, error) {
+func (self *HitBTC) GetMarkets(cached, sandbox bool, ignore []string) ([]model.Market, error) {
 	var (
 		err error
 		out []model.Market
@@ -299,7 +299,7 @@ func (self *HitBTC) sell(
 
 	// get the markets
 	var markets []model.Market
-	if markets, err = self.GetMarkets(false, sandbox); err != nil {
+	if markets, err = self.GetMarkets(false, sandbox, nil); err != nil {
 		return old, err
 	}
 
@@ -372,7 +372,7 @@ func (self *HitBTC) sell(
 							self.GetMaxSize(client, base, quote, hold.HasMarket(new[i].Symbol), qty),
 							pricing.Multiply(price, mult, prec),
 							model.LIMIT,
-							fmt.Sprintf("%g", price),
+							strconv.FormatFloat(price, 'f', -1, 64),
 						)
 					}
 				}

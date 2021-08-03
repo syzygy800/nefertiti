@@ -57,6 +57,9 @@ func (client *Client) do(req *http.Request) ([]byte, error) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
+		if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+			return nil, errors.New(resp.Status)
+		}
 		return nil, err
 	}
 
