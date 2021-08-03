@@ -4,7 +4,7 @@ go 1.16
 
 require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
-	github.com/adshao/go-binance/v2 v2.3.0
+	github.com/adshao/go-binance/v2 v2.3.1
 	github.com/alexflint/go-filemutex v1.1.0
 	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
@@ -21,11 +21,12 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
 	github.com/jedib0t/go-pretty/v6 v6.2.4
-	github.com/kr/pretty v0.2.1 // indirect
+	github.com/kr/pretty v0.3.0 // indirect
 	github.com/mattn/go-isatty v0.0.13 // indirect
 	github.com/mitchellh/cli v1.1.2
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/posener/complete v1.2.3 // indirect
+	github.com/rogpeppe/go-internal v1.8.0 // indirect
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/stretchr/testify v1.7.0 // indirect
 	github.com/svanas/go-coinbasepro v0.0.0-20210706151135-3ac97ad777f0
