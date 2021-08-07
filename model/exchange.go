@@ -2,6 +2,8 @@ package model
 
 import (
 	"strings"
+
+	"github.com/svanas/nefertiti/multiplier"
 )
 
 type Permission int

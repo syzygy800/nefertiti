@@ -6,6 +6,7 @@ import (
 
 	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
+	"github.com/svanas/nefertiti/multiplier"
 	"github.com/svanas/nefertiti/precision"
 )
 
