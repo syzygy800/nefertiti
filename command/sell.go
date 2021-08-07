@@ -49,6 +49,15 @@ func (c *SellCommand) Run(args []string) int {
 		}
 	}
 
+	earn := flag.Get("earn").Split()
+	if len(earn) > 0 && earn[0] != "" {
+		for _, market := range earn {
+			if market != "" && !model.HasMarket(all, market) {
+				return c.ReturnError(fmt.Errorf("market %s does not exist", market))
+			}
+		}
+	}
+
 	var level int64 = notify.LEVEL_DEFAULT
 	if level, err = notify.Level(); err != nil {
 		return c.ReturnError(err)
@@ -72,7 +81,7 @@ func (c *SellCommand) Run(args []string) int {
 		return nil
 	}
 
-	if err = exchange.Sell(strategy, hold, flag.Sandbox(), flag.Exists("tweet"), flag.Debug(), success); err != nil {
+	if err = exchange.Sell(strategy, hold, earn, flag.Sandbox(), flag.Exists("tweet"), flag.Debug(), success); err != nil {
 		return c.ReturnError(err)
 	}
 
@@ -92,6 +101,8 @@ Options:
   --notify   = [0|1|2|3] (see below)
   --mult     = multiplier, for example: 1.05 (aka 5 percent, optional)
   --hold     = name of the market not to sell, for example: BTC-EUR (optional)
+  --earn     = name of the market where you want to sell only enough of the
+               base asset at "mult" to break even; hold the rest (optional)
   --sweep    = if you have dust, try and sell it (optional, defaults to false)
 
 Notify:

@@ -388,7 +388,7 @@ func (self *Binance) sell(
 	strategy model.Strategy,
 	quotes []string,
 	mult, stop multiplier.Mult,
-	hold model.Markets,
+	hold, earn model.Markets,
 	service model.Notify,
 	twitter *notify.TwitterKeys,
 	level int64,
@@ -504,7 +504,7 @@ func (self *Binance) sell(
 						quote string
 					)
 					if base, quote, err = model.ParseMarket(markets, order.Symbol); err == nil {
-						qty := self.GetMaxSize(client, base, quote, hold.HasMarket(order.Symbol), order.GetSize())
+						qty := self.GetMaxSize(client, base, quote, hold.HasMarket(order.Symbol), earn.HasMarket(order.Symbol), order.GetSize(), mult)
 						if qty > 0 {
 							var prec int
 							if prec, err = self.GetPricePrec(client, order.Symbol); err == nil {
@@ -581,7 +581,7 @@ func (self *Binance) sell(
 
 func (self *Binance) Sell(
 	strategy model.Strategy,
-	hold model.Markets,
+	hold, earn model.Markets,
 	sandbox, tweet, debug bool,
 	success model.OnSuccess,
 ) error {
@@ -668,7 +668,7 @@ func (self *Binance) Sell(
 			self.notify(err, level, service)
 		} else
 		// listen to the filled orders, look for newly filled orders, automatically place new sell orders.
-		if filled, err = self.sell(client, strategy, quotes, mult, stop, hold, service, twitter, level, filled, sandbox, debug); err != nil {
+		if filled, err = self.sell(client, strategy, quotes, mult, stop, hold, earn, service, twitter, level, filled, sandbox, debug); err != nil {
 			self.notify(err, level, service)
 		} else
 		// listen to the open orders, send a notification on newly opened orders.
@@ -984,38 +984,42 @@ func (self *Binance) GetTicker(client interface{}, market string) (float64, erro
 }
 
 func (self *Binance) Get24h(client interface{}, market string) (*model.Stats, error) {
-	var err error
-
 	binanceClient, ok := client.(*binance.Client)
 	if !ok {
 		return nil, errors.New("invalid argument: client")
 	}
 
-	var stats *exchange.PriceChangeStats
-	if stats, err = binanceClient.Ticker(market); err != nil {
+	stats, err := binanceClient.Ticker(market)
+	if err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
 
-	var high float64
-	if high, err = strconv.ParseFloat(stats.HighPrice, 64); err != nil {
+	high, err := strconv.ParseFloat(stats.HighPrice, 64)
+	if err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
 
-	var low float64
-	if low, err = strconv.ParseFloat(stats.LowPrice, 64); err != nil {
-		return nil, errors.Wrap(err, 1)
-	}
-
-	var volume float64
-	if volume, err = strconv.ParseFloat(stats.QuoteVolume, 64); err != nil {
+	low, err := strconv.ParseFloat(stats.LowPrice, 64)
+	if err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
 
 	return &model.Stats{
-		Market:    market,
-		High:      high,
-		Low:       low,
-		BtcVolume: volume,
+		Market: market,
+		High:   high,
+		Low:    low,
+		BtcVolume: func() float64 {
+			symbol, err := binance.GetSymbol(binanceClient, market)
+			if err == nil {
+				if strings.EqualFold(symbol.QuoteAsset, model.BTC) {
+					out, err := strconv.ParseFloat(stats.QuoteVolume, 64)
+					if err == nil {
+						return out
+					}
+				}
+			}
+			return 0
+		}(),
 	}, nil
 }
 
@@ -1051,20 +1055,19 @@ func (self *Binance) GetSizePrec(client interface{}, market string) (int, error)
 	return 0, nil
 }
 
-func (self *Binance) GetMaxSize(client interface{}, base, quote string, hold bool, def float64) float64 {
+func (self *Binance) GetMaxSize(client interface{}, base, quote string, hold, earn bool, def float64, mult multiplier.Mult) float64 {
 	if hold {
 		if base == "BNB" {
 			return 0
 		}
 	}
-	fn := func() int {
+	return model.GetSizeMax(hold, earn, def, mult, func() int {
 		prec, err := self.GetSizePrec(client, self.FormatMarket(base, quote))
 		if err != nil {
 			return 0
 		}
 		return prec
-	}
-	return model.GetSizeMax(hold, def, fn)
+	})
 }
 
 func (self *Binance) Cancel(client interface{}, market string, side model.OrderSide) error {

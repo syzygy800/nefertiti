@@ -141,6 +141,25 @@ func (self *Kucoin) getAvailableBalance(client *exchange.ApiService, curr string
 	return out, nil
 }
 
+func (self *Kucoin) getSymbol(client *exchange.ApiService, name string) (*exchange.SymbolModel, error) {
+	cached := true
+	for {
+		symbols, err := self.getSymbols(client, cached)
+		if err != nil {
+			return nil, err
+		}
+		for _, symbol := range symbols {
+			if symbol.Symbol == name {
+				return symbol, nil
+			}
+		}
+		if !cached {
+			return nil, errors.Errorf("symbol %s does not exist", name)
+		}
+		cached = false
+	}
+}
+
 func (self *Kucoin) getSymbols(client *exchange.ApiService, cached bool) (exchange.SymbolsModel, error) {
 	if self.symbols == nil || !cached {
 		var (
@@ -160,21 +179,16 @@ func (self *Kucoin) getSymbols(client *exchange.ApiService, cached bool) (exchan
 }
 
 // the minimum order quantity requried to place an order.
-func (self *Kucoin) getMinSize(client *exchange.ApiService, market string, cached bool) (float64, error) {
-	symbols, err := self.getSymbols(client, cached)
+func (self *Kucoin) getMinSize(client *exchange.ApiService, market string) (float64, error) {
+	symbol, err := self.getSymbol(client, market)
 	if err != nil {
 		return 0, err
 	}
-	for _, symbol := range symbols {
-		if symbol.Symbol == market {
-			out, err := strconv.ParseFloat(symbol.BaseMinSize, 64)
-			if err != nil {
-				return 0, errors.Wrap(err, 1)
-			}
-			return out, nil
-		}
+	out, err := strconv.ParseFloat(symbol.BaseMinSize, 64)
+	if err != nil {
+		return 0, errors.Wrap(err, 1)
 	}
-	return 0, nil
+	return out, nil
 }
 
 // getOrders returns a list your current orders.
@@ -329,7 +343,7 @@ func (self *Kucoin) sell(
 	client *exchange.ApiService,
 	strategy model.Strategy,
 	mult, stop multiplier.Mult,
-	hold model.Markets,
+	hold, earn model.Markets,
 	service model.Notify,
 	twitter *notify.TwitterKeys,
 	level int64,
@@ -524,7 +538,7 @@ func (self *Kucoin) sell(
 				}
 			}
 			// ---- END ---- svanas 2019-02-19 ----------------------------------------
-			amount = self.GetMaxSize(client, base, quote, hold.HasMarket(symbol), amount)
+			amount = self.GetMaxSize(client, base, quote, hold.HasMarket(symbol), earn.HasMarket(symbol), amount, mult)
 			if amount > 0 {
 				var pp int
 				if pp, err = self.GetPricePrec(client, symbol); err == nil {
@@ -646,7 +660,7 @@ func (self *Kucoin) listen(
 
 func (self *Kucoin) Sell(
 	strategy model.Strategy,
-	hold model.Markets,
+	hold, earn model.Markets,
 	sandbox, tweet, debug bool,
 	success model.OnSuccess,
 ) error {
@@ -716,7 +730,7 @@ func (self *Kucoin) Sell(
 			self.error(err, level, service)
 		} else
 		// listens to the filled orders, look for newly filled orders, automatically place new sell orders.
-		if filled, err = self.sell(client, strategy, mult, stop, hold, service, twitter, level, filled, sandbox, debug); err != nil {
+		if filled, err = self.sell(client, strategy, mult, stop, hold, earn, service, twitter, level, filled, sandbox, debug); err != nil {
 			self.error(err, level, service)
 		} else
 		// listens to the open orders, look for cancelled orders, send a notification on newly opened orders.
@@ -1011,17 +1025,16 @@ func (self *Kucoin) GetTicker(client interface{}, market string) (float64, error
 }
 
 func (self *Kucoin) Get24h(client interface{}, market string) (*model.Stats, error) {
-	var (
-		err  error
-		resp *exchange.ApiResponse
-		json exchange.Stats24hrModel
-	)
-
 	kucoin, ok := client.(*exchange.ApiService)
 	if !ok {
 		return nil, errors.New("invalid argument: client")
 	}
 
+	var (
+		err  error
+		resp *exchange.ApiResponse
+		json exchange.Stats24hrModel
+	)
 	if resp, err = kucoin.Stats24hr(market); err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
@@ -1029,44 +1042,46 @@ func (self *Kucoin) Get24h(client interface{}, market string) (*model.Stats, err
 		return nil, errors.Wrap(err, 1)
 	}
 
-	var high float64
+	var (
+		high float64
+		low  float64
+	)
 	if high, err = strconv.ParseFloat(json.High, 64); err != nil {
-		log.Printf("[ERROR] %s\n%+v\n", errors.Wrap(err, 1).ErrorStack("kucoin.go::Get24h", ""), json)
+		return nil, err
 	}
-
-	var low float64
 	if low, err = strconv.ParseFloat(json.Low, 64); err != nil {
-		log.Printf("[ERROR] %s\n%+v\n", errors.Wrap(err, 1).ErrorStack("kucoin.go::Get24h", ""), json)
-	}
-
-	var volume float64
-	if volume, err = strconv.ParseFloat(json.VolValue, 64); err != nil {
-		log.Printf("[ERROR] %s\n%+v\n", errors.Wrap(err, 1).ErrorStack("kucoin.go::Get24h", ""), json)
+		return nil, err
 	}
 
 	return &model.Stats{
-		Market:    market,
-		High:      high,
-		Low:       low,
-		BtcVolume: volume,
+		Market: market,
+		High:   high,
+		Low:    low,
+		BtcVolume: func() float64 {
+			symbol, err := self.getSymbol(kucoin, market)
+			if err == nil {
+				if strings.EqualFold(symbol.QuoteCurrency, model.BTC) {
+					out, err := strconv.ParseFloat(json.VolValue, 64)
+					if err == nil {
+						return out
+					}
+				}
+			}
+			return 0
+		}(),
 	}, nil
 }
 
 func (self *Kucoin) GetPricePrec(client interface{}, market string) (int, error) {
 	kucoin, ok := client.(*exchange.ApiService)
 	if !ok {
-		return 0, errors.New("invalid argument: client")
+		return 8, errors.New("invalid argument: client")
 	}
-	symbols, err := self.getSymbols(kucoin, true)
+	symbol, err := self.getSymbol(kucoin, market)
 	if err != nil {
-		return 0, err
+		return 8, err
 	}
-	for _, symbol := range symbols {
-		if symbol.Symbol == market {
-			return precision.Parse(symbol.PriceIncrement, 8), nil
-		}
-	}
-	return 8, nil
+	return precision.Parse(symbol.PriceIncrement, 8), nil
 }
 
 func (self *Kucoin) GetSizePrec(client interface{}, market string) (int, error) {
@@ -1074,32 +1089,26 @@ func (self *Kucoin) GetSizePrec(client interface{}, market string) (int, error) 
 	if !ok {
 		return 0, errors.New("invalid argument: client")
 	}
-	symbols, err := self.getSymbols(kucoin, true)
+	symbol, err := self.getSymbol(kucoin, market)
 	if err != nil {
 		return 0, err
 	}
-	for _, symbol := range symbols {
-		if symbol.Symbol == market {
-			return precision.Parse(symbol.BaseIncrement, 0), nil
-		}
-	}
-	return 0, nil
+	return precision.Parse(symbol.BaseIncrement, 0), nil
 }
 
-func (self *Kucoin) GetMaxSize(client interface{}, base, quote string, hold bool, def float64) float64 {
+func (self *Kucoin) GetMaxSize(client interface{}, base, quote string, hold, earn bool, def float64, mult multiplier.Mult) float64 {
 	if hold {
 		if base == "KCS" {
 			return 0
 		}
 	}
-	fn := func() int {
+	return model.GetSizeMax(hold, earn, def, mult, func() int {
 		prec, err := self.GetSizePrec(client, self.FormatMarket(base, quote))
 		if err != nil {
 			return 0
 		}
 		return prec
-	}
-	return model.GetSizeMax(hold, def, fn)
+	})
 }
 
 func (self *Kucoin) Cancel(client interface{}, market string, side model.OrderSide) error {
@@ -1168,7 +1177,7 @@ func (self *Kucoin) Buy(client interface{}, cancel bool, market string, calls mo
 		qty float64
 	)
 	qty = size
-	if min, err = self.getMinSize(kucoin, market, true); err != nil {
+	if min, err = self.getMinSize(kucoin, market); err != nil {
 		return err
 	}
 	if min > 0 {

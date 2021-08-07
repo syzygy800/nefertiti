@@ -214,7 +214,7 @@ func (self *Gdax) FormatMarket(base, quote string) string {
 }
 
 func (self *Gdax) sell(
-	hold model.Markets,
+	hold, earn model.Markets,
 	apiSecret string,
 	apiKey string,
 	apiPassphrase string,
@@ -398,7 +398,7 @@ func (self *Gdax) sell(
 									ProductID: msg.ProductID,
 								},
 							}).
-								SetSize(self.GetMaxSize(client, base, quote, hold.HasMarket(msg.ProductID), qty)).
+								SetSize(self.GetMaxSize(client, base, quote, hold.HasMarket(msg.ProductID), earn.HasMarket(msg.ProductID), qty, mult)).
 								SetPrice(pricing.Multiply(price, mult, prec))
 
 							// log the newly created SELL order
@@ -535,7 +535,7 @@ func (self *Gdax) sell(
 
 func (self *Gdax) Sell(
 	strategy model.Strategy,
-	hold model.Markets,
+	hold, earn model.Markets,
 	sandbox, tweet, debug bool,
 	success model.OnSuccess,
 ) error {
@@ -579,7 +579,7 @@ func (self *Gdax) Sell(
 		}
 	}
 
-	return self.sell(hold, apiSecret, apiKey, apiPassphrase, apiUserId, service, twitter, sandbox, debug, success)
+	return self.sell(hold, earn, apiSecret, apiKey, apiPassphrase, apiUserId, service, twitter, sandbox, debug, success)
 }
 
 func (self *Gdax) Order(
@@ -856,19 +856,16 @@ func (self *Gdax) GetSizePrec(client interface{}, market string) (int, error) {
 	return 0, errors.Errorf("market %s not found", market)
 }
 
-func (self *Gdax) GetMaxSize(client interface{}, base, quote string, hold bool, def float64) float64 {
+func (self *Gdax) GetMaxSize(client interface{}, base, quote string, hold, earn bool, def float64, mult multiplier.Mult) float64 {
 	market := self.FormatMarket(base, quote)
 
-	fn := func() int {
+	out := model.GetSizeMax(hold, earn, def, mult, func() int {
 		prec, err := self.GetSizePrec(client, market)
 		if err != nil {
-			return 8
-		} else {
-			return prec
+			return 0
 		}
-	}
-
-	out := model.GetSizeMax(hold, def, fn)
+		return prec
+	})
 
 	if hold {
 		gdaxClient, ok := client.(*gdax.Client)

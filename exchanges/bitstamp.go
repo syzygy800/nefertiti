@@ -228,7 +228,7 @@ func (self *Bitstamp) listen(
 func (self *Bitstamp) sell(
 	client *exchange.Client,
 	mult multiplier.Mult,
-	hold model.Markets,
+	hold, earn model.Markets,
 	service model.Notify,
 	twitter *notify.TwitterKeys,
 	level int64,
@@ -365,22 +365,25 @@ func (self *Bitstamp) sell(
 			)
 			base, quote, err = model.ParseMarket(markets, orders[i].Market(client))
 			if err == nil {
-				var pp int
-				if pp, err = self.GetPricePrec(client, orders[i].Market(client)); err == nil {
-					attempts := 0
-					for {
-						_, err = client.SellLimitOrder(
-							orders[i].Market(client),
-							self.GetMaxSize(client, base, quote, hold.HasMarket(orders[i].Market(client)), qty),
-							pricing.Multiply(orders[i].Price(client), mult, pp),
-						)
-						if err != nil && strings.Contains(err.Error(), "Order could not be placed") {
-							attempts++
-							if attempts >= 10 {
+				qty = self.GetMaxSize(client, base, quote, hold.HasMarket(orders[i].Market(client)), earn.HasMarket(orders[i].Market(client)), qty, mult)
+				if qty > 0 {
+					var pp int
+					if pp, err = self.GetPricePrec(client, orders[i].Market(client)); err == nil {
+						attempts := 0
+						for {
+							_, err = client.SellLimitOrder(
+								orders[i].Market(client),
+								qty,
+								pricing.Multiply(orders[i].Price(client), mult, pp),
+							)
+							if err != nil && strings.Contains(err.Error(), "Order could not be placed") {
+								attempts++
+								if attempts >= 10 {
+									break
+								}
+							} else {
 								break
 							}
-						} else {
-							break
 						}
 					}
 				}
@@ -402,7 +405,7 @@ func (self *Bitstamp) sell(
 
 func (self *Bitstamp) Sell(
 	strategy model.Strategy,
-	hold model.Markets,
+	hold, earn model.Markets,
 	sandbox, tweet, debug bool,
 	success model.OnSuccess,
 ) error {
@@ -473,7 +476,7 @@ func (self *Bitstamp) Sell(
 			self.error(err, level, service)
 		} else
 		// listens to the transaction history, look for newly filled orders, automatically place new LIMIT SELL orders.
-		if transactions, err = self.sell(client, mult, hold, service, twitter, level, transactions, sandbox); err != nil {
+		if transactions, err = self.sell(client, mult, hold, earn, service, twitter, level, transactions, sandbox); err != nil {
 			self.error(err, level, service)
 		} else
 		// listens to the open orders, look for cancelled orders, send a notification.
@@ -796,19 +799,18 @@ func (self *Bitstamp) GetSizePrec(client interface{}, market string) (int, error
 	return 8, nil
 }
 
-func (self *Bitstamp) GetMaxSize(client interface{}, base, quote string, hold bool, def float64) float64 {
+func (self *Bitstamp) GetMaxSize(client interface{}, base, quote string, hold, earn bool, def float64, mult multiplier.Mult) float64 {
 	market := self.FormatMarket(base, quote)
 
 	fn := func() int {
 		prec, err := self.GetSizePrec(client, market)
 		if err != nil {
-			return 8
-		} else {
-			return prec
+			return 0
 		}
+		return prec
 	}
 
-	out := model.GetSizeMax(hold, def, fn)
+	out := model.GetSizeMax(hold, earn, def, mult, fn)
 
 	if hold {
 		ticker, err := self.GetTicker(client, market)

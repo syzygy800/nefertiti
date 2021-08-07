@@ -210,7 +210,7 @@ func (self *Woo) listen(
 func (self *Woo) sell(
 	client *exchange.Client,
 	mult multiplier.Mult,
-	hold model.Markets,
+	hold, earn model.Markets,
 	service model.Notify,
 	level int64,
 	old []exchange.Order,
@@ -282,16 +282,19 @@ func (self *Woo) sell(
 			// get base currency and desired size, calculate price, place sell order
 			base, quote, err := self.parseMarket(new[i].Symbol)
 			if err == nil {
-				var prec int
-				prec, err = self.GetPricePrec(client, new[i].Symbol)
-				if err == nil {
-					_, err = client.Order(
-						new[i].Symbol,
-						exchange.OrderSideSell,
-						exchange.OrderTypeLimit,
-						self.GetMaxSize(client, base, quote, hold.HasMarket(new[i].Symbol), qty),
-						pricing.Multiply(new[i].Price, mult, prec),
-					)
+				qty = self.GetMaxSize(client, base, quote, hold.HasMarket(new[i].Symbol), earn.HasMarket(new[i].Symbol), qty, mult)
+				if qty > 0 {
+					var prec int
+					prec, err = self.GetPricePrec(client, new[i].Symbol)
+					if err == nil {
+						_, err = client.Order(
+							new[i].Symbol,
+							exchange.OrderSideSell,
+							exchange.OrderTypeLimit,
+							qty,
+							pricing.Multiply(new[i].Price, mult, prec),
+						)
+					}
 				}
 			}
 
@@ -311,7 +314,7 @@ func (self *Woo) sell(
 
 func (self *Woo) Sell(
 	strategy model.Strategy,
-	hold model.Markets,
+	hold, earn model.Markets,
 	sandbox, tweet, debug bool,
 	success model.OnSuccess,
 ) error {
@@ -375,7 +378,7 @@ func (self *Woo) Sell(
 			self.error(err, level, service)
 		} else
 		// listen to the filled orders, look for newly filled orders, automatically place new LIMIT SELL orders.
-		if filled, err = self.sell(client, mult, hold, service, level, filled); err != nil {
+		if filled, err = self.sell(client, mult, hold, earn, service, level, filled); err != nil {
 			self.error(err, level, service)
 		} else
 		// listen to the opened orders, look for cancelled orders, send a notification.
@@ -612,8 +615,13 @@ func (self *Woo) GetSizePrec(client interface{}, market string) (int, error) {
 	return precision.Parse(strconv.FormatFloat(symbol.BaseTick, 'f', -1, 64), 0), nil
 }
 
-func (self *Woo) GetMaxSize(client interface{}, base, quote string, hold bool, def float64) float64 {
-	return model.GetSizeMax(hold, def, func() int {
+func (self *Woo) GetMaxSize(client interface{}, base, quote string, hold, earn bool, def float64, mult multiplier.Mult) float64 {
+	if hold {
+		if base == "WOO" {
+			return 0
+		}
+	}
+	return model.GetSizeMax(hold, earn, def, mult, func() int {
 		prec, err := self.GetSizePrec(client, self.FormatMarket(base, quote))
 		if err != nil {
 			return 0

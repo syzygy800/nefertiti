@@ -247,7 +247,7 @@ func (self *CexIo) listen(
 func (self *CexIo) sell(
 	client *exchange.Client,
 	mult multiplier.Mult,
-	hold model.Markets,
+	hold, earn model.Markets,
 	service model.Notify,
 	twitter *notify.TwitterKeys,
 	level int64,
@@ -299,13 +299,16 @@ func (self *CexIo) sell(
 						)
 						base, quote, err = model.ParseMarket(markets, market)
 						if err == nil {
-							var prec int
-							if prec, err = self.GetPricePrec(client, market); err == nil {
-								_, err = client.PlaceOrder(
-									order.Symbol1, order.Symbol2, exchange.SELL,
-									self.GetMaxSize(client, base, quote, hold.HasMarket(market), order.Amount),
-									pricing.Multiply(order.Price, mult, prec),
-								)
+							qty := self.GetMaxSize(client, base, quote, hold.HasMarket(market), earn.HasMarket(market), order.Amount, mult)
+							if qty > 0 {
+								var prec int
+								if prec, err = self.GetPricePrec(client, market); err == nil {
+									_, err = client.PlaceOrder(
+										order.Symbol1, order.Symbol2, exchange.SELL,
+										qty,
+										pricing.Multiply(order.Price, mult, prec),
+									)
+								}
 							}
 						}
 					}
@@ -322,7 +325,7 @@ func (self *CexIo) sell(
 
 func (self *CexIo) Sell(
 	strategy model.Strategy,
-	hold model.Markets,
+	hold, earn model.Markets,
 	sandbox, tweet, debug bool,
 	success model.OnSuccess,
 ) error {
@@ -384,7 +387,7 @@ func (self *CexIo) Sell(
 			self.error(err, level, service)
 		} else
 		// listen to the archived orders, look for newly filled orders, automatically place new LIMIT SELL orders.
-		if archive, err = self.sell(client, mult, hold, service, twitter, level, archive, sandbox); err != nil {
+		if archive, err = self.sell(client, mult, hold, earn, service, twitter, level, archive, sandbox); err != nil {
 			self.error(err, level, service)
 		} else
 		// listen to the open orders, look for cancelled orders, send a notification.
@@ -701,16 +704,14 @@ func (self *CexIo) GetSizePrec(client interface{}, market string) (int, error) {
 	return 8, nil
 }
 
-func (self *CexIo) GetMaxSize(client interface{}, base, quote string, hold bool, def float64) float64 {
-	fn := func() int {
+func (self *CexIo) GetMaxSize(client interface{}, base, quote string, hold, earn bool, def float64, mult multiplier.Mult) float64 {
+	return model.GetSizeMax(hold, earn, def, mult, func() int {
 		prec, err := self.GetSizePrec(client, self.FormatMarket(base, quote))
 		if err != nil {
-			return 8
-		} else {
-			return prec
+			return 0
 		}
-	}
-	return model.GetSizeMax(hold, def, fn)
+		return prec
+	})
 }
 
 func (self *CexIo) Cancel(client interface{}, market string, side model.OrderSide) error {

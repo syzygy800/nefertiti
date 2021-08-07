@@ -449,7 +449,7 @@ func (self *Bittrex) sell(
 	client *exchange.Client,
 	strategy model.Strategy,
 	mult, stop multiplier.Mult,
-	hold model.Markets,
+	hold, earn model.Markets,
 	service model.Notify,
 	twitter *notify.TwitterKeys,
 	level int64,
@@ -588,7 +588,7 @@ func (self *Bittrex) sell(
 					if err == nil {
 						var prec int
 						if prec, err = self.GetPricePrec(client, order.MarketName()); err == nil {
-							qty := self.GetMaxSize(client, base, quote, hold.HasMarket(order.MarketName()), order.QuantityFilled())
+							qty := self.GetMaxSize(client, base, quote, hold.HasMarket(order.MarketName()), earn.HasMarket(order.MarketName()), order.QuantityFilled(), mult)
 							if qty > 0 {
 								tgt := pricing.Multiply(bought, mult, prec)
 								if strategy == model.STRATEGY_STOP_LOSS {
@@ -626,7 +626,7 @@ func (self *Bittrex) sell(
 
 func (self *Bittrex) Sell(
 	strategy model.Strategy,
-	hold model.Markets,
+	hold, earn model.Markets,
 	sandbox, tweet, debug bool,
 	success model.OnSuccess,
 ) error {
@@ -693,7 +693,7 @@ func (self *Bittrex) Sell(
 			bittrexLogError(err, level, service)
 		} else
 		// listens to the order history, look for newly filled orders, automatically place new LIMIT SELL orders.
-		if history, err = self.sell(client, strategy, mult, stop, hold, service, twitter, level, history, sandbox); err != nil {
+		if history, err = self.sell(client, strategy, mult, stop, hold, earn, service, twitter, level, history, sandbox); err != nil {
 			bittrexLogError(err, level, service)
 		} else
 		// listens to the open orders, look for cancelled orders, send a notification.
@@ -982,28 +982,34 @@ func (self *Bittrex) GetTicker(client interface{}, market1 string) (float64, err
 }
 
 func (self *Bittrex) Get24h(client interface{}, market1 string) (*model.Stats, error) {
-	var err error
-
 	bittrex, ok := client.(*exchange.Client)
 	if !ok {
 		return nil, errors.New("arg is not a valid v3 client")
 	}
 
-	var market3 string
-	if market3, err = self.convertMarket(market1); err != nil {
+	market3, err := self.convertMarket(market1)
+	if err != nil {
 		return nil, err
 	}
 
-	var sum *exchange.MarketSummary
-	if sum, err = bittrex.GetMarketSummary(market3); err != nil {
+	sum, err := bittrex.GetMarketSummary(market3)
+	if err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
 
 	return &model.Stats{
-		Market:    market1,
-		High:      sum.High,
-		Low:       sum.Low,
-		BtcVolume: sum.QuoteVolume,
+		Market: market1,
+		High:   sum.High,
+		Low:    sum.Low,
+		BtcVolume: func() float64 {
+			_, quote, err := bittrexParseMarket(market1, 1)
+			if err == nil {
+				if strings.EqualFold(quote, model.BTC) {
+					return sum.QuoteVolume
+				}
+			}
+			return 0
+		}(),
 	}, nil
 }
 
@@ -1033,15 +1039,14 @@ func (self *Bittrex) GetSizePrec(client interface{}, market string) (int, error)
 	return 8, nil
 }
 
-func (self *Bittrex) GetMaxSize(client interface{}, base, quote string, hold bool, def float64) float64 {
-	fn := func() int {
+func (self *Bittrex) GetMaxSize(client interface{}, base, quote string, hold, earn bool, def float64, mult multiplier.Mult) float64 {
+	return model.GetSizeMax(hold, earn, def, mult, func() int {
 		prec, err := self.GetSizePrec(client, self.FormatMarket(base, quote))
 		if err != nil {
-			return 8
+			return 0
 		}
 		return prec
-	}
-	return model.GetSizeMax(hold, def, fn)
+	})
 }
 
 func (self *Bittrex) Cancel(client interface{}, market1 string, side model.OrderSide) error {

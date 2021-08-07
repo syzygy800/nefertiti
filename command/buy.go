@@ -77,13 +77,14 @@ func buyEvery(
 	max float64,
 	min float64,
 	price float64,
+	btcVolumeMin float64,
 	service model.Notify,
 	strict bool,
 	sandbox bool,
 	debug bool,
 ) {
 	for range time.Tick(d) {
-		market, err := buy(client, exchange, markets, hold, agg, size, dip, pip, mult, dist, top, max, min, price, service, strict, sandbox, false, debug)
+		market, err := buy(client, exchange, markets, hold, agg, size, dip, pip, mult, dist, top, max, min, price, btcVolumeMin, service, strict, sandbox, false, debug)
 		if err != nil {
 			report(err, market, nil, service, exchange)
 		}
@@ -105,6 +106,7 @@ func buy(
 	max float64,
 	min float64,
 	price float64,
+	btcVolumeMin float64,
 	service model.Notify,
 	strict bool,
 	sandbox bool,
@@ -143,9 +145,6 @@ func buy(
 		// "algo" orders are stop-loss, take-profit, and OCO (aka one-cancels-the-other) orders
 		if hasAlgoOrder, _ := exchange.HasAlgoOrder(client, market); hasAlgoOrder {
 			log.Printf("[INFO] Ignoring %s because you have at least one \"algo\" order open on this market.\n", market)
-			if err = exchange.Cancel(client, market, model.BUY); err != nil {
-				log.Printf("[ERROR] Cannot cancel your open %s buy orders. %v\n", market, err)
-			}
 			continue
 		}
 
@@ -161,6 +160,11 @@ func buy(
 
 		if stats, err = exchange.Get24h(client, market); err != nil {
 			return market, err
+		}
+
+		if btcVolumeMin > 0 && stats.BtcVolume > 0 && stats.BtcVolume < btcVolumeMin {
+			log.Printf("[INFO] Ignoring %s because volume %.2f is lower than %.2f BTC\n", market, stats.BtcVolume, btcVolumeMin)
+			continue
 		}
 
 		if avg, err = stats.Avg(exchange, sandbox); err != nil {
@@ -539,15 +543,13 @@ func buySignals(
 			if btcVolumeMin > 0 {
 				for i := range calls {
 					if !calls[i].Skip {
-						var stats *model.Stats
-						if stats, err = exchange.Get24h(client, calls[i].Market); err != nil {
+						stats, err := exchange.Get24h(client, calls[i].Market)
+						if err != nil {
 							return old, err
 						}
-						if stats.BtcVolume > 0 {
-							if stats.BtcVolume < btcVolumeMin {
-								log.Printf("[INFO] Ignoring %s because volume %.2f is lower than %.2f %s\n", calls[i].Market, stats.BtcVolume, btcVolumeMin, quote)
-								calls[i].Skip = true
-							}
+						if stats.BtcVolume > 0 && stats.BtcVolume < btcVolumeMin {
+							log.Printf("[INFO] Ignoring %s because volume %.2f is lower than %.2f %s\n", calls[i].Market, stats.BtcVolume, btcVolumeMin, quote)
+							calls[i].Skip = true
 						}
 					}
 				}
@@ -650,6 +652,15 @@ func (c *BuyCommand) Run(args []string) int {
 		return c.ReturnError(err)
 	}
 
+	// --volume=x
+	var btcVolumeMin float64 = 0
+	flg = flag.Get("volume")
+	if flg.Exists {
+		if btcVolumeMin, err = flg.Float64(); err != nil {
+			return c.ReturnError(errors.Errorf("volume %v is invalid", flg))
+		}
+	}
+
 	flg = flag.Get("signals")
 	if flg.Exists {
 		var channel model.Channel
@@ -684,14 +695,6 @@ func (c *BuyCommand) Run(args []string) int {
 				return c.ReturnError(errors.Errorf("valid %v is incorrect", flg))
 			}
 			duration2 = time.Duration(valid * float64(time.Hour))
-		}
-		// --volume=x
-		var btcVolumeMin float64 = 0
-		flg = flag.Get("volume")
-		if flg.Exists {
-			if btcVolumeMin, err = flg.Float64(); err != nil {
-				return c.ReturnError(errors.Errorf("volume %v is invalid", flg))
-			}
 		}
 		// --devn=x
 		var deviation float64 = 1.0
@@ -838,7 +841,7 @@ func (c *BuyCommand) Run(args []string) int {
 		return c.ReturnError(err)
 	}
 
-	if _, err = buy(client, exchange, splitted, hold, agg, size, dip, pip, mult, dist, top, max, min, price, service, flag.Strict(), flag.Sandbox(), test, flag.Debug()); err != nil {
+	if _, err = buy(client, exchange, splitted, hold, agg, size, dip, pip, mult, dist, top, max, min, price, btcVolumeMin, service, flag.Strict(), flag.Sandbox(), test, flag.Debug()); err != nil {
 		if flag.Get("ignore").Contains("error") {
 			log.Printf("[ERROR] %v\n", err)
 		} else {
@@ -856,7 +859,7 @@ func (c *BuyCommand) Run(args []string) int {
 			if err = c.ReturnSuccess(); err != nil {
 				return c.ReturnError(err)
 			}
-			buyEvery(time.Duration(repeat*float64(time.Hour)), client, exchange, splitted, hold, agg, size, dip, pip, mult, dist, top, max, min, price, service, flag.Strict(), flag.Sandbox(), flag.Debug())
+			buyEvery(time.Duration(repeat*float64(time.Hour)), client, exchange, splitted, hold, agg, size, dip, pip, mult, dist, top, max, min, price, btcVolumeMin, service, flag.Strict(), flag.Sandbox(), flag.Debug())
 		}
 	}
 
@@ -890,6 +893,8 @@ Options:
                (optional)
   --min      = minimum price that you will want to pay for the coins.
                (optional)
+  --volume   = minimum BTC volume over the last 24 hours.
+               optional, for example: --volume=10			   
   --dca      = if included, then slowly but surely, the bot will proportionally
                increase your stack while lowering your average buying price.
                (optional)

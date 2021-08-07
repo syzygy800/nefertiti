@@ -141,6 +141,25 @@ func (self *HitBTC) error(err error, level int64, service model.Notify) {
 	}
 }
 
+func (self *HitBTC) getSymbol(client *exchange.HitBtc, name string) (*exchange.Symbol, error) {
+	cached := true
+	for {
+		symbols, err := self.getSymbols(client, cached)
+		if err != nil {
+			return nil, err
+		}
+		for _, symbol := range symbols {
+			if symbol.Id == name {
+				return &symbol, nil
+			}
+		}
+		if !cached {
+			return nil, errors.Errorf("symbol %s does not exist", name)
+		}
+		cached = false
+	}
+}
+
 func (self *HitBTC) getSymbols(client *exchange.HitBtc, cached bool) (symbols []exchange.Symbol, err error) {
 	if self.symbols == nil || !cached {
 		if self.symbols, err = client.GetSymbols(); err != nil {
@@ -190,15 +209,12 @@ func (self *HitBTC) GetClient(permission model.Permission, sandbox bool) (interf
 }
 
 func (self *HitBTC) GetMarkets(cached, sandbox bool, ignore []string) ([]model.Market, error) {
-	var (
-		err error
-		out []model.Market
-	)
+	var out []model.Market
 
 	client := exchange.New("", "")
 
-	var symbols []exchange.Symbol
-	if symbols, err = self.getSymbols(client, cached); err != nil {
+	symbols, err := self.getSymbols(client, cached)
+	if err != nil {
 		return nil, err
 	}
 
@@ -288,7 +304,7 @@ func (self *HitBTC) sell(
 	client *exchange.HitBtc,
 	strategy model.Strategy,
 	mult multiplier.Mult,
-	hold model.Markets,
+	hold, earn model.Markets,
 	service model.Notify,
 	twitter *notify.TwitterKeys,
 	level int64,
@@ -364,16 +380,19 @@ func (self *HitBTC) sell(
 				)
 				base, quote, err = model.ParseMarket(markets, new[i].Symbol)
 				if err == nil {
-					var prec int
-					if prec, err = self.GetPricePrec(client, new[i].Symbol); err == nil {
-						_, _, err = self.Order(client,
-							model.SELL,
-							new[i].Symbol,
-							self.GetMaxSize(client, base, quote, hold.HasMarket(new[i].Symbol), qty),
-							pricing.Multiply(price, mult, prec),
-							model.LIMIT,
-							strconv.FormatFloat(price, 'f', -1, 64),
-						)
+					qty = self.GetMaxSize(client, base, quote, hold.HasMarket(new[i].Symbol), earn.HasMarket(new[i].Symbol), qty, mult)
+					if qty > 0 {
+						var prec int
+						if prec, err = self.GetPricePrec(client, new[i].Symbol); err == nil {
+							_, _, err = self.Order(client,
+								model.SELL,
+								new[i].Symbol,
+								qty,
+								pricing.Multiply(price, mult, prec),
+								model.LIMIT,
+								strconv.FormatFloat(price, 'f', -1, 64),
+							)
+						}
 					}
 				}
 
@@ -395,7 +414,7 @@ func (self *HitBTC) sell(
 
 func (self *HitBTC) Sell(
 	strategy model.Strategy,
-	hold model.Markets,
+	hold, earn model.Markets,
 	sandbox, tweet, debug bool,
 	success model.OnSuccess,
 ) error {
@@ -456,7 +475,7 @@ func (self *HitBTC) Sell(
 			self.error(err, level, service)
 		} else
 		// listens to the filled orders, look for newly filled orders, automatically place new sell orders.
-		if filled, err = self.sell(client, strategy, mult, hold, service, twitter, level, filled, sandbox); err != nil {
+		if filled, err = self.sell(client, strategy, mult, hold, earn, service, twitter, level, filled, sandbox); err != nil {
 			self.error(err, level, service)
 		} else
 		// listens to the open orders, look for cancelled orders, send a notification.
@@ -698,28 +717,31 @@ func (self *HitBTC) Get24h(client interface{}, market string) (*model.Stats, err
 	}
 
 	return &model.Stats{
-		Market:    market,
-		High:      ticker.High,
-		Low:       ticker.Low,
-		BtcVolume: ticker.VolumeQuote,
+		Market: market,
+		High:   ticker.High,
+		Low:    ticker.Low,
+		BtcVolume: func() float64 {
+			symbol, err := self.getSymbol(hitbtc, market)
+			if err == nil {
+				if strings.EqualFold(symbol.QuoteCurrency, model.BTC) {
+					return ticker.VolumeQuote
+				}
+			}
+			return 0
+		}(),
 	}, nil
 }
 
 func (self *HitBTC) GetPricePrec(client interface{}, market string) (int, error) {
 	hitbtc, ok := client.(*exchange.HitBtc)
 	if !ok {
-		return 0, errors.New("invalid argument: client")
+		return 8, errors.New("invalid argument: client")
 	}
-	symbols, err := self.getSymbols(hitbtc, true)
+	symbol, err := self.getSymbol(hitbtc, market)
 	if err != nil {
-		return 0, err
+		return 8, err
 	}
-	for _, symbol := range symbols {
-		if symbol.Id == market {
-			return precision.Parse(strconv.FormatFloat(symbol.TickSize, 'f', -1, 64), 8), nil
-		}
-	}
-	return 8, nil
+	return precision.Parse(strconv.FormatFloat(symbol.TickSize, 'f', -1, 64), 8), nil
 }
 
 func (self *HitBTC) GetSizePrec(client interface{}, market string) (int, error) {
@@ -727,28 +749,26 @@ func (self *HitBTC) GetSizePrec(client interface{}, market string) (int, error) 
 	if !ok {
 		return 0, errors.New("invalid argument: client")
 	}
-	symbols, err := self.getSymbols(hitbtc, true)
+	symbol, err := self.getSymbol(hitbtc, market)
 	if err != nil {
 		return 0, err
 	}
-	for _, symbol := range symbols {
-		if symbol.Id == market {
-			return precision.Parse(strconv.FormatFloat(symbol.QuantityIncrement, 'f', -1, 64), 0), nil
-		}
-	}
-	return 0, nil
+	return precision.Parse(strconv.FormatFloat(symbol.QuantityIncrement, 'f', -1, 64), 0), nil
 }
 
-func (self *HitBTC) GetMaxSize(client interface{}, base, quote string, hold bool, def float64) float64 {
-	fn := func() int {
+func (self *HitBTC) GetMaxSize(client interface{}, base, quote string, hold, earn bool, def float64, mult multiplier.Mult) float64 {
+	if hold {
+		if base == "HIT" {
+			return 0
+		}
+	}
+	return model.GetSizeMax(hold, earn, def, mult, func() int {
 		prec, err := self.GetSizePrec(client, self.FormatMarket(base, quote))
 		if err != nil {
 			return 0
-		} else {
-			return prec
 		}
-	}
-	return model.GetSizeMax(hold, def, fn)
+		return prec
+	})
 }
 
 func (self *HitBTC) Cancel(client interface{}, market string, side model.OrderSide) error {

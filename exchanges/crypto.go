@@ -341,7 +341,7 @@ func (self *CryptoDotCom) sell(
 	client *exchange.Client,
 	quotes []string,
 	mult multiplier.Mult,
-	hold model.Markets,
+	hold, earn model.Markets,
 	service model.Notify,
 	level int64,
 	old []exchange.Trade,
@@ -418,15 +418,18 @@ func (self *CryptoDotCom) sell(
 			)
 			base, quote, err = self.parseSymbol(symbols, new[i].Symbol)
 			if err == nil {
-				var prec int
-				if prec, err = self.GetPricePrec(client, new[i].Symbol); err == nil {
-					_, err = client.CreateOrder(
-						new[i].Symbol,
-						exchange.SELL,
-						exchange.LIMIT,
-						self.GetMaxSize(client, base, quote, hold.HasMarket(new[i].Symbol), qty),
-						pricing.Multiply(new[i].Price, mult, prec),
-					)
+				qty = self.GetMaxSize(client, base, quote, hold.HasMarket(new[i].Symbol), earn.HasMarket(new[i].Symbol), qty, mult)
+				if qty > 0 {
+					var prec int
+					if prec, err = self.GetPricePrec(client, new[i].Symbol); err == nil {
+						_, err = client.CreateOrder(
+							new[i].Symbol,
+							exchange.SELL,
+							exchange.LIMIT,
+							qty,
+							pricing.Multiply(new[i].Price, mult, prec),
+						)
+					}
 				}
 			}
 
@@ -446,7 +449,7 @@ func (self *CryptoDotCom) sell(
 
 func (self *CryptoDotCom) Sell(
 	strategy model.Strategy,
-	hold model.Markets,
+	hold, earn model.Markets,
 	sandbox, tweet, debug bool,
 	success model.OnSuccess,
 ) error {
@@ -522,7 +525,7 @@ func (self *CryptoDotCom) Sell(
 			self.error(err, level, service)
 		} else
 		// listen to the filled orders, look for newly filled orders, automatically place new LIMIT SELL orders.
-		if filled, err = self.sell(client, quotes, mult, hold, service, level, filled); err != nil {
+		if filled, err = self.sell(client, quotes, mult, hold, earn, service, level, filled); err != nil {
 			self.error(err, level, service)
 		} else
 		// listen to the opened orders, look for cancelled orders, send a notification.
@@ -754,16 +757,19 @@ func (self *CryptoDotCom) GetSizePrec(client interface{}, market string) (int, e
 	return 0, nil
 }
 
-func (self *CryptoDotCom) GetMaxSize(client interface{}, base, quote string, hold bool, def float64) float64 {
-	fn := func() int {
+func (self *CryptoDotCom) GetMaxSize(client interface{}, base, quote string, hold, earn bool, def float64, mult multiplier.Mult) float64 {
+	if hold {
+		if base == "CRO" {
+			return 0
+		}
+	}
+	return model.GetSizeMax(hold, earn, def, mult, func() int {
 		prec, err := self.GetSizePrec(client, self.FormatMarket(base, quote))
 		if err != nil {
 			return 0
-		} else {
-			return prec
 		}
-	}
-	return model.GetSizeMax(hold, def, fn)
+		return prec
+	})
 }
 
 func (self *CryptoDotCom) Cancel(client interface{}, market string, side model.OrderSide) error {

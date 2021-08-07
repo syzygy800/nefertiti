@@ -110,10 +110,14 @@ func GetSizeMin(hold bool, asset string) float64 {
 }
 
 // GetSizeMax returns the maximum size we can SELL
-func GetSizeMax(hold bool, def float64, prec func() int) float64 {
+func GetSizeMax(hold, earn bool, def float64, mult multiplier.Mult, prec func() int) float64 {
 	if hold {
 		// when we hodl, we then sell 20% of the purchased amount
 		return precision.Round((def * 0.20), prec())
+	}
+	if earn {
+		// sell enough at `mult` to break even; hold the rest
+		return precision.Floor((def / float64(mult)), prec())
 	}
 	return def
 }
@@ -121,6 +125,10 @@ func GetSizeMax(hold bool, def float64, prec func() int) float64 {
 type (
 	Markets []string
 )
+
+func (markets Markets) all() bool {
+	return len(markets) == 1 && markets[0] == "all"
+}
 
 func (markets Markets) IndexOf(market string) int {
 	for i, m := range markets {
@@ -132,5 +140,5 @@ func (markets Markets) IndexOf(market string) int {
 }
 
 func (markets Markets) HasMarket(market string) bool {
-	return markets.IndexOf(market) > -1
+	return markets.all() || markets.IndexOf(market) > -1
 }
