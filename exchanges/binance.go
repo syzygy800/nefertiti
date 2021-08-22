@@ -797,14 +797,21 @@ func (self *Binance) OCO(client interface{}, market string, size float64, price,
 		return nil, errors.New("invalid argument: client")
 	}
 
+	clientOrderId1 := self.newClientOrderID(metadata)
+	clientOrderId2 := self.newClientOrderID(metadata)
+	if clientOrderId1 == clientOrderId2 {
+		clientOrderId1 = binance.NewClientOrderID()
+		clientOrderId2 = binance.NewClientOrderID()
+	}
+
 	svc := binanceClient.NewCreateOCOService().
 		Symbol(market).
 		Quantity(size).
 		Price(price).
 		StopPrice(stop).
 		Side(exchange.SideTypeSell).
-		StopClientOrderID(self.newClientOrderID(metadata)).
-		LimitClientOrderID(self.newClientOrderID(metadata))
+		StopClientOrderID(clientOrderId1).
+		LimitClientOrderID(clientOrderId2)
 
 	var (
 		err  error

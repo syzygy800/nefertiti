@@ -27,9 +27,15 @@ func exit(
 	stopWithSize float64,
 	test bool,
 ) error {
-	steps := math.Round((stopAtPrice - startAtPrice) / ((stopAtPrice * stopWithSize) - (startAtPrice * startWithSize)))
+	steps, err := steps()
+	if err != nil {
+		return err
+	}
 	if steps < 1 {
-		return errors.New("Cannot open any orders. Please widen your arguments")
+		steps = int64(math.Round((stopAtPrice - startAtPrice) / ((stopAtPrice * stopWithSize) - (startAtPrice * startWithSize))))
+		if steps < 1 {
+			return errors.New("Cannot open any orders. Please widen your arguments")
+		}
 	}
 
 	client, err := exchange.GetClient(func() model.Permission {
@@ -88,8 +94,8 @@ func exit(
 		return err
 	}
 
-	sizeDeltaPerStep := precision.Round(((stopWithSize - startWithSize) / steps), sizePrec)
-	priceDeltaPerStep := precision.Round(((stopAtPrice - startAtPrice) / steps), pricePrec)
+	sizeDeltaPerStep := precision.Round(((stopWithSize - startWithSize) / float64(steps)), sizePrec)
+	priceDeltaPerStep := precision.Round(((stopAtPrice - startAtPrice) / float64(steps)), pricePrec)
 
 	currSize := stopWithSize
 	currPrice := stopAtPrice
@@ -143,6 +149,20 @@ func exit(
 	fmt.Println(tbl.Render())
 
 	return nil
+}
+
+func steps() (int64, error) {
+	var (
+		err error
+		out int64
+	)
+	arg := flag.Get("steps")
+	if arg.Exists {
+		if out, err = arg.Int64(); err != nil {
+			return out, errors.Errorf("steps %v is invalid", arg)
+		}
+	}
+	return out, nil
 }
 
 func startAtPrice() (float64, error) {
@@ -205,9 +225,6 @@ func stopWithSize() (float64, error) {
 	return out, nil
 }
 
-// examples:
-// ./nefertiti exit --exchange=GDAX --market=BTC-USDC --start-at-price=200000 --stop-at-price=240000 --start-with-size=0.015 --stop-with-size=0.020
-// ./nefertiti exit --exchange=GDAX --market=BTC-USDC --start-at-price=100000 --stop-at-price=200000 --start-with-size=0.010 --stop-with-size=0.015
 func (c *ExitCommand) Run(args []string) int {
 	exchange, err := exchanges.GetExchange()
 	if err != nil {

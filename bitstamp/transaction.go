@@ -18,60 +18,84 @@ func (transaction *Transaction) OrderId() string {
 }
 
 func (transaction *Transaction) Market(client *Client) string {
-	markets, _ := GetMarkets(client, true)
-	for i := range markets {
-		price := (*transaction)[fmt.Sprintf("%s_%s", markets[i].Base, markets[i].Quote)]
-		if empty.AsString(price) != "" {
-			return markets[i].Name
+	cached := true
+	for {
+		markets, _ := GetMarkets(client, cached)
+		for i := range markets {
+			price := (*transaction)[fmt.Sprintf("%s_%s", markets[i].Base, markets[i].Quote)]
+			if empty.AsString(price) != "" {
+				return markets[i].Name
+			}
 		}
+		if !cached {
+			return ""
+		}
+		cached = false
 	}
-	return ""
 }
 
 func (transaction *Transaction) Price(client *Client) float64 {
-	markets, _ := GetMarkets(client, true)
-	for i := range markets {
-		price := (*transaction)[fmt.Sprintf("%s_%s", markets[i].Base, markets[i].Quote)]
-		if empty.AsString(price) != "" {
-			return empty.AsFloat64(price)
+	cached := true
+	for {
+		markets, _ := GetMarkets(client, cached)
+		for i := range markets {
+			price := (*transaction)[fmt.Sprintf("%s_%s", markets[i].Base, markets[i].Quote)]
+			if empty.AsString(price) != "" {
+				return empty.AsFloat64(price)
+			}
 		}
+		if !cached {
+			return 0
+		}
+		cached = false
 	}
-	return 0
 }
 
 func (transaction *Transaction) Amount(client *Client) float64 {
-	markets, _ := GetMarkets(client, true)
-	for i := range markets {
-		price := (*transaction)[fmt.Sprintf("%s_%s", markets[i].Base, markets[i].Quote)]
-		if empty.AsString(price) != "" {
-			return math.Abs(empty.AsFloat64((*transaction)[markets[i].Base]))
+	cached := true
+	for {
+		markets, _ := GetMarkets(client, cached)
+		for i := range markets {
+			price := (*transaction)[fmt.Sprintf("%s_%s", markets[i].Base, markets[i].Quote)]
+			if empty.AsString(price) != "" {
+				return math.Abs(empty.AsFloat64((*transaction)[markets[i].Base]))
+			}
 		}
+		if !cached {
+			return 0
+		}
+		cached = false
 	}
-	return 0
 }
 
 func (transaction *Transaction) Side(client *Client) (string, error) {
-	markets, _ := GetMarkets(client, true)
-	for i := range markets {
-		price := (*transaction)[fmt.Sprintf("%s_%s", markets[i].Base, markets[i].Quote)]
-		if empty.AsString(price) != "" {
-			quote := empty.AsFloat64((*transaction)[markets[i].Quote])
-			if quote < 0 {
-				return BUY, nil
-			}
-			if quote > 0 {
-				return SELL, nil
-			}
-			base := empty.AsFloat64((*transaction)[markets[i].Base])
-			if base < 0 {
-				return SELL, nil
-			}
-			if base > 0 {
-				return BUY, nil
+	cached := true
+	for {
+		markets, _ := GetMarkets(client, cached)
+		for i := range markets {
+			price := (*transaction)[fmt.Sprintf("%s_%s", markets[i].Base, markets[i].Quote)]
+			if empty.AsString(price) != "" {
+				quote := empty.AsFloat64((*transaction)[markets[i].Quote])
+				if quote < 0 {
+					return BUY, nil
+				}
+				if quote > 0 {
+					return SELL, nil
+				}
+				base := empty.AsFloat64((*transaction)[markets[i].Base])
+				if base < 0 {
+					return SELL, nil
+				}
+				if base > 0 {
+					return BUY, nil
+				}
 			}
 		}
+		if !cached {
+			return "", errors.Errorf("unknown transaction side: %+v", transaction)
+		}
+		cached = false
 	}
-	return "", errors.Errorf("unknown transaction side: %+v", transaction)
 }
 
 func (transaction *Transaction) DateTime() time.Time {

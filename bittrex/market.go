@@ -22,12 +22,16 @@ func (market *Market) MarketName() string {
 	return fmt.Sprintf("%s-%s", market.QuoteCurrencySymbol, market.BaseCurrencySymbol)
 }
 
-// true if this market is currently active (and not about to be removed), otherwise false.
 func (market *Market) Online() bool {
-	return market.Status != "OFFLINE" && !strings.Contains(market.Notice, "will be removed")
+	return market.Status != "OFFLINE"
 }
 
-func (market *Market) Prohibited(regions []string) bool {
+// true if this market is currently online (and not about to be removed), otherwise false.
+func (market *Market) Active() bool {
+	return market.Online() && !strings.Contains(market.Notice, "will be removed")
+}
+
+func (market *Market) IsProhibited(regions []string) bool {
 	for _, r := range regions {
 		for _, s := range market.ProhibitedIn {
 			if strings.EqualFold(s, r) {

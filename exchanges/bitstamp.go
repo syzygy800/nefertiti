@@ -136,6 +136,25 @@ func (self *Bitstamp) GetClient(permission model.Permission, sandbox bool) (inte
 	return exchange.New(apiKey, apiSecret), nil
 }
 
+func (self *Bitstamp) getMarket(client *exchange.Client, name string) (*exchange.Market, error) {
+	cached := true
+	for {
+		markets, err := exchange.GetMarkets(client, cached)
+		if err != nil {
+			return nil, err
+		}
+		for _, market := range markets {
+			if market.Name == name {
+				return &market, nil
+			}
+		}
+		if !cached {
+			return nil, errors.Errorf("market %s does not exist", name)
+		}
+		cached = false
+	}
+}
+
 func (self *Bitstamp) GetMarkets(cached, sandbox bool, ignore []string) ([]model.Market, error) {
 	var out []model.Market
 
@@ -146,11 +165,13 @@ func (self *Bitstamp) GetMarkets(cached, sandbox bool, ignore []string) ([]model
 	}
 
 	for _, market := range markets {
-		out = append(out, model.Market{
-			Name:  market.Name,
-			Base:  market.Base,
-			Quote: market.Quote,
-		})
+		if market.Enabled {
+			out = append(out, model.Market{
+				Name:  market.Name,
+				Base:  market.Base,
+				Quote: market.Quote,
+			})
+		}
 	}
 
 	return out, nil
@@ -240,7 +261,7 @@ func (self *Bitstamp) sell(
 		markets []model.Market
 	)
 
-	if markets, err = self.GetMarkets(true, sandbox, nil); err != nil {
+	if markets, err = self.GetMarkets(false, sandbox, nil); err != nil {
 		return old, err
 	}
 
@@ -765,38 +786,28 @@ func (self *Bitstamp) Get24h(client interface{}, market string) (*model.Stats, e
 	}, nil
 }
 
-func (self *Bitstamp) GetPricePrec(client interface{}, market string) (int, error) {
+func (self *Bitstamp) GetPricePrec(client interface{}, marketName string) (int, error) {
 	bitstamp, ok := client.(*exchange.Client)
 	if !ok {
 		return 0, errors.New("invalid argument: client")
 	}
-	markets, err := exchange.GetMarkets(bitstamp, true)
+	market, err := self.getMarket(bitstamp, marketName)
 	if err != nil {
 		return 0, err
 	}
-	for _, m := range markets {
-		if m.Name == market {
-			return m.PricePrec, nil
-		}
-	}
-	return 8, nil
+	return market.PricePrec, nil
 }
 
-func (self *Bitstamp) GetSizePrec(client interface{}, market string) (int, error) {
+func (self *Bitstamp) GetSizePrec(client interface{}, marketName string) (int, error) {
 	bitstamp, ok := client.(*exchange.Client)
 	if !ok {
 		return 0, errors.New("invalid argument: client")
 	}
-	markets, err := exchange.GetMarkets(bitstamp, true)
+	market, err := self.getMarket(bitstamp, marketName)
 	if err != nil {
 		return 0, err
 	}
-	for _, m := range markets {
-		if m.Name == market {
-			return m.SizePrec, nil
-		}
-	}
-	return 8, nil
+	return market.SizePrec, nil
 }
 
 func (self *Bitstamp) GetMaxSize(client interface{}, base, quote string, hold, earn bool, def float64, mult multiplier.Mult) float64 {

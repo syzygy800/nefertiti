@@ -9,6 +9,7 @@ import (
 
 type Market struct {
 	Name      string `json:"name"`
+	Enabled   bool   `json:"enabled"`
 	SizePrec  int    `json:"sizePrec"`
 	PricePrec int    `json:"pricePrec"`
 	Base      string // 1st listed currency of this market pair
@@ -24,15 +25,14 @@ func getMarkets(client *Client) ([]Market, error) {
 		return nil, err
 	}
 	for _, pair := range pairs {
-		if strings.EqualFold(pair.Trading, "enabled") {
-			out = append(out, Market{
-				Name:      pair.UrlSymbol,
-				SizePrec:  pair.BaseDecimals,
-				PricePrec: pair.CounterDecimals,
-				Base:      strings.ToLower(strings.Split(pair.Name, "/")[0]),
-				Quote:     strings.ToLower(strings.Split(pair.Name, "/")[1]),
-			})
-		}
+		out = append(out, Market{
+			Name:      pair.UrlSymbol,
+			Enabled:   strings.EqualFold(pair.Trading, "enabled"),
+			SizePrec:  pair.BaseDecimals,
+			PricePrec: pair.CounterDecimals,
+			Base:      strings.ToLower(strings.Split(pair.Name, "/")[0]),
+			Quote:     strings.ToLower(strings.Split(pair.Name, "/")[1]),
+		})
 	}
 	return out, nil
 }

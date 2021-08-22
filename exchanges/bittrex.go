@@ -290,19 +290,6 @@ func bittrexCancelOrder(client *exchange.Client, order *exchange.Order) (float64
 	return triggerPrice, client.CancelOrder(order.Id)
 }
 
-func bittrexMinTradeSize(client *exchange.Client, market1 string) (float64, error) {
-	markets, err := client.GetMarkets()
-	if err != nil {
-		return 0, errors.Wrap(err, 1)
-	}
-	for _, market := range markets {
-		if market.MarketName() == market1 {
-			return market.MinTradeSize, nil
-		}
-	}
-	return 0, errors.Errorf("market %s does not exist", market1)
-}
-
 // ----------------------------------------------------------------------------
 
 type Bittrex struct {
@@ -327,6 +314,43 @@ func (self *Bittrex) GetClient(permission model.Permission, sandbox bool) (inter
 	return exchange.New(apiKey, apiSecret, bittrexAppID), nil
 }
 
+func (self *Bittrex) getMarket(client *exchange.Client, market1 string) (*exchange.Market, error) {
+	cached := true
+	for {
+		if self.markets == nil || !cached {
+			var err error
+			if self.markets, err = client.GetMarkets(); err != nil {
+				return nil, errors.Wrap(err, 1)
+			}
+		}
+		for _, market3 := range self.markets {
+			if market3.MarketName() == market1 {
+				return &market3, nil
+			}
+		}
+		if !cached {
+			return nil, errors.Errorf("market %s does not exist", market1)
+		}
+		cached = false
+	}
+}
+
+func (self *Bittrex) marketOnline(client *exchange.Client, market1 string) (bool, error) {
+	market3, err := self.getMarket(client, market1)
+	if err != nil {
+		return false, err
+	}
+	return market3.Online(), nil
+}
+
+func (self *Bittrex) minTradeSize(client *exchange.Client, market1 string) (float64, error) {
+	market3, err := self.getMarket(client, market1)
+	if err != nil {
+		return 0, err
+	}
+	return market3.MinTradeSize, nil
+}
+
 func (self *Bittrex) GetMarkets(cached, sandbox bool, ignore []string) ([]model.Market, error) {
 	var (
 		err error
@@ -341,7 +365,7 @@ func (self *Bittrex) GetMarkets(cached, sandbox bool, ignore []string) ([]model.
 	}
 
 	for _, market := range self.markets {
-		if market.Online() && !market.Prohibited(ignore) {
+		if market.Active() && !market.IsProhibited(ignore) {
 			out = append(out, model.Market{
 				Name:  market.MarketName(),
 				Base:  market.BaseCurrencySymbol,
@@ -542,7 +566,7 @@ func (self *Bittrex) sell(
 										return new, err
 									} else {
 										// not enough liquidity to buy this order. lower this order size until we can.
-										min, err := bittrexMinTradeSize(client, order.MarketName())
+										min, err := self.minTradeSize(client, order.MarketName())
 										if err != nil {
 											return new, err
 										}
@@ -707,26 +731,31 @@ func (self *Bittrex) Sell(
 			for _, order := range open {
 				side := bittrexOrderSide(&order)
 				if side != model.ORDER_SIDE_NONE {
-					var openedAt time.Time
-					if openedAt, err = time.Parse(exchange.TIME_FORMAT, order.CreatedAt); err != nil {
-						bittrexLogErrorEx(errors.Wrap(err, 1), &order, level, service)
-					} else if time.Since(openedAt).Hours() >= float64(reopenAfterDays*24) {
-						bittrexLogInfo(fmt.Sprintf(
-							"Cancelling (and reopening) limit %s %s (market: %s, price: %g, qty: %f, opened at %s) because it is older than %d days.",
-							model.OrderSideString[side], order.Id, order.MarketName(), order.Price(), order.Quantity, order.CreatedAt, reopenAfterDays,
-						), level, service)
-
-						var ocoTriggerPrice float64
-						if ocoTriggerPrice, err = bittrexCancelOrder(client, &order); err == nil {
-							if ocoTriggerPrice > 0 {
-								_, err = self.OCO(client, order.MarketName(), order.Quantity, order.Price(), ocoTriggerPrice, "")
-							} else {
-								_, _, err = self.Order(client, side, order.MarketName(), order.Quantity, order.Price(), model.LIMIT, "")
-							}
-						}
-
-						if err != nil {
+					var online bool
+					if online, err = self.marketOnline(client, order.MarketName()); err != nil {
+						bittrexLogErrorEx(err, &order, level, service)
+					} else if online {
+						var openedAt time.Time
+						if openedAt, err = time.Parse(exchange.TIME_FORMAT, order.CreatedAt); err != nil {
 							bittrexLogErrorEx(errors.Wrap(err, 1), &order, level, service)
+						} else if time.Since(openedAt).Hours() >= float64(reopenAfterDays*24) {
+							bittrexLogInfo(fmt.Sprintf(
+								"Cancelling (and reopening) limit %s %s (market: %s, price: %g, qty: %f, opened at %s) because it is older than %d days.",
+								model.OrderSideString[side], order.Id, order.MarketName(), order.Price(), order.Quantity, order.CreatedAt, reopenAfterDays,
+							), level, service)
+
+							var ocoTriggerPrice float64
+							if ocoTriggerPrice, err = bittrexCancelOrder(client, &order); err == nil {
+								if ocoTriggerPrice > 0 {
+									_, err = self.OCO(client, order.MarketName(), order.Quantity, order.Price(), ocoTriggerPrice, "")
+								} else {
+									_, _, err = self.Order(client, side, order.MarketName(), order.Quantity, order.Price(), model.LIMIT, "")
+								}
+							}
+
+							if err != nil {
+								bittrexLogErrorEx(errors.Wrap(err, 1), &order, level, service)
+							}
 						}
 					}
 				}
@@ -1013,26 +1042,18 @@ func (self *Bittrex) Get24h(client interface{}, market1 string) (*model.Stats, e
 	}, nil
 }
 
-func (self *Bittrex) GetPricePrec(client interface{}, market string) (int, error) {
+func (self *Bittrex) GetPricePrec(client interface{}, market1 string) (int, error) {
 	bittrex, ok := client.(*exchange.Client)
 	if !ok {
 		return 0, errors.New("arg is not a valid v3 client")
 	}
 
-	if self.markets == nil {
-		var err error
-		if self.markets, err = bittrex.GetMarkets(); err != nil {
-			return 0, errors.Wrap(err, 1)
-		}
+	market3, err := self.getMarket(bittrex, market1)
+	if err != nil {
+		return 0, err
 	}
 
-	for _, market3 := range self.markets {
-		if market3.MarketName() == market {
-			return market3.Precision, nil
-		}
-	}
-
-	return 8, nil
+	return market3.Precision, nil
 }
 
 func (self *Bittrex) GetSizePrec(client interface{}, market string) (int, error) {
@@ -1131,7 +1152,7 @@ func (self *Bittrex) Buy(client interface{}, cancel bool, market1 string, calls 
 				// --- BEGIN --- svanas 2019-05-12 ------------------------------------
 				if strings.Contains(err.Error(), "MIN_TRADE_REQUIREMENT_NOT_MET") {
 					var min float64
-					if min, err = bittrexMinTradeSize(bittrex, market1); err == nil {
+					if min, err = self.minTradeSize(bittrex, market1); err == nil {
 						return self.Buy(client, cancel, market1, calls, min, deviation, kind)
 					}
 				}

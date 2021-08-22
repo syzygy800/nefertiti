@@ -169,7 +169,7 @@ func (self *CryptoDotCom) getSymbols(client *exchange.Client, quotes []string, c
 	var filtered []exchange.Symbol
 	for _, symbol := range self.symbols {
 		for _, quote := range quotes {
-			if strings.EqualFold(symbol.CountCoin, quote) {
+			if strings.EqualFold(symbol.QuoteCurrency, quote) {
 				filtered = append(filtered, symbol)
 			}
 		}
@@ -181,7 +181,7 @@ func (self *CryptoDotCom) getSymbols(client *exchange.Client, quotes []string, c
 func (self *CryptoDotCom) parseSymbol(symbols []exchange.Symbol, symbol string) (base, quote string, err error) {
 	for _, market := range symbols {
 		if market.Symbol == symbol {
-			return market.BaseCoin, market.CountCoin, nil
+			return market.BaseCurrency, market.QuoteCurrency, nil
 		}
 	}
 	return "", "", errors.Errorf("symbol %s does not exist", symbol)
@@ -250,8 +250,8 @@ func (self *CryptoDotCom) GetMarkets(cached, sandbox bool, ignore []string) ([]m
 	for _, symbol := range symbols {
 		out = append(out, model.Market{
 			Name:  symbol.Symbol,
-			Base:  symbol.BaseCoin,
-			Quote: symbol.CountCoin,
+			Base:  symbol.BaseCurrency,
+			Quote: symbol.QuoteCurrency,
 		})
 	}
 
@@ -265,20 +265,13 @@ func (self *CryptoDotCom) FormatMarket(base, quote string) string {
 // listen to the opened orders, look for cancelled orders, send a notification.
 func (self *CryptoDotCom) listen(
 	client *exchange.Client,
-	quotes []string,
+	symbols []exchange.Symbol,
 	service model.Notify,
 	level int64,
 	old []exchange.Order,
 	filled []exchange.Trade,
 ) ([]exchange.Order, error) {
-	var (
-		err     error
-		symbols []exchange.Symbol
-	)
-
-	if symbols, err = self.getSymbols(client, quotes, true); err != nil {
-		return old, err
-	}
+	var err error
 
 	// get my opened orders
 	var new []exchange.Order
@@ -339,21 +332,14 @@ func (self *CryptoDotCom) listen(
 // listen to the filled orders, look for newly filled orders, automatically place new LIMIT SELL orders.
 func (self *CryptoDotCom) sell(
 	client *exchange.Client,
-	quotes []string,
+	symbols []exchange.Symbol,
 	mult multiplier.Mult,
 	hold, earn model.Markets,
 	service model.Notify,
 	level int64,
 	old []exchange.Trade,
 ) ([]exchange.Trade, error) {
-	var (
-		err     error
-		symbols []exchange.Symbol
-	)
-
-	if symbols, err = self.getSymbols(client, quotes, true); err != nil {
-		return old, err
-	}
+	var err error
 
 	// get my filled orders
 	var filled []exchange.Trade
@@ -523,13 +509,15 @@ func (self *CryptoDotCom) Sell(
 			self.error(err, level, service)
 		} else if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
 			self.error(err, level, service)
-		} else
+		} else if symbols, err = self.getSymbols(client, quotes, false); err != nil {
+			self.error(err, level, service)
+		}
 		// listen to the filled orders, look for newly filled orders, automatically place new LIMIT SELL orders.
-		if filled, err = self.sell(client, quotes, mult, hold, earn, service, level, filled); err != nil {
+		if filled, err = self.sell(client, symbols, mult, hold, earn, service, level, filled); err != nil {
 			self.error(err, level, service)
 		} else
 		// listen to the opened orders, look for cancelled orders, send a notification.
-		if opened, err = self.listen(client, quotes, service, level, opened, filled); err != nil {
+		if opened, err = self.listen(client, symbols, service, level, opened, filled); err != nil {
 			self.error(err, level, service)
 		}
 	}
@@ -734,7 +722,7 @@ func (self *CryptoDotCom) GetPricePrec(client interface{}, market string) (int, 
 	}
 	for _, symbol := range symbols {
 		if symbol.Symbol == market {
-			return symbol.PricePrecision, nil
+			return symbol.PriceDecimals, nil
 		}
 	}
 	return 8, nil
@@ -751,7 +739,7 @@ func (self *CryptoDotCom) GetSizePrec(client interface{}, market string) (int, e
 	}
 	for _, symbol := range symbols {
 		if symbol.Symbol == market {
-			return symbol.AmountPrecision, nil
+			return symbol.QuantityDecimals, nil
 		}
 	}
 	return 0, nil
