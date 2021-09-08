@@ -77,6 +77,11 @@ func init() {
 	}
 }
 
+const (
+	kucoinPartnerID     = "nefertiti"
+	kucoinPartnerSecret = "1fac7c63-33d6-4662-801f-4a0900ecbd88"
+)
+
 type Kucoin struct {
 	*model.ExchangeInfo
 	symbols exchange.SymbolsModel
@@ -306,6 +311,8 @@ func (self *Kucoin) GetClient(permission model.Permission, sandbox bool) (interf
 		exchange.ApiKeyOption(apiKey),
 		exchange.ApiSecretOption(apiSecret),
 		exchange.ApiPassPhraseOption(apiPassphrase),
+		exchange.ApiPartnerIdOption(kucoinPartnerID),
+		exchange.ApiPartnerSecretOption(kucoinPartnerSecret),
 	), nil
 }
 
@@ -697,6 +704,8 @@ func (self *Kucoin) Sell(
 		exchange.ApiKeyOption(apiKey),
 		exchange.ApiSecretOption(apiSecret),
 		exchange.ApiPassPhraseOption(apiPassphrase),
+		exchange.ApiPartnerIdOption(kucoinPartnerID),
+		exchange.ApiPartnerIdOption(kucoinPartnerSecret),
 	)
 
 	// get my filled orders

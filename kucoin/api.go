@@ -35,12 +35,14 @@ func init() {
 
 // An ApiService provides a HTTP client and a signer to make a HTTP request with the signature to KuCoin API.
 type ApiService struct {
-	apiBaseURI    string
-	apiKey        string
-	apiSecret     string
-	apiPassphrase string
-	requester     Requester
-	signer        Signer
+	apiBaseURI       string
+	apiKey           string
+	apiSecret        string
+	apiPassphrase    string
+	apiPartnerID     string
+	apiPartnerSecret string
+	requester        Requester
+	signer           *KcSigner
 }
 
 // ProductionApiBaseURI is api base uri for production.
@@ -77,6 +79,18 @@ func ApiPassPhraseOption(passPhrase string) ApiServiceOption {
 	}
 }
 
+func ApiPartnerIdOption(partnerID string) ApiServiceOption {
+	return func(service *ApiService) {
+		service.apiPartnerID = partnerID
+	}
+}
+
+func ApiPartnerSecretOption(partnerSecret string) ApiServiceOption {
+	return func(service *ApiService) {
+		service.apiPartnerSecret = partnerSecret
+	}
+}
+
 // NewApiService creates a instance of ApiService by passing ApiServiceOptions, then you can call methods.
 func NewApiService(opts ...ApiServiceOption) *ApiService {
 	as := &ApiService{
@@ -89,7 +103,7 @@ func NewApiService(opts ...ApiServiceOption) *ApiService {
 		as.apiBaseURI = ProductionApiBaseURI
 	}
 	if as.apiKey != "" {
-		as.signer = NewKcSigner(as.apiKey, as.apiSecret, as.apiPassphrase, 2)
+		as.signer = NewKcSigner(as.apiKey, as.apiSecret, as.apiPassphrase, as.apiPartnerID, as.apiPartnerSecret, 2)
 	}
 	return as
 }
@@ -115,7 +129,7 @@ func (as *ApiService) call(request *Request, rps float64) (*ApiResponse, error) 
 		b.WriteString(request.Method)
 		b.WriteString(request.RequestURI())
 		b.Write(request.Body)
-		h := as.signer.(*KcSigner).Headers(b.String())
+		h := as.signer.Headers(b.String())
 		for k, v := range h {
 			request.Header.Set(k, v)
 		}
