@@ -22,7 +22,7 @@ require (
 	github.com/imdario/mergo v0.3.12 // indirect
 	github.com/jedib0t/go-pretty/v6 v6.2.4
 	github.com/kr/pretty v0.3.0 // indirect
-	github.com/mattn/go-isatty v0.0.13 // indirect
+	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/mitchellh/cli v1.1.2
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/posener/complete v1.2.3 // indirect
@@ -34,6 +34,6 @@ require (
 	github.com/svanas/go-mining-hamster v0.0.0-20190102110438-73bc620cc6e9
 	github.com/yanzay/tbot v1.0.0
 	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97 // indirect
-	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c // indirect
+	golang.org/x/sys v0.0.0-20210906170528-6f6e22806c34 // indirect
 	golang.org/x/term v0.0.0-20210615171337-6886f2dfbf5b
 )
