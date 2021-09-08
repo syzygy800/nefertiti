@@ -15,9 +15,9 @@ import (
 	"github.com/svanas/nefertiti/flag"
 )
 
-const (
+var (
 	APP_NAME    = "nefertiti"
-	APP_VERSION = "0.0.175"
+	APP_VERSION = "99.99.999"
 )
 
 var (

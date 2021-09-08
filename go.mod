@@ -7,10 +7,10 @@ require (
 	github.com/adshao/go-binance/v2 v2.3.1
 	github.com/alexflint/go-filemutex v1.1.0
 	github.com/armon/go-radix v1.0.0 // indirect
+	github.com/blang/semver v3.5.1+incompatible
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/dghubble/go-twitter v0.0.0-20210609183100-2fdbf421508e
 	github.com/dghubble/oauth1 v0.7.0
-	github.com/equinox-io/equinox v1.2.0
 	github.com/fatih/color v1.12.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
@@ -26,6 +26,7 @@ require (
 	github.com/mitchellh/cli v1.1.2
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/posener/complete v1.2.3 // indirect
+	github.com/rhysd/go-github-selfupdate v1.2.3
 	github.com/rogpeppe/go-internal v1.8.0 // indirect
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/stretchr/testify v1.7.0 // indirect
