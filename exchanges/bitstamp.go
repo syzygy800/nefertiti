@@ -155,7 +155,7 @@ func (self *Bitstamp) getMarket(client *exchange.Client, name string) (*exchange
 	}
 }
 
-func (self *Bitstamp) GetMarkets(cached, sandbox bool, ignore []string) ([]model.Market, error) {
+func (self *Bitstamp) GetMarkets(cached, sandbox bool, blacklist []string) ([]model.Market, error) {
 	var out []model.Market
 
 	markets, err := exchange.GetMarkets(exchange.New("", ""), cached)
@@ -165,7 +165,14 @@ func (self *Bitstamp) GetMarkets(cached, sandbox bool, ignore []string) ([]model
 	}
 
 	for _, market := range markets {
-		if market.Enabled {
+		if market.Enabled && func() bool {
+			for _, ignore := range blacklist {
+				if strings.EqualFold(market.Name, ignore) {
+					return false
+				}
+			}
+			return true
+		}() {
 			out = append(out, model.Market{
 				Name:  market.Name,
 				Base:  market.Base,
@@ -485,6 +492,10 @@ func (self *Bitstamp) Sell(
 		return err
 	}
 
+	// we won't be re-buying *unless* your most recent (non-sold) sell is older than 14 days
+	reboughtAt := time.Now()
+	const rebuyAfterDays = 14
+
 	for {
 		// read the dynamic settings
 		var (
@@ -505,10 +516,7 @@ func (self *Bitstamp) Sell(
 			self.error(err, level, service)
 		} else
 		// follow up on the "aggressive" strategy
-		if flag.Dca() {
-			// we won't be re-buying *unless* your most recent (non-sold) sell is older than 14 days
-			const rebuyAfterDays = 14
-
+		if flag.Dca() && time.Since(reboughtAt).Minutes() > 60 {
 			var markets []exchange.Market
 			if markets, err = exchange.GetMarkets(client, true); err != nil {
 				self.error(err, level, service)
@@ -549,7 +557,6 @@ func (self *Bitstamp) Sell(
 									if precSize, err = self.GetSizePrec(client, market.Name); err != nil {
 										self.error(err, level, service)
 									} else {
-										orderType := model.MARKET
 										for {
 											var qty float64
 											if qty, err = exchange.GetMinOrderSize(client, market.Name, ticker, precSize); err != nil {
@@ -558,31 +565,12 @@ func (self *Bitstamp) Sell(
 												if hold.HasMarket(market.Name) {
 													qty = qty * 5
 												}
-												if orderType == model.MARKET {
-													_, err = client.BuyMarketOrder(market.Name, precision.Round(qty, precSize))
-												} else {
-													var precPrice int
-													if precPrice, err = self.GetPricePrec(client, market.Name); err == nil {
-														ticker = ticker * 1.01
-														_, err = client.BuyLimitOrder(market.Name,
-															precision.Round(qty, precSize),
-															precision.Round(ticker, precPrice),
-														)
-													}
-												}
-												if err != nil {
+												if _, err = client.BuyMarketOrder(market.Name, precision.Round(qty, precSize)); err != nil {
 													// --- BEGIN --- svanas 2020-09-15 --- error: Minimum order size is ... -----------
 													if strings.Contains(err.Error(), "Minimum order size") {
 														lower, _ := strconv.ParseFloat(precision.Format(precSize), 64)
 														ticker = ticker - lower
 														continue
-													}
-													// --- BEGIN --- svanas 2021-03-26 --- error: Order could not be placed -----------
-													if strings.Contains(err.Error(), "Order could not be placed") {
-														if orderType == model.MARKET {
-															orderType = model.LIMIT
-															continue
-														}
 													}
 													// ---- END ---- svanas 2020-09-15 ------------------------------------------------
 													self.error(err, level, service)
@@ -597,6 +585,7 @@ func (self *Bitstamp) Sell(
 					}
 				}
 			}
+			reboughtAt = time.Now()
 		}
 	}
 }

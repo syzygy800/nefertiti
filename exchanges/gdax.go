@@ -189,7 +189,7 @@ func (self *Gdax) getProducts(client interface{}, cached bool) ([]exchange.Produ
 	return self.products, nil
 }
 
-func (self *Gdax) GetMarkets(cached, sandbox bool, ignore []string) ([]model.Market, error) {
+func (self *Gdax) GetMarkets(cached, sandbox bool, blacklist []string) ([]model.Market, error) {
 	var out []model.Market
 
 	products, err := self.getProducts(gdax.New(sandbox), cached)
@@ -199,11 +199,20 @@ func (self *Gdax) GetMarkets(cached, sandbox bool, ignore []string) ([]model.Mar
 	}
 
 	for _, product := range products {
-		out = append(out, model.Market{
-			Name:  product.ID,
-			Base:  product.BaseCurrency,
-			Quote: product.QuoteCurrency,
-		})
+		if func() bool {
+			for _, ignore := range blacklist {
+				if strings.EqualFold(product.ID, ignore) {
+					return false
+				}
+			}
+			return true
+		}() {
+			out = append(out, model.Market{
+				Name:  product.ID,
+				Base:  product.BaseCurrency,
+				Quote: product.QuoteCurrency,
+			})
+		}
 	}
 
 	return out, nil
@@ -290,7 +299,7 @@ func (self *Gdax) sell(
 				}
 			} else {
 				// read: connection reset by peer?
-				if strings.Contains(err.Error(), "connection reset by peer") {
+				if strings.Contains(err.Error(), "connection reset by peer") || strings.Contains(err.Error(), "operation timed out") {
 					for {
 						log.Printf("[ERROR] %v", err)
 						time.Sleep(5 * time.Second)
@@ -298,7 +307,7 @@ func (self *Gdax) sell(
 						if err == nil {
 							break
 						} else {
-							if !strings.Contains(err.Error(), "connection reset by peer") {
+							if !strings.Contains(err.Error(), "connection reset by peer") && !strings.Contains(err.Error(), "operation timed out") {
 								self.error(err, level, service)
 								return err
 							}

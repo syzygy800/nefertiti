@@ -316,7 +316,7 @@ func (self *Kucoin) GetClient(permission model.Permission, sandbox bool) (interf
 	), nil
 }
 
-func (self *Kucoin) GetMarkets(cached, sandbox bool, ignore []string) ([]model.Market, error) {
+func (self *Kucoin) GetMarkets(cached, sandbox bool, blacklist []string) ([]model.Market, error) {
 	var out []model.Market
 
 	client := exchange.NewApiService(
@@ -329,7 +329,14 @@ func (self *Kucoin) GetMarkets(cached, sandbox bool, ignore []string) ([]model.M
 	}
 
 	for _, symbol := range symbols {
-		if symbol.EnableTrading {
+		if symbol.EnableTrading && func() bool {
+			for _, ignore := range blacklist {
+				if strings.EqualFold(symbol.Symbol, ignore) {
+					return false
+				}
+			}
+			return true
+		}() {
 			out = append(out, model.Market{
 				Name:  symbol.Symbol,
 				Base:  symbol.BaseCurrency,

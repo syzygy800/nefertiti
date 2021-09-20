@@ -162,45 +162,48 @@ func (self *Binance) baseURL(sandbox bool) string {
 	if sandbox {
 		return self.ExchangeInfo.REST.Sandbox
 	}
+
 	output := self.ExchangeInfo.REST.URI
 
-	arg := flag.Get("cluster")
-	if arg.Exists {
-		if cluster, err := arg.Int64(); err == nil {
-			switch cluster {
-			case 1:
-				output = binance.BASE_URL_1
-			case 2:
-				output = binance.BASE_URL_2
-			case 3:
-				output = binance.BASE_URL_3
-			}
-		}
-	} else {
-		client := &http.Client{Timeout: time.Second}
-
-		endpoints := map[string]time.Duration{
-			binance.BASE_URL:   0,
-			binance.BASE_URL_1: 0,
-			binance.BASE_URL_2: 0,
-			binance.BASE_URL_3: 0,
-		}
-
-		for endpoint := range endpoints {
-			if req, err := http.NewRequest(http.MethodHead, endpoint, nil); err == nil {
-				start := time.Now()
-				if response, err := client.Do(req); err == nil {
-					response.Body.Close()
-					endpoints[endpoint] = time.Since(start)
+	if output != binance.BASE_URL_US {
+		arg := flag.Get("cluster")
+		if arg.Exists {
+			if cluster, err := arg.Int64(); err == nil {
+				switch cluster {
+				case 1:
+					output = binance.BASE_URL_1
+				case 2:
+					output = binance.BASE_URL_2
+				case 3:
+					output = binance.BASE_URL_3
 				}
 			}
-		}
+		} else {
+			client := &http.Client{Timeout: time.Second}
 
-		lowest := endpoints[binance.BASE_URL]
-		for endpoint, duration := range endpoints {
-			if duration > 0 && duration < lowest {
-				lowest = duration
-				output = endpoint
+			endpoints := map[string]time.Duration{
+				binance.BASE_URL:   0,
+				binance.BASE_URL_1: 0,
+				binance.BASE_URL_2: 0,
+				binance.BASE_URL_3: 0,
+			}
+
+			for endpoint := range endpoints {
+				if req, err := http.NewRequest(http.MethodHead, endpoint, nil); err == nil {
+					start := time.Now()
+					if response, err := client.Do(req); err == nil {
+						response.Body.Close()
+						endpoints[endpoint] = time.Since(start)
+					}
+				}
+			}
+
+			lowest := endpoints[binance.BASE_URL]
+			for endpoint, duration := range endpoints {
+				if duration > 0 && duration < lowest {
+					lowest = duration
+					output = endpoint
+				}
 			}
 		}
 	}
@@ -297,7 +300,7 @@ func (self *Binance) GetClient(permission model.Permission, sandbox bool) (inter
 	return binance.New(self.baseURL(sandbox), apiKey, apiSecret), nil
 }
 
-func (self *Binance) GetMarkets(cached, sandbox bool, ignore []string) ([]model.Market, error) {
+func (self *Binance) GetMarkets(cached, sandbox bool, blacklist []string) ([]model.Market, error) {
 	var out []model.Market
 
 	precs, err := binance.GetPrecs(binance.New(self.baseURL(sandbox), "", ""), cached)
@@ -307,7 +310,14 @@ func (self *Binance) GetMarkets(cached, sandbox bool, ignore []string) ([]model.
 	}
 
 	for _, prec := range precs {
-		if prec.Symbol.Status == string(exchange.SymbolStatusTypeTrading) {
+		if prec.Symbol.Status == string(exchange.SymbolStatusTypeTrading) && func() bool {
+			for _, ignore := range blacklist {
+				if strings.EqualFold(prec.Symbol.Symbol, ignore) {
+					return false
+				}
+			}
+			return true
+		}() {
 			out = append(out, model.Market{
 				Name:  prec.Symbol.Symbol,
 				Base:  prec.Symbol.BaseAsset,
