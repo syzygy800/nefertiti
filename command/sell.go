@@ -103,7 +103,6 @@ Options:
   --hold     = name of the market not to sell, for example: BTC-EUR (optional)
   --earn     = name of the market where you want to sell only enough of the
                base asset at "mult" to break even; hold the rest (optional)
-  --sweep    = if you have dust, try and sell it (optional, defaults to false)
 
 Notify:
   0 = nothing, ever

@@ -124,6 +124,7 @@ func (self *Kucoin) error(err error, level int64, service model.Notify) {
 	}
 }
 
+//lint:ignore U1000 func is unused
 func (self *Kucoin) getAvailableBalance(client *exchange.ApiService, curr string) (float64, error) {
 	var (
 		err      error
@@ -539,19 +540,6 @@ func (self *Kucoin) sell(
 		)
 		base, quote, err = model.ParseMarket(markets, symbol)
 		if err == nil {
-			// --- BEGIN --- svanas 2019-02-19 --- if we have dust, try and sell it ---
-			if flag.Exists("sweep") {
-				var available float64
-				if available, err = self.getAvailableBalance(client, base); err != nil {
-					self.error(err, level, service)
-				} else {
-					available = precision.Floor(available, sp)
-					if available > amount {
-						amount = available
-					}
-				}
-			}
-			// ---- END ---- svanas 2019-02-19 ----------------------------------------
 			amount = self.GetMaxSize(client, base, quote, hold.HasMarket(symbol), earn.HasMarket(symbol), amount, mult)
 			if amount > 0 {
 				var pp int
