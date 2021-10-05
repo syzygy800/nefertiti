@@ -7,6 +7,7 @@ import (
 	"log"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"github.com/svanas/nefertiti/aggregation"
 	"github.com/svanas/nefertiti/errors"
@@ -580,10 +581,22 @@ func (self *Woo) Get24h(client interface{}, market string) (*model.Stats, error)
 	}
 
 	return &model.Stats{
-		Market:    market,
-		High:      ticker.HighestPrice24h,
-		Low:       ticker.LowestPrice24h,
-		BtcVolume: 0,
+		Market: market,
+		High:   ticker.HighestPrice24h,
+		Low:    ticker.LowestPrice24h,
+		BtcVolume: func(ticker1 *exchange.Ticker) float64 {
+			_, quote, err := self.parseMarket(market)
+			if err == nil {
+				if strings.EqualFold(quote, model.BTC) {
+					return ticker1.QuoteVolume
+				}
+				ticker2, err := wooClient.Ticker(self.FormatMarket(model.BTC, quote))
+				if err == nil {
+					return ticker1.QuoteVolume / ticker2.LastPrice
+				}
+			}
+			return 0
+		}(ticker),
 	}, nil
 }
 
