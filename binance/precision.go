@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	exchange "github.com/adshao/go-binance/v2"
 	"github.com/svanas/nefertiti/precision"
@@ -37,7 +38,12 @@ func (self Precs) PrecFromSymbol(symbol string) *Prec {
 	return nil
 }
 
-var cache Precs
+type Cache struct {
+	precs     Precs
+	updatedAt time.Time
+}
+
+var cache *Cache
 
 func getPrecs(client *Client) (Precs, error) {
 	var out Precs
@@ -86,13 +92,17 @@ func getPrecs(client *Client) (Precs, error) {
 }
 
 func GetPrecs(client *Client, cached bool) (Precs, error) {
-	if cache == nil || !cached {
-		var err error
-		if cache, err = getPrecs(client); err != nil {
+	if cache == nil || !cached || time.Since(cache.updatedAt).Minutes() > 15 {
+		latest, err := getPrecs(client)
+		if err != nil {
 			return nil, err
 		}
+		cache = &Cache{
+			precs:     latest,
+			updatedAt: time.Now(),
+		}
 	}
-	return cache, nil
+	return cache.precs, nil
 }
 
 func GetSymbol(client *Client, name string) (*exchange.Symbol, error) {
