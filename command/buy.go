@@ -177,20 +177,52 @@ func buy(
 			mpip float64
 			mqty float64
 			mmin float64
+			mmax float64
 		)
 
 		magg = agg
 		mdip = dip
 		mpip = pip
-		if magg == 0 {
-			if magg, mdip, mpip, err = aggregation.GetEx(exchange, client, market, ticker, avg, dip, pip, max, min, int(top), strict); err != nil {
-				if errors.Is(err, aggregation.EOrderBookTooThin) {
-					if len(enumerable) > 1 {
-						report(err, market, nil, service, exchange)
-						continue
-					} else {
+		mmax = max
+
+		hasOpenSell := 0
+		// ignore supports where the price is higher than BUY order(s) that were (a) filled and (b) not been sold (yet)
+		if !test {
+			var opened model.Orders
+			if opened, err = exchange.GetOpened(client, market); err != nil {
+				return market, err
+			}
+			for _, order := range opened {
+				if order.Side == model.SELL {
+					hasOpenSell++
+				}
+			}
+			// step 1: loop through the filled BUY orders
+			var closed model.Orders
+			if closed, err = exchange.GetClosed(client, market); err != nil {
+				return market, err
+			}
+			for _, fill := range closed {
+				if fill.Side == model.BUY {
+					// step 2: has this filled BUY order NOT been sold?
+					var prec int
+					if prec, err = exchange.GetPricePrec(client, market); err != nil {
 						return market, err
 					}
+					if opened.IndexByPrice(model.SELL, market, pricing.Multiply(fill.Price, mult, prec)) > -1 {
+						if mmax == 0 || mmax >= fill.Price {
+							mmax = fill.Price
+						}
+					}
+				}
+			}
+		}
+
+		if magg == 0 {
+			if magg, mdip, mpip, err = aggregation.GetEx(exchange, client, market, ticker, avg, dip, pip, mmax, min, int(top), strict); err != nil {
+				if errors.Is(err, aggregation.EOrderBookTooThin) && len(enumerable) > 1 {
+					report(err, market, nil, service, exchange)
+					continue
 				} else {
 					return market, err
 				}
@@ -259,51 +291,13 @@ func buy(
 		}
 
 		// ignore BUY orders that are more expensive than max (optional)
-		if max > 0 {
+		if mmax > 0 {
 			i = 0
 			for i < len(book2) {
-				if book2[i].Price > max {
+				if book2[i].Price > mmax {
 					book2 = append(book2[:i], book2[i+1:]...)
 				} else {
 					i++
-				}
-			}
-		}
-
-		hasOpenSell := 0
-		// ignore BUY orders where the price is higher than BUY order(s) that were (a) filled and (b) not been sold (yet)
-		if !test {
-			var opened model.Orders
-			if opened, err = exchange.GetOpened(client, market); err != nil {
-				return market, err
-			}
-			for _, order := range opened {
-				if order.Side == model.SELL {
-					hasOpenSell++
-				}
-			}
-			// step 1: loop through the filled BUY orders
-			var closed model.Orders
-			if closed, err = exchange.GetClosed(client, market); err != nil {
-				return market, err
-			}
-			for _, fill := range closed {
-				if fill.Side == model.BUY {
-					// step 2: has this filled BUY order NOT been sold?
-					var prec int
-					if prec, err = exchange.GetPricePrec(client, market); err != nil {
-						return market, err
-					}
-					if opened.IndexByPrice(model.SELL, market, pricing.Multiply(fill.Price, mult, prec)) > -1 {
-						i = 0
-						for i < len(book2) {
-							if book2[i].Price >= fill.Price {
-								book2 = append(book2[:i], book2[i+1:]...)
-							} else {
-								i++
-							}
-						}
-					}
 				}
 			}
 		}
@@ -319,7 +313,7 @@ func buy(
 				report(aggregation.EOrderBookTooThin, market, nil, service, exchange)
 				continue
 			} else {
-				return market, errors.Errorf("Not enough supports. Please update your %s aggregation.", market)
+				return market, aggregation.EOrderBookTooThin
 			}
 		}
 		// distance between the buy orders must be at least 2%
