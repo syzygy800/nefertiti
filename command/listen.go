@@ -137,27 +137,22 @@ func getPong(req *http.Request) Pongs {
 		return out
 	}
 
-	not_ok := 0
 	for { // enumerate over ports, starting with "our" port + 1
 		port++
 		resp, err := http.Get("http://" + host + ":" + strconv.FormatInt(port, 10) + "/ping")
 		if err != nil {
-			not_ok++
+			break
+		}
+		// add the response to this func result
+		if raw, err := ioutil.ReadAll(resp.Body); err != nil {
+			log.Printf("[ERROR] %v", err)
 		} else {
-			// add the response to this func result
-			if raw, err := ioutil.ReadAll(resp.Body); err != nil {
+			var pong Pong
+			if err := json.Unmarshal(raw, &pong); err != nil {
 				log.Printf("[ERROR] %v", err)
 			} else {
-				var pong Pong
-				if err := json.Unmarshal(raw, &pong); err != nil {
-					log.Printf("[ERROR] %v", err)
-				} else {
-					out = append(out, pong)
-				}
+				out = append(out, pong)
 			}
-		}
-		if not_ok >= 10 { // 10 ports without an answer? stop enumerating
-			break
 		}
 	}
 
