@@ -258,20 +258,20 @@ func (self *Woo) sell(
 	// has a buy order been filled? then place a sell order
 	for i := 0; i < len(new); i++ {
 		if new[i].Side == exchange.OrderSideBuy {
-			qty := new[i].Quantity
+			qty := new[i].QuantityMinusFee()
 
 			// add up amount(s), hereby preventing a problem with partial matches
 			n := i + 1
 			for n < len(new) {
 				if new[n].Symbol == new[i].Symbol && new[n].Side == new[i].Side && new[n].Price == new[i].Price {
-					qty = qty + new[n].Quantity
+					qty = qty + new[n].QuantityMinusFee()
 					new = append(new[:n], new[n+1:]...)
 				} else {
 					n++
 				}
 			}
 
-			if qty > new[i].Quantity {
+			if qty > new[i].QuantityMinusFee() {
 				prec, err := self.GetSizePrec(client, new[i].Symbol)
 				if err != nil {
 					self.error(err, level, service)
@@ -293,7 +293,7 @@ func (self *Woo) sell(
 							exchange.OrderSideSell,
 							exchange.OrderTypeLimit,
 							qty,
-							pricing.Multiply(new[i].Price, mult, prec),
+							pricing.Multiply(new[i].ExecutedAt(), mult, prec),
 						)
 					}
 				}
@@ -460,8 +460,8 @@ func (self *Woo) GetClosed(client interface{}, market string) (model.Orders, err
 				return model.BUY
 			}(),
 			Market:    market,
-			Size:      order.Quantity,
-			Price:     order.Price,
+			Size:      order.QuantityMinusFee(),
+			Price:     order.ExecutedAt(),
 			CreatedAt: order.CreatedAt(),
 		})
 	}

@@ -78,18 +78,21 @@ func (client *Client) CancelOrder(symbol string, orderID int64) error {
 }
 
 type Order struct {
-	Symbol        string      `json:"symbol"`
-	Status        OrderStatus `json:"status"`
-	Side          OrderSide   `json:"side"`
-	CreatedTime   string      `json:"created_time"`
-	UpdatedTime   string      `json:"updated_time"`
-	OrderID       int64       `json:"order_id"`
-	ApplicationID string      `json:"application_id"`
-	OrderTag      string      `json:"order_tag"`
-	Price         float64     `json:"price"`
-	Type          OrderType   `json:"type"`
-	Quantity      float64     `json:"quantity"`
-	Amount        interface{} `json:"amount"`
+	Symbol               string      `json:"symbol"`
+	Status               OrderStatus `json:"status"`
+	Side                 OrderSide   `json:"side"`
+	CreatedTime          string      `json:"created_time"`
+	UpdatedTime          string      `json:"updated_time"`
+	OrderID              int64       `json:"order_id"`
+	ApplicationID        string      `json:"application_id"`
+	OrderTag             string      `json:"order_tag"`
+	Price                float64     `json:"price"`
+	Type                 OrderType   `json:"type"`
+	Quantity             float64     `json:"quantity"`
+	Amount               interface{} `json:"amount"`
+	Executed             float64     `json:"executed"`
+	TotalFee             float64     `json:"total_fee"`
+	AverageExecutedPrice float64     `json:"average_executed_price"`
 }
 
 func (order *Order) CreatedAt() time.Time {
@@ -106,6 +109,24 @@ func (order *Order) UpdatedAt() time.Time {
 		return time.Time{}
 	}
 	return time.Unix(sec, 0)
+}
+
+func (order *Order) ExecutedAt() float64 {
+	if order.AverageExecutedPrice > 0 {
+		return order.AverageExecutedPrice
+	}
+	return order.Price
+}
+
+func (order *Order) QuantityMinusFee() float64 {
+	executed := order.Executed
+	if executed == 0 {
+		executed = order.Quantity
+	}
+	if executed > 0 {
+		executed = executed - order.TotalFee
+	}
+	return executed
 }
 
 type Orders struct {
