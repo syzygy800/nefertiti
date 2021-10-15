@@ -57,7 +57,7 @@ func (client *Client) Order(symbol string, side OrderSide, orderType OrderType, 
 		body []byte
 		out  NewOrder
 	)
-	if body, err = client.call(http.MethodPost, "/v1/order", params, 30); err != nil {
+	if body, err = client.call(http.MethodPost, "/v1/order", params, 2); err != nil {
 		return nil, err
 	}
 	if err = json.Unmarshal(body, &out); err != nil {

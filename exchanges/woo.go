@@ -8,7 +8,9 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
+	filemutex "github.com/alexflint/go-filemutex"
 	"github.com/svanas/nefertiti/aggregation"
 	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
@@ -17,8 +19,62 @@ import (
 	"github.com/svanas/nefertiti/notify"
 	"github.com/svanas/nefertiti/precision"
 	"github.com/svanas/nefertiti/pricing"
+	"github.com/svanas/nefertiti/session"
 	exchange "github.com/svanas/nefertiti/woo"
 )
+
+var (
+	wooMutex *filemutex.FileMutex
+)
+
+const (
+	wooSessionFile = "woo.time"
+	wooSessionLock = "woo.lock"
+)
+
+func init() {
+	exchange.BeforeRequest = func(method, path string, rps float64) error {
+		var err error
+
+		if wooMutex == nil {
+			if wooMutex, err = filemutex.New(session.GetSessionFile(wooSessionLock)); err != nil {
+				return err
+			}
+		}
+
+		if err = wooMutex.Lock(); err != nil {
+			return err
+		}
+
+		var lastRequest *time.Time
+		if lastRequest, err = session.GetLastRequest(wooSessionFile); err != nil {
+			return err
+		}
+
+		if lastRequest != nil {
+			elapsed := time.Since(*lastRequest)
+			if elapsed.Seconds() < (float64(1) / rps) {
+				sleep := time.Duration((float64(time.Second) / rps) - float64(elapsed))
+				if flag.Debug() {
+					log.Printf("[DEBUG] sleeping %f seconds\n", sleep.Seconds())
+				}
+				time.Sleep(sleep)
+			}
+		}
+
+		if flag.Debug() {
+			log.Printf("[DEBUG] %s %s\n", method, path)
+		}
+
+		return nil
+	}
+	exchange.AfterRequest = func() {
+		defer func() {
+			wooMutex.Unlock()
+		}()
+		session.SetLastRequest(wooSessionFile, time.Now())
+	}
+}
 
 type Woo struct {
 	*model.ExchangeInfo
