@@ -271,7 +271,8 @@ func (self *Woo) sell(
 				}
 			}
 
-			if qty > new[i].QuantityMinusFee() {
+			// round to precision if (a) fees got deducted, or (b) we added up partial matches
+			if qty < new[i].Quantity || qty > new[i].QuantityMinusFee() {
 				prec, err := self.GetSizePrec(client, new[i].Symbol)
 				if err != nil {
 					self.error(err, level, service)
