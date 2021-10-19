@@ -82,7 +82,7 @@ func GetEx(
 		return 0, dip, pip, err
 	}
 
-	for cnt := Max(top, 4); cnt >= top; cnt-- {
+	for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
 		if out, err = get(exchange, client, market, ticker, avg, book, dip, pip, max, min, cnt); err == nil {
 			return out, dip, pip, err
 		}
@@ -94,7 +94,7 @@ func GetEx(
 		// if we cannot find any supports, upper your pip setting one percentage at a time until (a) we can, or (b) 50%
 		for y < 50 {
 			y++
-			for cnt := Max(top, 4); cnt >= top; cnt-- {
+			for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
 				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, cnt); err == nil {
 					return out, x, y, err
 				}
@@ -103,7 +103,7 @@ func GetEx(
 		// if we cannot find any supports, lower your dip setting one percentage at a time until (a) we can, or (b) 0%
 		for x > 0 {
 			x--
-			for cnt := Max(top, 4); cnt >= top; cnt-- {
+			for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
 				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, cnt); err == nil {
 					return out, x, y, err
 				}
@@ -112,7 +112,7 @@ func GetEx(
 		// if we cannot find any supports, upper your pip setting one percentage at a time until (a) we can, or (b) 100%
 		for y < 100 {
 			y++
-			for cnt := Max(top, 4); cnt >= top; cnt-- {
+			for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
 				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, cnt); err == nil {
 					return out, x, y, err
 				}
