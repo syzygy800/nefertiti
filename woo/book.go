@@ -2,6 +2,7 @@ package woo
 
 import (
 	"encoding/json"
+	"net/url"
 )
 
 type BookEntry struct {
@@ -20,7 +21,9 @@ func (client *Client) OrderBook(symbol string) (*OrderBook, error) {
 		body []byte
 		out  OrderBook
 	)
-	if body, err = client.get(("/v1/orderbook/" + symbol), nil, true, 10); err != nil {
+	params := url.Values{}
+	params.Add("max_level", "500")
+	if body, err = client.get(("/v1/orderbook/" + symbol), params, true, 10); err != nil {
 		return nil, err
 	}
 	if err = json.Unmarshal(body, &out); err != nil {
