@@ -830,10 +830,26 @@ func (self *Gdax) Get24h(client interface{}, market string) (*model.Stats, error
 	}
 
 	return &model.Stats{
-		Market:    market,
-		High:      gdax.ParseFloat(gdaxStats.High),
-		Low:       gdax.ParseFloat(gdaxStats.Low),
-		BtcVolume: 0,
+		Market: market,
+		High:   gdax.ParseFloat(gdaxStats.High),
+		Low:    gdax.ParseFloat(gdaxStats.Low),
+		BtcVolume: func(stats1 *exchange.Stats) float64 {
+			products, err := self.getProducts(gdaxClient, true)
+			if err == nil {
+				for _, product := range products {
+					if product.ID == market {
+						if strings.EqualFold(product.BaseCurrency, model.BTC) {
+							return gdax.ParseFloat(stats1.Volume)
+						}
+						stats2, err := gdaxClient.GetStats(self.FormatMarket(product.BaseCurrency, model.BTC))
+						if err == nil {
+							return gdax.ParseFloat(stats1.Volume) * gdax.ParseFloat(stats2.Last)
+						}
+					}
+				}
+			}
+			return 0
+		}(&gdaxStats),
 	}, nil
 }
 
