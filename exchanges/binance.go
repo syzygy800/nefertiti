@@ -965,12 +965,10 @@ func (self *Binance) Aggregate(client, book interface{}, market string, agg floa
 		if entry != nil {
 			entry.Size = entry.Size + qty
 		} else {
-			entry = &model.BookEntry{
-				Buy: &model.Buy{
-					Market: market,
-					Price:  price,
-				},
-				Size: qty,
+			entry = &model.Buy{
+				Market: market,
+				Price:  price,
+				Size:   qty,
 			}
 			out = append(out, *entry)
 		}
@@ -1115,7 +1113,7 @@ func (self *Binance) Cancel(client interface{}, market string, side model.OrderS
 	return nil
 }
 
-func (self *Binance) Buy(client interface{}, cancel bool, market string, calls model.Calls, size, deviation float64, kind model.OrderType) error {
+func (self *Binance) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {
 	var err error
 
 	binanceClient, ok := client.(*binance.Client)
@@ -1151,7 +1149,7 @@ func (self *Binance) Buy(client interface{}, cancel bool, market string, calls m
 			var (
 				oid   []byte
 				min   float64
-				qty   float64 = size
+				qty   float64 = call.Size
 				limit float64 = call.Price
 			)
 			if deviation != 1.0 {

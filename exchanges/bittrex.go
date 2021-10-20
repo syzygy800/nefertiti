@@ -975,13 +975,12 @@ func (self *Bittrex) Aggregate(client, book interface{}, market string, agg floa
 		if entry != nil {
 			entry.Size = entry.Size + e.Quantity
 		} else {
-			entry := &model.BookEntry{
-				Buy: &model.Buy{
+			entry :=
+				&model.Buy{
 					Market: market,
 					Price:  price,
-				},
-				Size: e.Quantity,
-			}
+					Size:   e.Quantity,
+				}
 			out = append(out, *entry)
 		}
 	}
@@ -1099,7 +1098,7 @@ func (self *Bittrex) Cancel(client interface{}, market1 string, side model.Order
 	return nil
 }
 
-func (self *Bittrex) Buy(client interface{}, cancel bool, market1 string, calls model.Calls, size, deviation float64, kind model.OrderType) error {
+func (self *Bittrex) Buy(client interface{}, cancel bool, market1 string, calls model.Calls, deviation float64, kind model.OrderType) error {
 	var err error
 
 	bittrex, ok := client.(*exchange.Client)
@@ -1123,7 +1122,7 @@ func (self *Bittrex) Buy(client interface{}, cancel bool, market1 string, calls 
 			if side == model.BUY {
 				// do not cancel orders that we're about to re-place
 				index := calls.IndexByPrice(order.Price())
-				if index > -1 && order.Quantity == size {
+				if index > -1 && order.Quantity == calls[index].Size {
 					calls[index].Skip = true
 				} else {
 					if err = bittrex.CancelOrder(order.Id); err != nil {
@@ -1144,7 +1143,7 @@ func (self *Bittrex) Buy(client interface{}, cancel bool, market1 string, calls 
 			_, _, err = self.Order(client,
 				model.BUY,
 				market1,
-				size,
+				call.Size,
 				limit,
 				kind, "",
 			)
@@ -1153,7 +1152,13 @@ func (self *Bittrex) Buy(client interface{}, cancel bool, market1 string, calls 
 				if strings.Contains(err.Error(), "MIN_TRADE_REQUIREMENT_NOT_MET") {
 					var min float64
 					if min, err = self.minTradeSize(bittrex, market1); err == nil {
-						return self.Buy(client, cancel, market1, calls, min, deviation, kind)
+						_, _, err = self.Order(client,
+							model.BUY,
+							market1,
+							min,
+							limit,
+							kind, "",
+						)
 					}
 				}
 				// ---- END ---- svanas 2019-05-12 ------------------------------------

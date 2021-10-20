@@ -728,13 +728,12 @@ func (self *Bitstamp) Aggregate(client, book interface{}, market string, agg flo
 		if entry != nil {
 			entry.Size = entry.Size + e.Size()
 		} else {
-			entry = &model.BookEntry{
-				Buy: &model.Buy{
+			entry =
+				&model.Buy{
 					Market: market,
 					Price:  price,
-				},
-				Size: e.Size(),
-			}
+					Size:   e.Size(),
+				}
 			out = append(out, *entry)
 		}
 	}
@@ -862,7 +861,7 @@ func (self *Bitstamp) Cancel(client interface{}, market string, side model.Order
 	return nil
 }
 
-func (self *Bitstamp) Buy(client interface{}, cancel bool, market string, calls model.Calls, size, deviation float64, kind model.OrderType) error {
+func (self *Bitstamp) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {
 	var err error
 
 	bitstamp, ok := client.(*exchange.Client)
@@ -881,7 +880,7 @@ func (self *Bitstamp) Buy(client interface{}, cancel bool, market string, calls 
 			if side == exchange.BUY {
 				// do not cancel orders that we're about to re-place
 				index := calls.IndexByPrice(order.Price)
-				if index > -1 && order.Amount == size {
+				if index > -1 && order.Amount == calls[index].Size {
 					calls[index].Skip = true
 				} else {
 					if err = bitstamp.CancelOrder(order.Id); err != nil {
@@ -897,7 +896,7 @@ func (self *Bitstamp) Buy(client interface{}, cancel bool, market string, calls 
 		if !call.Skip {
 			var (
 				min   float64
-				qty   float64 = size
+				qty   float64 = call.Size
 				limit float64 = call.Price
 			)
 			if deviation != 1.0 {

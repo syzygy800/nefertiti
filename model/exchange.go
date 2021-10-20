@@ -56,7 +56,7 @@ type Exchange interface {
 	GetSizePrec(client interface{}, market string) (int, error)
 	GetMaxSize(client interface{}, base, quote string, hold, earn bool, def float64, mult multiplier.Mult) float64
 	Cancel(client interface{}, market string, side OrderSide) error
-	Buy(client interface{}, cancel bool, market string, calls Calls, size, deviation float64, kind OrderType) error
+	Buy(client interface{}, cancel bool, market string, calls Calls, deviation float64, kind OrderType) error
 	IsLeveragedToken(name string) bool
 	HasAlgoOrder(client interface{}, market string) (bool, error)
 }

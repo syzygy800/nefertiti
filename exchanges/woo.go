@@ -598,12 +598,10 @@ func (self *Woo) Aggregate(client, book interface{}, market string, agg float64)
 		if entry != nil {
 			entry.Size = entry.Size + e.Quantity
 		} else {
-			entry = &model.BookEntry{
-				Buy: &model.Buy{
-					Market: market,
-					Price:  price,
-				},
-				Size: e.Quantity,
+			entry = &model.Buy{
+				Market: market,
+				Price:  price,
+				Size:   e.Quantity,
 			}
 			out = append(out, *entry)
 		}
@@ -722,7 +720,7 @@ func (self *Woo) Cancel(client interface{}, market string, side model.OrderSide)
 	return nil
 }
 
-func (self *Woo) Buy(client interface{}, cancel bool, market string, calls model.Calls, size, deviation float64, kind model.OrderType) error {
+func (self *Woo) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {
 	wooClient, ok := client.(*exchange.Client)
 	if !ok {
 		return errors.New("invalid argument: client")
@@ -738,7 +736,7 @@ func (self *Woo) Buy(client interface{}, cancel bool, market string, calls model
 			if order.Side == exchange.OrderSideBuy {
 				// do not cancel orders that we're about to re-place
 				index := calls.IndexByPrice(order.Price)
-				if index > -1 && order.Quantity == size {
+				if index > -1 && order.Quantity == calls[index].Size {
 					calls[index].Skip = true
 				} else {
 					if err := wooClient.CancelOrder(market, order.OrderID); err != nil {
@@ -753,7 +751,7 @@ func (self *Woo) Buy(client interface{}, cancel bool, market string, calls model
 	for _, call := range calls {
 		if !call.Skip {
 			var (
-				qty   float64 = size
+				qty   float64 = call.Size
 				limit float64 = call.Price
 			)
 			if deviation != 1.0 {

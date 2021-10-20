@@ -175,7 +175,6 @@ func buy(
 			magg float64
 			mdip float64
 			mpip float64
-			mqty float64
 			mmin float64
 			mmax float64
 		)
@@ -240,16 +239,6 @@ func buy(
 
 		if book2, err = exchange.Aggregate(client, book1, market, magg); err != nil {
 			return market, err
-		}
-
-		mqty = size
-		// if we have an arg named --price, then we'll calculate the desired size here
-		if price != 0 {
-			var prec int
-			if prec, err = exchange.GetSizePrec(client, market); err != nil {
-				return market, err
-			}
-			mqty = precision.Round(price/ticker, prec)
 		}
 
 		// ignore orders that are more expensive than ticker
@@ -347,30 +336,40 @@ func buy(
 			}
 		}
 
-		// the more non-sold sell orders we have, the bigger the new buy order size
-		if flag.Dca() {
-			var prec int
-			if prec, err = exchange.GetSizePrec(client, market); err != nil {
-				return market, err
-			}
-			mqty = precision.Round((mqty * (1 + (float64(hasOpenSell) * 0.2))), prec)
+		var prec int
+		if prec, err = exchange.GetSizePrec(client, market); err != nil {
+			return market, err
 		}
 
-		// for BTC and ETH, there is a minimum size (otherwise, we would never be hodl'ing)
-		var curr string
-		if curr, err = model.GetBaseCurr(available, market); err == nil {
-			units := model.GetSizeMin(hold.HasMarket(curr), curr)
-			if mqty < units {
-				return market, errors.Errorf("Cannot buy %s. Size is too low. You must buy at least %f units.", market, units)
+		for _, e := range book2 {
+			e.Size = size
+
+			// if we have an arg named --price, then we'll calculate the desired size here
+			if price != 0 {
+				e.Size = precision.Round(price/e.Price, prec)
+			}
+
+			// the more non-sold sell orders we have, the bigger the new buy order size
+			if flag.Dca() {
+				e.Size = precision.Round((e.Size * (1 + (float64(hasOpenSell) * 0.2))), prec)
+			}
+
+			// for BTC and ETH, there is a minimum size (otherwise, we would never be hodl'ing)
+			var curr string
+			if curr, err = model.GetBaseCurr(available, market); err == nil {
+				units := model.GetSizeMin(hold.HasMarket(curr), curr)
+				if e.Size < units {
+					return market, errors.Errorf("Cannot buy %s. Size is too low. You must buy at least %f units.", market, units)
+				}
 			}
 		}
 
 		// cancel your open buy order(s), then place the top X buy orders
 		if !test {
 			if len(book2) < int(top) {
-				err = exchange.Buy(client, true, market, book2.Calls(), mqty, 1.0, model.LIMIT)
+				err = exchange.Buy(client, true, market, book2.Calls(), 1.0, model.LIMIT)
 			} else {
-				err = exchange.Buy(client, true, market, book2[:top].Calls(), mqty, 1.0, model.LIMIT)
+				err = exchange.Buy(client, true, market, book2[:top].Calls(), 1.0, model.LIMIT)
 			}
 			if err != nil {
 				if len(enumerable) > 1 {
@@ -490,27 +489,28 @@ func buySignals(
 				return old, err
 			}
 
-			size := precision.Round(price/ticker, prec)
-			if flag.Dca() {
-				hasOpenSell := 0
-				var opened model.Orders
-				if opened, err = exchange.GetOpened(client, market); err != nil {
-					return old, err
-				}
-				for _, order := range opened {
-					if order.Side == model.SELL {
-						hasOpenSell++
-					}
-				}
-				size = precision.Round((size * (1 + (float64(hasOpenSell) * 0.2))), prec)
-			}
-
 			var calls model.Calls
 			if calls, err = channel.GetCalls(exchange, market, sandbox, debug); err != nil {
 				return old, err
 			}
 
 			for i := range calls {
+				calls[i].Size = precision.Round(price/ticker, prec)
+
+				if flag.Dca() {
+					hasOpenSell := 0
+					var opened model.Orders
+					if opened, err = exchange.GetOpened(client, market); err != nil {
+						return old, err
+					}
+					for _, order := range opened {
+						if order.Side == model.SELL {
+							hasOpenSell++
+						}
+					}
+					calls[i].Size = precision.Round((calls[i].Size * (1 + (float64(hasOpenSell) * 0.2))), prec)
+				}
+
 				if !calls[i].Skip {
 					if calls[i].Corrupt(channel.GetOrderType()) {
 						log.Printf("[INFO] Ignoring %s because the signal appears to be corrupt.\n", calls[i].Market)
@@ -570,7 +570,7 @@ func buySignals(
 					}
 					if calls.HasBuy() {
 						// cancel your open buy order(s), then place the new buy orders
-						err = exchange.Buy(client, false, market, calls, size, deviation, channel.GetOrderType())
+						err = exchange.Buy(client, false, market, calls, deviation, channel.GetOrderType())
 						if err != nil {
 							report(err, market, channel, service, exchange)
 						}

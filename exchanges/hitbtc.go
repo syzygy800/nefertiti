@@ -677,12 +677,10 @@ func (self *HitBTC) Aggregate(client, book interface{}, market string, agg float
 		if entry != nil {
 			entry.Size = entry.Size + e.Size
 		} else {
-			entry = &model.BookEntry{
-				Buy: &model.Buy{
-					Market: market,
-					Price:  price,
-				},
-				Size: e.Size,
+			entry = &model.Buy{
+				Market: market,
+				Price:  price,
+				Size:   e.Size,
 			}
 			out = append(out, *entry)
 		}
@@ -795,7 +793,7 @@ func (self *HitBTC) Cancel(client interface{}, market string, side model.OrderSi
 	return nil
 }
 
-func (self *HitBTC) Buy(client interface{}, cancel bool, market string, calls model.Calls, size, deviation float64, kind model.OrderType) error {
+func (self *HitBTC) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {
 	var err error
 
 	hitbtc, ok := client.(*exchange.HitBtc)
@@ -835,7 +833,7 @@ func (self *HitBTC) Buy(client interface{}, cancel bool, market string, calls mo
 			_, _, err = self.Order(client,
 				model.BUY,
 				market,
-				size,
+				call.Size,
 				limit,
 				kind, "",
 			)

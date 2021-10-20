@@ -988,12 +988,10 @@ func (self *Kucoin) Aggregate(client, book interface{}, market string, agg float
 		if entry != nil {
 			entry.Size = entry.Size + e.Size()
 		} else {
-			entry = &model.BookEntry{
-				Buy: &model.Buy{
-					Market: market,
-					Price:  price,
-				},
-				Size: e.Size(),
+			entry = &model.Buy{
+				Market: market,
+				Price:  price,
+				Size:   e.Size(),
 			}
 			out = append(out, *entry)
 		}
@@ -1143,7 +1141,7 @@ func (self *Kucoin) Cancel(client interface{}, market string, side model.OrderSi
 	return nil
 }
 
-func (self *Kucoin) Buy(client interface{}, cancel bool, market string, calls model.Calls, size, deviation float64, kind model.OrderType) error {
+func (self *Kucoin) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {
 	var err error
 
 	kucoin, ok := client.(*exchange.ApiService)
@@ -1151,7 +1149,7 @@ func (self *Kucoin) Buy(client interface{}, cancel bool, market string, calls mo
 		return errors.New("invalid argument: client")
 	}
 
-	// step #1: delete the buy order(s) that are open in your book
+	// delete the buy order(s) that are open in your book
 	if cancel {
 		var orders exchange.OrdersModel
 		if orders, err = self.getOrders(kucoin, map[string]string{
@@ -1175,36 +1173,32 @@ func (self *Kucoin) Buy(client interface{}, cancel bool, market string, calls mo
 		}
 	}
 
-	// step 2: respect the baseMinSize
-	var (
-		min float64
-		qty float64
-	)
-	qty = size
-	if min, err = self.getMinSize(kucoin, market); err != nil {
-		return err
-	}
-	if min > 0 {
-		if qty < min {
-			qty = min
-		}
-	}
-
-	// step 3: open the top X buy orders
+	// open the top X buy orders
 	for _, call := range calls {
 		if !call.Skip {
+			qty := call.Size
+
+			// respect the baseMinSize
+			var min float64
+			if min, err = self.getMinSize(kucoin, market); err != nil {
+				return err
+			}
+			if qty < min {
+				qty = min
+			}
+
 			limit := call.Price
 			if deviation != 1.0 {
 				kind, limit = call.Deviate(self, client, kind, deviation)
 			}
-			_, _, err = self.Order(client,
+
+			if _, _, err = self.Order(client,
 				model.BUY,
 				market,
 				qty,
 				limit,
 				kind, "",
-			)
-			if err != nil {
+			); err != nil {
 				return err
 			}
 		}

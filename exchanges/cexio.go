@@ -555,12 +555,10 @@ func (self *CexIo) Aggregate(client, book interface{}, market string, agg float6
 		if entry != nil {
 			entry.Size = entry.Size + e.Size()
 		} else {
-			entry = &model.BookEntry{
-				Buy: &model.Buy{
-					Market: market,
-					Price:  price,
-				},
-				Size: e.Size(),
+			entry = &model.Buy{
+				Market: market,
+				Price:  price,
+				Size:   e.Size(),
 			}
 			out = append(out, *entry)
 		}
@@ -744,7 +742,7 @@ func (self *CexIo) Cancel(client interface{}, market string, side model.OrderSid
 	return nil
 }
 
-func (self *CexIo) Buy(client interface{}, cancel bool, market string, calls model.Calls, size, deviation float64, kind model.OrderType) error {
+func (self *CexIo) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {
 	var err error
 
 	cexio, ok := client.(*exchange.Client)
@@ -787,7 +785,7 @@ func (self *CexIo) Buy(client interface{}, cancel bool, market string, calls mod
 			if deviation != 1.0 {
 				kind, limit = call.Deviate(self, client, kind, deviation)
 			}
-			if _, err = cexio.PlaceOrder(symbol1, symbol2, exchange.BUY, size, limit); err != nil {
+			if _, err = cexio.PlaceOrder(symbol1, symbol2, exchange.BUY, call.Size, limit); err != nil {
 				return err
 			}
 		}

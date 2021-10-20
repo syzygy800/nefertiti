@@ -672,12 +672,10 @@ func (self *CryptoDotCom) Aggregate(client, book interface{}, market string, agg
 		if entry != nil {
 			entry.Size = entry.Size + e.Size()
 		} else {
-			entry = &model.BookEntry{
-				Buy: &model.Buy{
-					Market: market,
-					Price:  price,
-				},
-				Size: e.Size(),
+			entry = &model.Buy{
+				Market: market,
+				Price:  price,
+				Size:   e.Size(),
 			}
 			out = append(out, *entry)
 		}
@@ -793,7 +791,7 @@ func (self *CryptoDotCom) Cancel(client interface{}, market string, side model.O
 	return nil
 }
 
-func (self *CryptoDotCom) Buy(client interface{}, cancel bool, market string, calls model.Calls, size, deviation float64, kind model.OrderType) error {
+func (self *CryptoDotCom) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {
 	var err error
 
 	crypto, ok := client.(*exchange.Client)
@@ -812,7 +810,7 @@ func (self *CryptoDotCom) Buy(client interface{}, cancel bool, market string, ca
 			if side == exchange.BUY {
 				// do not cancel orders that we're about to re-place
 				index := calls.IndexByPrice(order.Price)
-				if index > -1 && order.Volume == size {
+				if index > -1 && order.Volume == calls[index].Size {
 					calls[index].Skip = true
 				} else {
 					if err = crypto.CancelOrder(market, order.Id); err != nil {
@@ -831,9 +829,9 @@ func (self *CryptoDotCom) Buy(client interface{}, cancel bool, market string, ca
 				kind, limit = call.Deviate(self, client, kind, deviation)
 			}
 			if kind == model.MARKET {
-				_, err = crypto.CreateOrder(market, exchange.BUY, exchange.MARKET, size, 0)
+				_, err = crypto.CreateOrder(market, exchange.BUY, exchange.MARKET, call.Size, 0)
 			} else {
-				_, err = crypto.CreateOrder(market, exchange.BUY, exchange.LIMIT, size, limit)
+				_, err = crypto.CreateOrder(market, exchange.BUY, exchange.LIMIT, call.Size, limit)
 			}
 			if err != nil {
 				return errors.Wrap(err, 1)

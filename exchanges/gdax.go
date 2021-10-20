@@ -785,12 +785,10 @@ func (self *Gdax) Aggregate(client, book interface{}, market string, agg float64
 		if entry != nil {
 			entry.Size = entry.Size + gdax.ParseFloat(e.Size)
 		} else {
-			entry = &model.BookEntry{
-				Buy: &model.Buy{
-					Market: market,
-					Price:  price,
-				},
-				Size: gdax.ParseFloat(e.Size),
+			entry = &model.Buy{
+				Market: market,
+				Price:  price,
+				Size:   gdax.ParseFloat(e.Size),
 			}
 			out = append(out, *entry)
 		}
@@ -923,7 +921,7 @@ func (self *Gdax) Cancel(client interface{}, market string, side model.OrderSide
 	return nil
 }
 
-func (self *Gdax) Buy(client interface{}, cancel bool, market string, calls model.Calls, size, deviation float64, kind model.OrderType) error {
+func (self *Gdax) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {
 	var err error
 
 	gdaxClient, ok := client.(*gdax.Client)
@@ -946,7 +944,7 @@ func (self *Gdax) Buy(client interface{}, cancel bool, market string, calls mode
 					if order.Side == model.OrderSideString[model.BUY] {
 						// do not cancel orders that we're about to re-place
 						index := calls.IndexByPrice(order.GetPrice())
-						if index > -1 && order.GetSize() == size {
+						if index > -1 && order.GetSize() == calls[index].Size {
 							calls[index].Skip = true
 						} else {
 							if err = gdaxClient.CancelOrder(order.ID); err != nil {
@@ -972,7 +970,7 @@ func (self *Gdax) Buy(client interface{}, cancel bool, market string, calls mode
 					Side:      model.OrderSideString[model.BUY],
 					ProductID: market,
 				},
-			}).SetSize(size).SetPrice(limit)
+			}).SetSize(call.Size).SetPrice(limit)
 			if _, err = gdaxClient.CreateOrder(order); err != nil {
 				var raw []byte
 				if raw, _ = json.Marshal(order); raw == nil {

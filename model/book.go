@@ -14,8 +14,8 @@ type (
 	Buy struct {
 		Market string  `json:"market"`
 		Price  float64 `json:"price"`
+		Size   float64 `json:"size,omitempty"`
 	}
-	Buys []Buy
 )
 
 type (
@@ -158,11 +158,7 @@ func (c Calls) IndexByMarketPrice(market string, price float64) int {
 }
 
 type (
-	BookEntry struct {
-		*Buy
-		Size float64 `json:"size"`
-	}
-	Book []BookEntry
+	Book []Buy
 )
 
 type BookSide int
@@ -179,6 +175,7 @@ func (b Book) Calls() Calls {
 			Buy: &Buy{
 				Market: e.Market,
 				Price:  e.Price,
+				Size:   e.Size,
 			},
 		})
 	}
@@ -194,7 +191,7 @@ func (b Book) IndexByPrice(price float64) int {
 	return -1
 }
 
-func (b Book) EntryByPrice(price float64) *BookEntry {
+func (b Book) EntryByPrice(price float64) *Buy {
 	i := b.IndexByPrice(price)
 	if i != -1 {
 		return &b[i]
