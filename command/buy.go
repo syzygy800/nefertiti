@@ -219,7 +219,7 @@ func buy(
 
 		if magg == 0 {
 			if magg, mdip, mpip, err = aggregation.GetEx(exchange, client, market, ticker, avg, dip, pip, mmax, min, int(top), strict); err != nil {
-				if errors.Is(err, aggregation.EOrderBookTooThin) && len(enumerable) > 1 {
+				if errors.Is(err, aggregation.EOrderBookTooThin) && (len(enumerable) > 1 || flag.Get("ignore").Contains("error")) {
 					report(err, market, nil, service, exchange)
 					continue
 				} else {
@@ -298,7 +298,7 @@ func buy(
 
 		// we need at least one support
 		if len(book2) == 0 {
-			if len(enumerable) > 1 {
+			if len(enumerable) > 1 || flag.Get("ignore").Contains("error") {
 				report(aggregation.EOrderBookTooThin, market, nil, service, exchange)
 				continue
 			} else {
@@ -372,7 +372,7 @@ func buy(
 				err = exchange.Buy(client, true, market, book2[:top].Calls(), 1.0, model.LIMIT)
 			}
 			if err != nil {
-				if len(enumerable) > 1 {
+				if len(enumerable) > 1 || flag.Get("ignore").Contains("error") {
 					report(err, market, nil, service, exchange)
 					continue
 				} else {
