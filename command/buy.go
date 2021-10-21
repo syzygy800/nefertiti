@@ -341,26 +341,28 @@ func buy(
 			return market, err
 		}
 
-		for _, e := range book2 {
-			e.Size = size
+		var base string
+		if base, err = model.GetBaseCurr(available, market); err != nil {
+			return market, err
+		}
+
+		for i := 0; i < len(book2); i++ {
+			book2[i].Size = size
 
 			// if we have an arg named --price, then we'll calculate the desired size here
 			if price != 0 {
-				e.Size = precision.Round(price/e.Price, prec)
+				book2[i].Size = precision.Round((price / book2[i].Price), prec)
 			}
 
 			// the more non-sold sell orders we have, the bigger the new buy order size
 			if flag.Dca() {
-				e.Size = precision.Round((e.Size * (1 + (float64(hasOpenSell) * 0.2))), prec)
+				book2[i].Size = precision.Round((book2[i].Size * (1 + (float64(hasOpenSell) * 0.2))), prec)
 			}
 
 			// for BTC and ETH, there is a minimum size (otherwise, we would never be hodl'ing)
-			var curr string
-			if curr, err = model.GetBaseCurr(available, market); err == nil {
-				units := model.GetSizeMin(hold.HasMarket(curr), curr)
-				if e.Size < units {
-					return market, errors.Errorf("Cannot buy %s. Size is too low. You must buy at least %f units.", market, units)
-				}
+			units := model.GetSizeMin(hold.HasMarket(market), base)
+			if book2[i].Size < units {
+				return market, errors.Errorf("Cannot buy %s. Size is too low. You must buy at least %f units.", market, units)
 			}
 		}
 
