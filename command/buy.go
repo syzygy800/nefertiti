@@ -283,7 +283,7 @@ func buy(
 		if mmax > 0 {
 			i = 0
 			for i < len(book2) {
-				if book2[i].Price > mmax {
+				if book2[i].Price >= mmax {
 					book2 = append(book2[:i], book2[i+1:]...)
 				} else {
 					i++

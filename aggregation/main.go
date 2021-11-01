@@ -203,7 +203,7 @@ func get(
 			if max > 0 {
 				i = 0
 				for i < len(book2) {
-					if book2[i].Price > max {
+					if book2[i].Price >= max {
 						book2 = append(book2[:i], book2[i+1:]...)
 					} else {
 						i++
