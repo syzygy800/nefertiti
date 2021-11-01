@@ -365,64 +365,64 @@ func (self *Gdax) sell(
 							var old *gdax.Order
 							if old, err = client.GetOrder(msg.OrderID); err != nil {
 								self.error(errors.Wrap(err, 1), level, service)
-							}
-
-							qty := old.GetSize()
-							if qty == 0 {
-								if qty, err = self.getMinOrderSize(client, msg.ProductID); err != nil {
-									self.error(err, level, service)
+							} else {
+								qty := old.GetSize()
+								if qty == 0 {
+									if qty, err = self.getMinOrderSize(client, msg.ProductID); err != nil {
+										self.error(err, level, service)
+									}
+									qty = qty * 5
 								}
-								qty = qty * 5
-							}
 
-							var (
-								base  string
-								quote string
-							)
-							if base, quote, err = model.ParseMarket(markets, msg.ProductID); err != nil {
-								if markets, err = self.GetMarkets(false, sandbox, nil); err == nil {
-									base, quote, err = model.ParseMarket(markets, msg.ProductID)
-								}
-								if err != nil {
-									self.error(err, level, service)
-								}
-							}
-
-							var prec int
-							if prec, err = self.GetPricePrec(client, msg.ProductID); err != nil {
-								self.error(err, level, service)
-							}
-
-							var mult multiplier.Mult
-							if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
-								self.error(err, level, service)
-							}
-
-							// by default, we will sell at a 5% profit
-
-							order := (&gdax.Order{
-								Order: &exchange.Order{
-									Type:      model.OrderTypeString[model.LIMIT],
-									Side:      model.OrderSideString[model.SELL],
-									ProductID: msg.ProductID,
-								},
-							}).
-								SetSize(self.GetMaxSize(client, base, quote, hold.HasMarket(msg.ProductID), earn.HasMarket(msg.ProductID), qty, mult)).
-								SetPrice(pricing.Multiply(price, mult, prec))
-
-							// log the newly created SELL order
-							var raw []byte
-							if raw, err = json.Marshal(order); err == nil {
-								log.Println("[INFO] " + string(raw))
-								if service != nil {
-									if notify.CanSend(level, notify.INFO) {
-										service.SendMessage(order, "Coinbase Pro - New Sell", model.ALWAYS)
+								var (
+									base  string
+									quote string
+								)
+								if base, quote, err = model.ParseMarket(markets, msg.ProductID); err != nil {
+									if markets, err = self.GetMarkets(false, sandbox, nil); err == nil {
+										base, quote, err = model.ParseMarket(markets, msg.ProductID)
+									}
+									if err != nil {
+										self.error(err, level, service)
 									}
 								}
-							}
 
-							if _, err = client.CreateOrder(order); err != nil {
-								self.error(errors.Wrap(err, 1), level, service)
+								var prec int
+								if prec, err = self.GetPricePrec(client, msg.ProductID); err != nil {
+									self.error(err, level, service)
+								}
+
+								var mult multiplier.Mult
+								if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
+									self.error(err, level, service)
+								}
+
+								// by default, we will sell at a 5% profit
+
+								order := (&gdax.Order{
+									Order: &exchange.Order{
+										Type:      model.OrderTypeString[model.LIMIT],
+										Side:      model.OrderSideString[model.SELL],
+										ProductID: msg.ProductID,
+									},
+								}).
+									SetSize(self.GetMaxSize(client, base, quote, hold.HasMarket(msg.ProductID), earn.HasMarket(msg.ProductID), qty, mult)).
+									SetPrice(pricing.Multiply(price, mult, prec))
+
+								// log the newly created SELL order
+								var raw []byte
+								if raw, err = json.Marshal(order); err == nil {
+									log.Println("[INFO] " + string(raw))
+									if service != nil {
+										if notify.CanSend(level, notify.INFO) {
+											service.SendMessage(order, "Coinbase Pro - New Sell", model.ALWAYS)
+										}
+									}
+								}
+
+								if _, err = client.CreateOrder(order); err != nil {
+									self.error(errors.Wrap(err, 1), level, service)
+								}
 							}
 						}
 					}
