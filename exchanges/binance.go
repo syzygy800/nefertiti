@@ -1026,10 +1026,19 @@ func (self *Binance) Get24h(client interface{}, market string) (*model.Stats, er
 		BtcVolume: func() float64 {
 			symbol, err := binance.GetSymbol(binanceClient, market)
 			if err == nil {
-				if strings.EqualFold(symbol.QuoteAsset, model.BTC) {
-					out, err := strconv.ParseFloat(stats.QuoteVolume, 64)
-					if err == nil {
-						return out
+				volume, err := strconv.ParseFloat(stats.QuoteVolume, 64)
+				if err == nil {
+					if strings.EqualFold(symbol.QuoteAsset, model.BTC) {
+						return volume
+					} else {
+						btcSymbol := self.FormatMarket(model.BTC, symbol.QuoteAsset)
+						ticker2, err := binanceClient.Ticker(btcSymbol)
+						if err == nil {
+							price, err := strconv.ParseFloat(ticker2.LastPrice, 64)
+							if err == nil {
+								return volume / price
+							}
+						}
 					}
 				}
 			}
