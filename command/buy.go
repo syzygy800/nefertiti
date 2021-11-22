@@ -77,14 +77,15 @@ func buyEvery(
 	max float64,
 	min float64,
 	price float64,
-	btcVolumeMin float64,
+	btcVolumeMin,
+	deviation float64,
 	service model.Notify,
 	strict bool,
 	sandbox bool,
 	debug bool,
 ) {
 	for range time.Tick(d) {
-		market, err := buy(client, exchange, markets, hold, agg, size, dip, pip, mult, dist, top, max, min, price, btcVolumeMin, service, strict, sandbox, false, debug)
+		market, err := buy(client, exchange, markets, hold, agg, size, dip, pip, mult, dist, top, max, min, price, btcVolumeMin, deviation, service, strict, sandbox, false, debug)
 		if err != nil {
 			report(err, market, nil, service, exchange)
 		}
@@ -106,7 +107,8 @@ func buy(
 	max float64,
 	min float64,
 	price float64,
-	btcVolumeMin float64,
+	btcVolumeMin,
+	deviation float64,
 	service model.Notify,
 	strict bool,
 	sandbox bool,
@@ -369,9 +371,9 @@ func buy(
 		// cancel your open buy order(s), then place the top X buy orders
 		if !test {
 			if len(book2) < int(top) {
-				err = exchange.Buy(client, true, market, book2.Calls(), 1.0, model.LIMIT)
+				err = exchange.Buy(client, true, market, book2.Calls(), deviation, model.LIMIT)
 			} else {
-				err = exchange.Buy(client, true, market, book2[:top].Calls(), 1.0, model.LIMIT)
+				err = exchange.Buy(client, true, market, book2[:top].Calls(), deviation, model.LIMIT)
 			}
 			if err != nil {
 				if len(enumerable) > 1 || flag.Get("ignore").Contains("error") {
@@ -657,6 +659,15 @@ func (c *BuyCommand) Run(args []string) int {
 		}
 	}
 
+	// --devn=x
+	var deviation float64 = 1.0
+	flg = flag.Get("devn")
+	if flg.Exists {
+		if deviation, err = flg.Float64(); err != nil {
+			return c.ReturnError(errors.Errorf("devn %v is invalid", flg))
+		}
+	}
+
 	flg = flag.Get("signals")
 	if flg.Exists {
 		var channel model.Channel
@@ -691,14 +702,6 @@ func (c *BuyCommand) Run(args []string) int {
 				return c.ReturnError(errors.Errorf("valid %v is incorrect", flg))
 			}
 			duration2 = time.Duration(valid * float64(time.Hour))
-		}
-		// --devn=x
-		var deviation float64 = 1.0
-		flg = flag.Get("devn")
-		if flg.Exists {
-			if deviation, err = flg.Float64(); err != nil {
-				return c.ReturnError(errors.Errorf("devn %v is invalid", flg))
-			}
 		}
 		// initial run starts here
 		var calls model.Calls
@@ -837,7 +840,7 @@ func (c *BuyCommand) Run(args []string) int {
 		return c.ReturnError(err)
 	}
 
-	if _, err = buy(client, exchange, splitted, hold, agg, size, dip, pip, mult, dist, top, max, min, price, btcVolumeMin, service, flag.Strict(), flag.Sandbox(), test, flag.Debug()); err != nil {
+	if _, err = buy(client, exchange, splitted, hold, agg, size, dip, pip, mult, dist, top, max, min, price, btcVolumeMin, deviation, service, flag.Strict(), flag.Sandbox(), test, flag.Debug()); err != nil {
 		if flag.Get("ignore").Contains("error") {
 			log.Printf("[ERROR] %v\n", err)
 		} else {
@@ -855,7 +858,7 @@ func (c *BuyCommand) Run(args []string) int {
 			if err = c.ReturnSuccess(); err != nil {
 				return c.ReturnError(err)
 			}
-			buyEvery(time.Duration(repeat*float64(time.Hour)), client, exchange, splitted, hold, agg, size, dip, pip, mult, dist, top, max, min, price, btcVolumeMin, service, flag.Strict(), flag.Sandbox(), flag.Debug())
+			buyEvery(time.Duration(repeat*float64(time.Hour)), client, exchange, splitted, hold, agg, size, dip, pip, mult, dist, top, max, min, price, btcVolumeMin, deviation, service, flag.Strict(), flag.Sandbox(), flag.Debug())
 		}
 	}
 
