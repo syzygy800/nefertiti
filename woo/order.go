@@ -42,7 +42,7 @@ type NewOrder struct {
 	Amount   interface{} `json:"order_amount"`
 }
 
-func (client *Client) Order(symbol string, side OrderSide, orderType OrderType, quantity, price float64) (*NewOrder, error) {
+func (client *Client) Order(symbol string, side OrderSide, orderType OrderType, quantity, price float64, tag string) (*NewOrder, error) {
 	params := url.Values{}
 	params.Add("symbol", symbol)
 	params.Add("order_type", string(orderType))
@@ -50,6 +50,9 @@ func (client *Client) Order(symbol string, side OrderSide, orderType OrderType, 
 	params.Add("side", string(side))
 	if orderType == OrderTypeLimit {
 		params.Add("order_price", strconv.FormatFloat(price, 'f', -1, 64))
+	}
+	if tag != "" {
+		params.Add("order_tag", tag)
 	}
 
 	var (

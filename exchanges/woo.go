@@ -360,6 +360,7 @@ func (self *Woo) sell(
 							exchange.OrderTypeLimit,
 							qty,
 							pricing.Multiply(new[i].ExecutedAt(), mult, prec),
+							"NEF2021xxxxxxx",
 						)
 					}
 				}
@@ -482,7 +483,7 @@ func (self *Woo) Order(
 		} else {
 			return exchange.OrderTypeLimit
 		}
-	}(), size, price); err != nil {
+	}(), size, price, metadata); err != nil {
 		return nil, nil, errors.Wrap(err, 1)
 	}
 
@@ -794,7 +795,7 @@ func (self *Woo) Buy(client interface{}, cancel bool, market string, calls model
 					return exchange.OrderTypeMarket
 				}
 				return exchange.OrderTypeLimit
-			}(), qty, limit); err != nil {
+			}(), qty, limit, "NEF2021xxxxxxx"); err != nil {
 				return errors.Wrap(err, 1)
 			}
 		}
