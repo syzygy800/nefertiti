@@ -161,7 +161,7 @@ func (self *Woo) GetClient(permission model.Permission, sandbox bool) (interface
 	return exchange.New(self.getBaseURL(sandbox), apiKey, apiSecret), nil
 }
 
-func (self *Woo) GetMarkets(cached, sandbox bool, ignore []string) ([]model.Market, error) {
+func (self *Woo) GetMarkets(cached, sandbox bool, blacklist []string) ([]model.Market, error) {
 	var out []model.Market
 
 	symbols, err := self.getSymbols(exchange.New(self.getBaseURL(sandbox), "", ""), cached)
@@ -174,11 +174,20 @@ func (self *Woo) GetMarkets(cached, sandbox bool, ignore []string) ([]model.Mark
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, model.Market{
-			Name:  symbol.Symbol,
-			Base:  base,
-			Quote: quote,
-		})
+		if func() bool {
+			for _, ignore := range blacklist {
+				if strings.EqualFold(symbol.Symbol, ignore) {
+					return false
+				}
+			}
+			return true
+		}() {
+			out = append(out, model.Market{
+				Name:  symbol.Symbol,
+				Base:  base,
+				Quote: quote,
+			})
+		}
 	}
 
 	return out, nil
