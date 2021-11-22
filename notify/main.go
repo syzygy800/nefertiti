@@ -8,9 +8,17 @@ type Services []model.Notify
 
 func (services *Services) Init(interactive, verify bool) (model.Notify, error) {
 	for _, service := range *services {
-		ok, err := service.PromptForKeys(interactive, verify)
+		ok, err := service.PromptForKeys(false, verify)
 		if ok {
 			return service, err
+		}
+	}
+	if interactive {
+		for _, service := range *services {
+			ok, err := service.PromptForKeys(true, verify)
+			if ok {
+				return service, err
+			}
 		}
 	}
 	return nil, nil
