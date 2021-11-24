@@ -1,0 +1,243 @@
+//lint:file-ignore ST1006 receiver name should be a reflection of its identity; don't use generic names such as "this" or "self"
+package exchanges
+
+import (
+	"fmt"
+	"log"
+	"runtime"
+	"strings"
+
+	"github.com/svanas/nefertiti/errors"
+	"github.com/svanas/nefertiti/flag"
+	exchange "github.com/svanas/nefertiti/huobi"
+	"github.com/svanas/nefertiti/model"
+	"github.com/svanas/nefertiti/multiplier"
+	"github.com/svanas/nefertiti/notify"
+)
+
+type Huobi struct {
+	*model.ExchangeInfo
+	symbols []exchange.Symbol
+}
+
+func (self *Huobi) getBaseURL(sandbox bool) string {
+	return self.ExchangeInfo.REST.URI
+}
+
+func (self *Huobi) getSymbols(client *exchange.Client, cached bool) ([]exchange.Symbol, error) {
+	if self.symbols == nil || !cached {
+		var err error
+		if self.symbols, err = client.Symbols(); err != nil {
+			return nil, errors.Wrap(err, 1)
+		}
+	}
+	return self.symbols, nil
+}
+
+func (self *Huobi) getSymbol(client *exchange.Client, market string, cached bool) (*exchange.Symbol, error) {
+	symbols, err := self.getSymbols(client, cached)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, symbol := range symbols {
+		if symbol.Symbol == market {
+			return &symbol, nil
+		}
+	}
+
+	return nil, errors.Errorf("symbol %v does not exist", market)
+}
+
+func (self *Huobi) error(err error, level int64, service model.Notify) {
+	pc, file, line, _ := runtime.Caller(1)
+	prefix := errors.FormatCaller(pc, file, line)
+
+	msg := fmt.Sprintf("%s %v", prefix, err)
+	_, ok := err.(*errors.Error)
+	if ok && flag.Debug() {
+		log.Printf("[ERROR] %s", err.(*errors.Error).ErrorStack(prefix, ""))
+	} else {
+		log.Printf("[ERROR] %s", msg)
+	}
+
+	if service != nil {
+		if notify.CanSend(level, notify.ERROR) {
+			err := service.SendMessage(msg, "Huobi - ERROR", model.ONCE_PER_MINUTE)
+			if err != nil {
+				log.Printf("[ERROR] %v", err)
+			}
+		}
+	}
+}
+
+func (self *Huobi) GetInfo() *model.ExchangeInfo {
+	return self.ExchangeInfo
+}
+
+func (self *Huobi) GetClient(permission model.Permission, sandbox bool) (interface{}, error) {
+	if permission != model.PRIVATE {
+		return exchange.New(self.getBaseURL(sandbox), "", ""), nil
+	}
+
+	var (
+		err       error
+		apiKey    string
+		apiSecret string
+	)
+	if apiKey, apiSecret, err = promptForApiKeys("Huobi"); err != nil {
+		return nil, err
+	}
+
+	return exchange.New(self.getBaseURL(sandbox), apiKey, apiSecret), nil
+}
+
+func (self *Huobi) GetMarkets(cached, sandbox bool, blacklist []string) ([]model.Market, error) {
+	var out []model.Market
+
+	symbols, err := self.getSymbols(exchange.New(self.getBaseURL(sandbox), "", ""), cached)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, symbol := range symbols {
+		if symbol.Online() && symbol.Enabled() && func() bool {
+			for _, ignore := range blacklist {
+				if strings.EqualFold(symbol.Symbol, ignore) {
+					return false
+				}
+			}
+			return true
+		}() {
+			out = append(out, model.Market{
+				Name:  symbol.Symbol,
+				Base:  symbol.BaseCurrency,
+				Quote: symbol.QuoteCurrency,
+			})
+		}
+	}
+
+	return out, nil
+}
+
+func (self *Huobi) FormatMarket(base, quote string) string {
+	return strings.ToLower(base + quote)
+}
+
+func (self *Huobi) Sell(
+	strategy model.Strategy,
+	hold, earn model.Markets,
+	sandbox, tweet, debug bool,
+	success model.OnSuccess,
+) error {
+	if strategy != model.STRATEGY_STANDARD {
+		return errors.New("strategy not implemented")
+	}
+
+	// apiKey, apiSecret, err := promptForApiKeys("Huobi")
+	// if err != nil {
+	// 	return err
+	// }
+
+	// service, err := notify.New().Init(flag.Interactive(), true)
+	// if err != nil {
+	// 	return err
+	// }
+
+	return errors.New("Not implemented")
+}
+
+func (self *Huobi) Order(
+	client interface{},
+	side model.OrderSide,
+	market string,
+	size float64,
+	price float64,
+	kind model.OrderType,
+	metadata string,
+) (oid []byte, raw []byte, err error) {
+	return nil, nil, errors.New("Not implemented")
+}
+
+func (self *Huobi) StopLoss(client interface{}, market string, size float64, price float64, kind model.OrderType, metadata string) ([]byte, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (self *Huobi) OCO(client interface{}, market string, size float64, price, stop float64, metadata string) ([]byte, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (self *Huobi) GetClosed(client interface{}, market string) (model.Orders, error) {
+	return nil, errors.New("Not implemented")
+}
+
+func (self *Huobi) GetOpened(client interface{}, market string) (model.Orders, error) {
+	return nil, errors.New("Not implemented")
+}
+
+func (self *Huobi) GetBook(client interface{}, market string, side model.BookSide) (interface{}, error) {
+	return 0, errors.New("Not implemented")
+}
+
+func (self *Huobi) Aggregate(client, book interface{}, market string, agg float64) (model.Book, error) {
+	return nil, errors.New("Not implemented")
+}
+
+func (self *Huobi) GetTicker(client interface{}, market string) (float64, error) {
+	return 0, errors.New("Not implemented")
+}
+
+func (self *Huobi) Get24h(client interface{}, market string) (*model.Stats, error) {
+	return nil, errors.New("Not implemented")
+}
+
+func (self *Huobi) GetPricePrec(client interface{}, market string) (int, error) {
+	return 8, errors.New("Not implemented")
+}
+
+func (self *Huobi) GetSizePrec(client interface{}, market string) (int, error) {
+	return 0, errors.New("Not implemented")
+}
+
+func (self *Huobi) GetMaxSize(client interface{}, base, quote string, hold, earn bool, def float64, mult multiplier.Mult) float64 {
+	return model.GetSizeMax(hold, earn, def, mult, func() int {
+		prec, err := self.GetSizePrec(client, self.FormatMarket(base, quote))
+		if err != nil {
+			return 0
+		}
+		return prec
+	})
+}
+
+func (self *Huobi) Cancel(client interface{}, market string, side model.OrderSide) error {
+	return errors.New("Not implemented")
+}
+
+func (self *Huobi) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {
+	return errors.New("Not implemented")
+}
+
+func (self *Huobi) IsLeveragedToken(name string) bool {
+	return false
+}
+
+func (self *Huobi) HasAlgoOrder(client interface{}, market string) (bool, error) {
+	return false, nil
+}
+
+func newHuobi() model.Exchange {
+	return &Huobi{
+		ExchangeInfo: &model.ExchangeInfo{
+			Code: "HUBI",
+			Name: "Huobi",
+			URL:  "https://www.huobi.com",
+			REST: model.Endpoint{
+				URI: "https://api.huobi.pro",
+			},
+			WebSocket: model.Endpoint{
+				URI: "wss://api.huobi.pro/ws",
+			},
+			Country: "Seychelles",
+		},
+	}
+}
