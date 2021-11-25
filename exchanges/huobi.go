@@ -184,7 +184,17 @@ func (self *Huobi) Aggregate(client, book interface{}, market string, agg float6
 }
 
 func (self *Huobi) GetTicker(client interface{}, market string) (float64, error) {
-	return 0, errors.New("Not implemented")
+	huobiClient, ok := client.(*exchange.Client)
+	if !ok {
+		return 0, errors.New("invalid argument: client")
+	}
+
+	ticker, err := huobiClient.Ticker(market)
+	if err != nil {
+		return 0, errors.Wrap(err, 1)
+	}
+
+	return ticker.Price, nil
 }
 
 func (self *Huobi) Get24h(client interface{}, market string) (*model.Stats, error) {
