@@ -198,7 +198,41 @@ func (self *Huobi) GetTicker(client interface{}, market string) (float64, error)
 }
 
 func (self *Huobi) Get24h(client interface{}, market string) (*model.Stats, error) {
-	return nil, errors.New("Not implemented")
+	huobiClient, ok := client.(*exchange.Client)
+	if !ok {
+		return nil, errors.New("invalid argument: client")
+	}
+
+	var (
+		err error
+		sum *exchange.Summary
+	)
+	if sum, err = huobiClient.Summary(market); err != nil {
+		return nil, errors.Wrap(err, 1)
+	}
+
+	return &model.Stats{
+		Market: market,
+		High:   sum.High,
+		Low:    sum.Low,
+		BtcVolume: func(sum *exchange.Summary) float64 {
+			symbols, err := self.getSymbols(huobiClient, true)
+			if err == nil {
+				for _, symbol := range symbols {
+					if symbol.Symbol == market {
+						if strings.EqualFold(symbol.BaseCurrency, model.BTC) {
+							return sum.Volume
+						}
+						tick, err := huobiClient.Ticker(self.FormatMarket(symbol.BaseCurrency, model.BTC))
+						if err == nil {
+							return sum.Volume * tick.Price
+						}
+					}
+				}
+			}
+			return 0
+		}(sum),
+	}, nil
 }
 
 func (self *Huobi) GetPricePrec(client interface{}, market string) (int, error) {
