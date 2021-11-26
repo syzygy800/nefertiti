@@ -41,7 +41,7 @@ func (client *Client) Symbols() ([]Symbol, error) {
 		resp Response
 	)
 
-	if body, err = client.get("/v1/common/symbols", nil); err != nil {
+	if body, err = client.get("/v1/common/symbols", nil, false); err != nil {
 		return nil, err
 	}
 

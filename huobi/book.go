@@ -37,7 +37,7 @@ func (client *Client) OrderBook(symbol string) (*OrderBook, error) {
 	params.Add("type", "step0")
 	params.Add("symbol", symbol)
 
-	if body, err = client.get("/market/depth", params); err != nil {
+	if body, err = client.get("/market/depth", params, false); err != nil {
 		return nil, err
 	}
 

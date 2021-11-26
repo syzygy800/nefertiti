@@ -27,7 +27,7 @@ func (client *Client) Ticker(symbol string) (*Ticker, error) {
 	params := url.Values{}
 	params.Add("symbol", symbol)
 
-	if body, err = client.get("/market/trade", params); err != nil {
+	if body, err = client.get("/market/trade", params, false); err != nil {
 		return nil, err
 	}
 

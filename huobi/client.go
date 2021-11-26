@@ -71,7 +71,7 @@ func (client *Client) do(req *http.Request) ([]byte, error) {
 	return body, nil
 }
 
-func (client *Client) get(path string, query url.Values) ([]byte, error) {
+func (client *Client) get(path string, query url.Values, auth bool) ([]byte, error) {
 	// respect the rate limit
 	err := BeforeRequest(http.MethodGet, path)
 	if err != nil {
@@ -87,6 +87,20 @@ func (client *Client) get(path string, query url.Values) ([]byte, error) {
 		return nil, err
 	}
 	endpoint.Path += path
+
+	// add authentication params
+	if auth {
+		if query == nil {
+			query = url.Values{}
+		}
+		query.Add("AccessKeyId", client.apiKey)
+		query.Add("SignatureMethod", "HmacSHA256")
+		query.Add("SignatureVersion", "2")
+		query.Add("Timestamp", time.Now().UTC().Format("2006-01-02T15:04:05"))
+		query.Add("Signature", sign(client.apiSecret, http.MethodGet, endpoint.Host, path, query))
+	}
+
+	// encode the query params, then add them to the endpoint
 	if query != nil {
 		endpoint.RawQuery = query.Encode()
 	}

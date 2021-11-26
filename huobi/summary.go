@@ -28,7 +28,7 @@ func (client *Client) Summary(symbol string) (*Summary, error) {
 	params := url.Values{}
 	params.Add("symbol", symbol)
 
-	if body, err = client.get("/market/detail", params); err != nil {
+	if body, err = client.get("/market/detail", params, false); err != nil {
 		return nil, err
 	}
 
