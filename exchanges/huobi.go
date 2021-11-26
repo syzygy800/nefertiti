@@ -7,12 +7,14 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/svanas/nefertiti/aggregation"
 	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
 	exchange "github.com/svanas/nefertiti/huobi"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/multiplier"
 	"github.com/svanas/nefertiti/notify"
+	"github.com/svanas/nefertiti/precision"
 )
 
 type Huobi struct {
@@ -176,11 +178,53 @@ func (self *Huobi) GetOpened(client interface{}, market string) (model.Orders, e
 }
 
 func (self *Huobi) GetBook(client interface{}, market string, side model.BookSide) (interface{}, error) {
-	return 0, errors.New("Not implemented")
+	huobiClient, ok := client.(*exchange.Client)
+	if !ok {
+		return nil, errors.New("invalid argument: client")
+	}
+
+	book, err := huobiClient.OrderBook(market)
+	if err != nil {
+		return nil, errors.Wrap(err, 1)
+	}
+
+	return func() []exchange.BookEntry {
+		if side == model.BOOK_SIDE_ASKS {
+			return book.Asks
+		} else {
+			return book.Bids
+		}
+	}(), nil
 }
 
 func (self *Huobi) Aggregate(client, book interface{}, market string, agg float64) (model.Book, error) {
-	return nil, errors.New("Not implemented")
+	bids, ok := book.([]exchange.BookEntry)
+	if !ok {
+		return nil, errors.New("invalid argument: book")
+	}
+
+	prec, err := self.GetPricePrec(client, market)
+	if err != nil {
+		return nil, err
+	}
+
+	var out model.Book
+	for _, e := range bids {
+		price := precision.Round(aggregation.Round(e.Price(), agg), prec)
+		entry := out.EntryByPrice(price)
+		if entry != nil {
+			entry.Size = entry.Size + e.Size()
+		} else {
+			entry = &model.Buy{
+				Market: market,
+				Price:  price,
+				Size:   e.Size(),
+			}
+			out = append(out, *entry)
+		}
+	}
+
+	return out, nil
 }
 
 func (self *Huobi) GetTicker(client interface{}, market string) (float64, error) {
