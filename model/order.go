@@ -77,6 +77,8 @@ type (
 		Size      float64   `json:"size"`
 		Price     float64   `json:"price"`
 		CreatedAt time.Time `json:"createdAt"`
+		UpdatedAt time.Time `json:"updatedAt"`
+		BoughtAt  float64   `json:"boughtAt"`
 	}
 	Orders []Order
 )
