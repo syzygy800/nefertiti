@@ -328,7 +328,25 @@ func (self *Huobi) GetMaxSize(client interface{}, base, quote string, hold, earn
 }
 
 func (self *Huobi) Cancel(client interface{}, market string, side model.OrderSide) error {
-	return errors.New("Not implemented")
+	huobiClient, ok := client.(*exchange.Client)
+	if !ok {
+		return errors.New("invalid argument: client")
+	}
+
+	orders, err := huobiClient.OpenOrders(market)
+	if err != nil {
+		return errors.Wrap(err, 1)
+	}
+
+	for _, order := range orders {
+		if ((side == model.BUY) && order.Buy()) || ((side == model.SELL) && order.Sell()) {
+			if err := huobiClient.CancelOrder(order.Id); err != nil {
+				return errors.Wrap(err, 1)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (self *Huobi) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {
