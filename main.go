@@ -62,6 +62,9 @@ func main() {
 		"order": func() (cli.Command, error) {
 			return &command.OrderCommand{CommandMeta: &cm}, nil
 		},
+		"orders": func() (cli.Command, error) {
+			return &command.OrdersCommand{CommandMeta: &cm}, nil
+		},
 		"book": func() (cli.Command, error) {
 			return &command.BookCommand{CommandMeta: &cm}, nil
 		},
