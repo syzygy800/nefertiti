@@ -860,6 +860,25 @@ func (self *Binance) OCO(client interface{}, market string, size float64, price,
 	return out, nil
 }
 
+//
+// Retreives the "bought at" price vom the metadata in the client order id.
+// Currently only the newest encoding is supported!
+// If something goes wrong, the sell price is returned.
+func getBoughtAt(order binance.Order) float64 {
+	var price = order.GetPrice()
+	var parts = strings.Split(order.ClientOrderID, "-")
+	var err error
+
+	if len(parts) > 2 {
+		price, err = strconv.ParseFloat(strings.Replace(parts[2], "_", ".", -1), 64)
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+
+	return price
+}
+
 func (self *Binance) GetClosed(client interface{}, market string) (model.Orders, error) {
 	var err error
 
@@ -875,14 +894,15 @@ func (self *Binance) GetClosed(client interface{}, market string) (model.Orders,
 
 	var out model.Orders
 	for _, order := range orders {
-		// get the orders that got filled during the last 24 hours
-		if order.Status == exchange.OrderStatusTypeFilled && time.Since(order.UpdatedAt()).Hours() < 24 {
+		if order.Status == exchange.OrderStatusTypeFilled {
 			out = append(out, model.Order{
 				Side:      binanceOrderSide(&order),
 				Market:    order.Symbol,
 				Size:      order.GetSize(),
 				Price:     order.GetPrice(),
 				CreatedAt: time.Unix(order.Time/1000, 0),
+				UpdatedAt: time.Unix(order.UpdateTime/1000, 0),
+				BoughtAt:  getBoughtAt(order),
 			})
 		}
 	}
