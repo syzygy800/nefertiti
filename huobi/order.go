@@ -160,3 +160,43 @@ func (client *Client) CancelOrder(orderId int64) error {
 	_, err := client.post(fmt.Sprintf("/v1/order/orders/%d/submitcancel", orderId), nil)
 	return err
 }
+
+func (client *Client) PastOrders(symbol string, days int, state OrderState) ([]Order, error) {
+	type Response struct {
+		Data []Order `json:"data"`
+	}
+
+	var (
+		err error
+		out []Order
+	)
+
+	end := time.Now().UTC()
+	for day := 0; day < days; day++ {
+		var (
+			body []byte
+			resp Response
+		)
+
+		start := end.AddDate(0, 0, -1)
+
+		params := url.Values{}
+		params.Add("symbol", symbol)
+		params.Add("start-time", strconv.FormatInt(start.UnixNano()/1000000, 10))
+		params.Add("end-time", strconv.FormatInt(end.UnixNano()/1000000, 10))
+		params.Add("states", string(state))
+
+		if body, err = client.get("/v1/order/orders", params, true); err != nil {
+			return nil, err
+		}
+
+		if err = json.Unmarshal(body, &resp); err != nil {
+			return nil, err
+		}
+
+		out = append(out, resp.Data...)
+		end = start
+	}
+
+	return out, nil
+}

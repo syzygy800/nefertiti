@@ -193,7 +193,37 @@ func (self *Huobi) OCO(client interface{}, market string, size float64, price, s
 }
 
 func (self *Huobi) GetClosed(client interface{}, market string) (model.Orders, error) {
-	return nil, errors.New("Not implemented")
+	huobiClient, ok := client.(*exchange.Client)
+	if !ok {
+		return nil, errors.New("invalid argument: client")
+	}
+
+	var (
+		err    error
+		orders []exchange.Order
+		output model.Orders
+	)
+
+	if orders, err = huobiClient.PastOrders(market, 14, exchange.OrderStateFilled); err != nil {
+		return nil, errors.Wrap(err, 1)
+	}
+
+	for _, order := range orders {
+		output = append(output, model.Order{
+			Side: func() model.OrderSide {
+				if order.Sell() {
+					return model.SELL
+				}
+				return model.BUY
+			}(),
+			Market:    market,
+			Size:      order.Amount,
+			Price:     order.Price,
+			CreatedAt: order.GetCreatedAt(),
+		})
+	}
+
+	return output, nil
 }
 
 func (self *Huobi) GetOpened(client interface{}, market string) (model.Orders, error) {
