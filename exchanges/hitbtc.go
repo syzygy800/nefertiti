@@ -105,7 +105,8 @@ func (trades hitbtcTrades) indexByOrderId(id uint64) int {
 
 type HitBTC struct {
 	*model.ExchangeInfo
-	symbols []exchange.Symbol
+	symbols   []exchange.Symbol
+	updatedAt time.Time // the last time we pulled symbols
 }
 
 // We can track API requests using ClientOrderID field. The string has 32 symbols,
@@ -161,10 +162,11 @@ func (self *HitBTC) getSymbol(client *exchange.HitBtc, name string) (*exchange.S
 }
 
 func (self *HitBTC) getSymbols(client *exchange.HitBtc, cached bool) (symbols []exchange.Symbol, err error) {
-	if self.symbols == nil || !cached {
+	if self.symbols == nil || !cached || time.Since(self.updatedAt).Minutes() > 30 {
 		if self.symbols, err = client.GetSymbols(); err != nil {
 			return nil, errors.Wrap(err, 1)
 		}
+		self.updatedAt = time.Now()
 	}
 	return self.symbols, nil
 }
@@ -315,7 +317,7 @@ func (self *HitBTC) sell(
 
 	// get the markets
 	var markets []model.Market
-	if markets, err = self.GetMarkets(false, sandbox, nil); err != nil {
+	if markets, err = self.GetMarkets(true, sandbox, nil); err != nil {
 		return old, err
 	}
 
