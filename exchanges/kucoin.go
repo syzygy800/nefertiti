@@ -544,36 +544,23 @@ func (self *Kucoin) sell(
 			if amount > 0 {
 				var pp int
 				if pp, err = self.GetPricePrec(client, symbol); err == nil {
-					var ticker float64
-					if ticker, err = self.GetTicker(client, symbol); err == nil {
-						if ticker >= pricing.Multiply(bought, mult, pp) {
-							_, _, err = self.Order(client,
-								model.SELL,
-								symbol,
-								amount,
-								0, model.MARKET,
-								strconv.FormatFloat(bought, 'f', -1, 64),
-							)
-						} else {
-							if strategy == model.STRATEGY_STOP_LOSS {
-								_, err = self.StopLoss(client,
-									symbol,
-									amount,
-									pricing.Multiply(bought, stop, pp),
-									model.MARKET,
-									strconv.FormatFloat(bought, 'f', -1, 64),
-								)
-							} else {
-								_, _, err = self.Order(client,
-									model.SELL,
-									symbol,
-									amount,
-									pricing.Multiply(bought, mult, pp),
-									model.LIMIT,
-									strconv.FormatFloat(bought, 'f', -1, 64),
-								)
-							}
-						}
+					if strategy == model.STRATEGY_STOP_LOSS {
+						_, err = self.StopLoss(client,
+							symbol,
+							amount,
+							pricing.Multiply(bought, stop, pp),
+							model.MARKET,
+							strconv.FormatFloat(bought, 'f', -1, 64),
+						)
+					} else {
+						_, _, err = self.Order(client,
+							model.SELL,
+							symbol,
+							amount,
+							pricing.Multiply(bought, mult, pp),
+							model.LIMIT,
+							strconv.FormatFloat(bought, 'f', -1, 64),
+						)
 					}
 				}
 			}
