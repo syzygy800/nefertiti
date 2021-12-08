@@ -36,19 +36,23 @@ func (self *Huobi) getSymbols(client *exchange.Client, cached bool) ([]exchange.
 	return self.symbols, nil
 }
 
-func (self *Huobi) getSymbol(client *exchange.Client, market string, cached bool) (*exchange.Symbol, error) {
-	symbols, err := self.getSymbols(client, cached)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, symbol := range symbols {
-		if symbol.Symbol == market {
-			return &symbol, nil
+func (self *Huobi) getSymbol(client *exchange.Client, market string) (*exchange.Symbol, error) {
+	cached := true
+	for {
+		symbols, err := self.getSymbols(client, cached)
+		if err != nil {
+			return nil, err
 		}
+		for _, symbol := range symbols {
+			if symbol.Symbol == market {
+				return &symbol, nil
+			}
+		}
+		if !cached {
+			return nil, errors.Errorf("symbol %s does not exist", market)
+		}
+		cached = false
 	}
-
-	return nil, errors.Errorf("symbol %v does not exist", market)
 }
 
 func (self *Huobi) error(err error, level int64, service model.Notify) {
@@ -363,11 +367,31 @@ func (self *Huobi) Get24h(client interface{}, market string) (*model.Stats, erro
 }
 
 func (self *Huobi) GetPricePrec(client interface{}, market string) (int, error) {
-	return 8, errors.New("Not implemented")
+	huobiClient, ok := client.(*exchange.Client)
+	if !ok {
+		return 8, errors.New("invalid argument: client")
+	}
+
+	symbol, err := self.getSymbol(huobiClient, market)
+	if err != nil {
+		return 8, err
+	}
+
+	return symbol.PricePrecision, nil
 }
 
 func (self *Huobi) GetSizePrec(client interface{}, market string) (int, error) {
-	return 0, errors.New("Not implemented")
+	huobiClient, ok := client.(*exchange.Client)
+	if !ok {
+		return 0, errors.New("invalid argument: client")
+	}
+
+	symbol, err := self.getSymbol(huobiClient, market)
+	if err != nil {
+		return 0, err
+	}
+
+	return symbol.AmountPrecision, nil
 }
 
 func (self *Huobi) GetMaxSize(client interface{}, base, quote string, hold, earn bool, def float64, mult multiplier.Mult) float64 {
