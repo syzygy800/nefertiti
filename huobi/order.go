@@ -55,7 +55,7 @@ type Order struct {
 	OrderType        OrderType  `json:"type"`                      // order type (see above)
 }
 
-func (order *Order) Buy() bool {
+func (order *Order) IsBuy() bool {
 	return order.OrderType == OrderTypeBuyMarket ||
 		order.OrderType == OrderTypeBuyLimit ||
 		order.OrderType == OrderTypeBuyIOC ||
@@ -65,8 +65,8 @@ func (order *Order) Buy() bool {
 		order.OrderType == OrderTypeBuyStopLimitFOK
 }
 
-func (order *Order) Sell() bool {
-	return !order.Buy()
+func (order *Order) IsSell() bool {
+	return !order.IsBuy()
 }
 
 func (order *Order) GetCreatedAt() time.Time {

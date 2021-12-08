@@ -215,7 +215,7 @@ func (self *Huobi) GetClosed(client interface{}, market string) (model.Orders, e
 	for _, order := range orders {
 		output = append(output, model.Order{
 			Side: func() model.OrderSide {
-				if order.Sell() {
+				if order.IsSell() {
 					return model.SELL
 				}
 				return model.BUY
@@ -249,7 +249,7 @@ func (self *Huobi) GetOpened(client interface{}, market string) (model.Orders, e
 	for _, order := range orders {
 		output = append(output, model.Order{
 			Side: func() model.OrderSide {
-				if order.Sell() {
+				if order.IsSell() {
 					return model.SELL
 				}
 				return model.BUY
@@ -416,7 +416,7 @@ func (self *Huobi) Cancel(client interface{}, market string, side model.OrderSid
 	}
 
 	for _, order := range orders {
-		if ((side == model.BUY) && order.Buy()) || ((side == model.SELL) && order.Sell()) {
+		if ((side == model.BUY) && order.IsBuy()) || ((side == model.SELL) && order.IsSell()) {
 			if err := huobiClient.CancelOrder(order.Id); err != nil {
 				return errors.Wrap(err, 1)
 			}
@@ -427,7 +427,74 @@ func (self *Huobi) Cancel(client interface{}, market string, side model.OrderSid
 }
 
 func (self *Huobi) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {
-	return errors.New("Not implemented")
+	huobiClient, ok := client.(*exchange.Client)
+	if !ok {
+		return errors.New("invalid argument: client")
+	}
+
+	// step #1: delete the buy order(s) that are open in your book
+	if cancel {
+		orders, err := huobiClient.OpenOrders(market)
+		if err != nil {
+			return errors.Wrap(err, 1)
+		}
+		for _, order := range orders {
+			if order.IsBuy() {
+				// do not cancel orders that we're about to re-place
+				index := calls.IndexByPrice(order.Price)
+				if index > -1 && order.Amount == calls[index].Size {
+					calls[index].Skip = true
+				} else {
+					if err := huobiClient.CancelOrder(order.Id); err != nil {
+						return errors.Wrap(err, 1)
+					}
+				}
+			}
+		}
+	}
+
+	// step 2: open the top X buy orders
+	for _, call := range calls {
+		if !call.Skip {
+			var (
+				qty   float64 = call.Size
+				limit float64 = call.Price
+			)
+			if deviation != 1.0 {
+				kind, limit = call.Deviate(self, client, kind, deviation)
+			}
+			// --- BEGIN --- order value should be greater or equal to X ------
+			symbol, err := self.getSymbol(huobiClient, market)
+			if err != nil {
+				return err
+			}
+			if symbol.MinOrderValue > 0 {
+				if limit == 0 {
+					if limit, err = self.GetTicker(client, market); err != nil {
+						return err
+					}
+				}
+				if (qty * limit) < symbol.MinOrderValue {
+					prec, err := self.GetSizePrec(client, market)
+					if err != nil {
+						return err
+					}
+					qty = precision.Ceil((symbol.MinOrderValue / limit), prec)
+				}
+			}
+			// ---- END ---- order value should be greater or equal to X ------
+			if _, err := huobiClient.PlaceOrder(market, func() exchange.OrderType {
+				if kind == model.MARKET {
+					return exchange.OrderTypeBuyMarket
+				}
+				return exchange.OrderTypeBuyLimit
+			}(), qty, limit, ""); err != nil {
+				return errors.Wrap(err, 1)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (self *Huobi) IsLeveragedToken(name string) bool {
