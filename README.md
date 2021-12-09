@@ -12,6 +12,7 @@ At the time of this writing, the trading bot supports the following crypto excha
 * [Binance](https://www.binance.com/en/register?ref=UME24R7B)
 * [KuCoin](https://www.kucoin.com/?rcode=KJ6stw)
 * [crypto.com](https://crypto.com/exch/rf3v8ucd4k)
+* [WOO X](https://bit.ly/3orINEF)
 * [Huobi](https://www.huobi.com/en-us/topic/double-reward/?invite_code=8ab23)
 
 ### Setup
