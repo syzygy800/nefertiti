@@ -30,6 +30,7 @@ func New() *Exchanges {
 	out = append(out, newKucoin())
 	out = append(out, newCryptoDotCom())
 	out = append(out, newWoo())
+	out = append(out, newHuobi())
 	return &out
 }
 
