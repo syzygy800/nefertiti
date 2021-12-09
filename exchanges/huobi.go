@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/svanas/nefertiti/aggregation"
@@ -22,6 +24,18 @@ import (
 type Huobi struct {
 	*model.ExchangeInfo
 	symbols []exchange.Symbol
+}
+
+func (self *Huobi) getBrokerId() string {
+	const (
+		MAX_LEN = 54
+		BROKER  = "AAf68ef084"
+	)
+	out := BROKER
+	for len(out) < MAX_LEN {
+		out += strconv.Itoa(rand.Intn(10))
+	}
+	return out
 }
 
 func (self *Huobi) getBaseURL(sandbox bool) string {
@@ -304,7 +318,7 @@ func (self *Huobi) sell(
 								exchange.OrderTypeSellLimit,
 								qty,
 								pricing.Multiply(new[i].Price, mult, prec),
-								"",
+								self.getBrokerId(),
 							)
 						}
 					}
@@ -429,7 +443,13 @@ func (self *Huobi) Order(
 				return exchange.OrderTypeSellMarket
 			}
 		}
-	}(), size, price, metadata); err != nil {
+	}(), size, price, func() string {
+		if metadata != "" {
+			return metadata
+		} else {
+			return self.getBrokerId()
+		}
+	}()); err != nil {
 		return nil, nil, errors.Wrap(err, 1)
 	}
 
@@ -734,9 +754,10 @@ func (self *Huobi) Buy(client interface{}, cancel bool, market string, calls mod
 			if _, err := huobiClient.PlaceOrder(market, func() exchange.OrderType {
 				if kind == model.MARKET {
 					return exchange.OrderTypeBuyMarket
+				} else {
+					return exchange.OrderTypeBuyLimit
 				}
-				return exchange.OrderTypeBuyLimit
-			}(), qty, limit, ""); err != nil {
+			}(), qty, limit, self.getBrokerId()); err != nil {
 				return errors.Wrap(err, 1)
 			}
 		}
