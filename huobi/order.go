@@ -69,6 +69,14 @@ func (order *Order) IsSell() bool {
 	return !order.IsBuy()
 }
 
+func (order *Order) Side() string {
+	if order.IsBuy() {
+		return "Buy"
+	} else {
+		return "Sell"
+	}
+}
+
 func (order *Order) GetCreatedAt() time.Time {
 	if order.CreatedAt == 0 {
 		return time.Now().UTC()

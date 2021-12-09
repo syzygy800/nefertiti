@@ -2,6 +2,7 @@
 package exchanges
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"runtime"
@@ -15,6 +16,7 @@ import (
 	"github.com/svanas/nefertiti/multiplier"
 	"github.com/svanas/nefertiti/notify"
 	"github.com/svanas/nefertiti/precision"
+	"github.com/svanas/nefertiti/pricing"
 )
 
 type Huobi struct {
@@ -24,6 +26,15 @@ type Huobi struct {
 
 func (self *Huobi) getBaseURL(sandbox bool) string {
 	return self.ExchangeInfo.REST.URI
+}
+
+func (self *Huobi) indexByOrderID(orders []exchange.Order, id int64) int {
+	for i, o := range orders {
+		if o.Id == id {
+			return i
+		}
+	}
+	return -1
 }
 
 func (self *Huobi) getSymbols(client *exchange.Client, cached bool) ([]exchange.Symbol, error) {
@@ -53,6 +64,15 @@ func (self *Huobi) getSymbol(client *exchange.Client, market string) (*exchange.
 		}
 		cached = false
 	}
+}
+
+func (self *Huobi) parseSymbol(symbols []exchange.Symbol, symbol string) (base, quote string, err error) {
+	for _, market := range symbols {
+		if market.Symbol == symbol {
+			return market.BaseCurrency, market.QuoteCurrency, nil
+		}
+	}
+	return "", "", errors.Errorf("symbol %s does not exist", symbol)
 }
 
 func (self *Huobi) error(err error, level int64, service model.Notify) {
@@ -130,6 +150,181 @@ func (self *Huobi) FormatMarket(base, quote string) string {
 	return strings.ToLower(base + quote)
 }
 
+// listen to the opened orders, look for cancelled orders, send a notification.
+func (self *Huobi) listen(
+	client *exchange.Client,
+	service model.Notify,
+	level int64,
+	old []exchange.Order,
+	filled []exchange.Order,
+) ([]exchange.Order, error) {
+	symbols, err := self.getSymbols(client, true)
+	if err != nil {
+		return old, err
+	}
+
+	// get my opened orders
+	var new []exchange.Order
+	for _, market := range symbols {
+		orders, err := client.OpenOrders(market.Symbol)
+		if err != nil {
+			return old, errors.Wrap(err, 1)
+		}
+		new = append(new, orders...)
+	}
+
+	// look for cancelled orders
+	for _, order := range old {
+		if self.indexByOrderID(new, order.Id) == -1 {
+			// if this order has NOT been FILLED, then it has been cancelled.
+			if self.indexByOrderID(filled, order.Id) == -1 {
+				data, err := json.Marshal(order)
+				if err != nil {
+					return new, errors.Wrap(err, 1)
+				}
+
+				log.Println("[CANCELLED] " + string(data))
+
+				if service != nil {
+					if notify.CanSend(level, notify.CANCELLED) {
+						err := service.SendMessage(order, fmt.Sprintf("Huobi - Done %v (Reason: Cancelled)", order.Side()), model.ALWAYS)
+						if err != nil {
+							log.Printf("[ERROR] %v", err)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// look for newly opened orders
+	for _, order := range new {
+		if self.indexByOrderID(old, order.Id) == -1 {
+			data, err := json.Marshal(order)
+			if err != nil {
+				return new, errors.Wrap(err, 1)
+			}
+
+			log.Println("[OPEN] " + string(data))
+
+			if service != nil {
+				if notify.CanSend(level, notify.OPENED) || (level == notify.LEVEL_DEFAULT && order.IsSell()) {
+					err := service.SendMessage(order, fmt.Sprintf("Huobi - Open %v", order.Side()), model.ALWAYS)
+					if err != nil {
+						log.Printf("[ERROR] %v", err)
+					}
+				}
+			}
+		}
+	}
+
+	return new, nil
+}
+
+// listen to the filled orders, look for newly filled orders, automatically place new LIMIT SELL orders.
+func (self *Huobi) sell(
+	client *exchange.Client,
+	mult multiplier.Mult,
+	hold, earn model.Markets,
+	service model.Notify,
+	level int64,
+	old []exchange.Order,
+) ([]exchange.Order, error) {
+	symbols, err := self.getSymbols(client, true)
+	if err != nil {
+		return old, err
+	}
+
+	// get my filled orders
+	var filled []exchange.Order
+	for _, market := range symbols {
+		orders, err := client.PastOrders(market.Symbol, 1, exchange.OrderStateFilled)
+		if err != nil {
+			return old, errors.Wrap(err, 1)
+		}
+		filled = append(filled, orders...)
+	}
+
+	// make a list of newly filled orders
+	var new []exchange.Order
+	for _, order := range filled {
+		if self.indexByOrderID(old, order.Id) == -1 {
+			new = append(new, order)
+		}
+	}
+
+	// send notification(s)
+	for _, order := range new {
+		data, err := json.Marshal(order)
+		if err != nil {
+			self.error(err, level, service)
+		} else {
+			log.Println("[FILLED] " + string(data))
+			if notify.CanSend(level, notify.FILLED) && service != nil {
+				err := service.SendMessage(order, fmt.Sprintf("Huobi - Done %v (Reason: Filled)", order.Side()), model.ALWAYS)
+				if err != nil {
+					log.Printf("[ERROR] %v", err)
+				}
+			}
+		}
+	}
+
+	// has a buy order been filled? then place a sell order
+	for i := 0; i < len(new); i++ {
+		if new[i].IsBuy() {
+			qty := new[i].FilledAmount
+
+			// add up amount(s), hereby preventing a problem with partial matches
+			n := i + 1
+			for n < len(new) {
+				if new[n].Symbol == new[i].Symbol && new[n].Side() == new[i].Side() && new[n].Price == new[i].Price {
+					qty = qty + new[n].FilledAmount
+					new = append(new[:n], new[n+1:]...)
+				} else {
+					n++
+				}
+			}
+
+			prec, err := self.GetSizePrec(client, new[i].Symbol)
+			if err == nil {
+				qty = precision.Floor(qty, prec)
+				// get base currency and desired size, calculate price, place sell order
+				var (
+					base  string
+					quote string
+				)
+				base, quote, err = self.parseSymbol(symbols, new[i].Symbol)
+				if err == nil {
+					qty = self.GetMaxSize(client, base, quote, hold.HasMarket(new[i].Symbol), earn.HasMarket(new[i].Symbol), qty, mult)
+					if qty > 0 {
+						prec, err = self.GetPricePrec(client, new[i].Symbol)
+						if err == nil {
+							_, err = client.PlaceOrder(
+								new[i].Symbol,
+								exchange.OrderTypeSellLimit,
+								qty,
+								pricing.Multiply(new[i].Price, mult, prec),
+								"",
+							)
+						}
+					}
+				}
+			}
+
+			if err != nil {
+				data, _ := json.Marshal(new[i])
+				if data == nil {
+					self.error(err, level, service)
+				} else {
+					self.error(errors.Append(err, "\t", string(data)), level, service)
+				}
+			}
+		}
+	}
+
+	return filled, nil
+}
+
 func (self *Huobi) Sell(
 	strategy model.Strategy,
 	hold, earn model.Markets,
@@ -140,17 +335,70 @@ func (self *Huobi) Sell(
 		return errors.New("strategy not implemented")
 	}
 
-	// apiKey, apiSecret, err := promptForApiKeys("Huobi")
-	// if err != nil {
-	// 	return err
-	// }
+	apiKey, apiSecret, err := promptForApiKeys("Huobi")
+	if err != nil {
+		return err
+	}
 
-	// service, err := notify.New().Init(flag.Interactive(), true)
-	// if err != nil {
-	// 	return err
-	// }
+	service, err := notify.New().Init(flag.Interactive(), true)
+	if err != nil {
+		return err
+	}
 
-	return errors.New("Not implemented")
+	client := exchange.New(self.getBaseURL(sandbox), apiKey, apiSecret)
+
+	symbols, err := self.getSymbols(client, true)
+	if err != nil {
+		return err
+	}
+
+	var (
+		filled []exchange.Order
+		opened []exchange.Order
+	)
+
+	// get my filled orders
+	for _, market := range symbols {
+		orders, err := client.PastOrders(market.Symbol, 1, exchange.OrderStateFilled)
+		if err != nil {
+			return errors.Wrap(err, 1)
+		}
+		filled = append(filled, orders...)
+	}
+
+	// get my opened orders
+	for _, market := range symbols {
+		orders, err := client.OpenOrders(market.Symbol)
+		if err != nil {
+			return errors.Wrap(err, 1)
+		}
+		opened = append(opened, orders...)
+	}
+
+	if err = success(service); err != nil {
+		return err
+	}
+
+	for {
+		// read the dynamic settings
+		var (
+			level int64 = notify.LEVEL_DEFAULT
+			mult  multiplier.Mult
+		)
+		if level, err = notify.Level(); err != nil {
+			self.error(err, level, service)
+		} else if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
+			self.error(err, level, service)
+		} else
+		// listen to the filled orders, look for newly filled orders, automatically place new LIMIT SELL orders.
+		if filled, err = self.sell(client, mult, hold, earn, service, level, filled); err != nil {
+			self.error(err, level, service)
+		} else
+		// listen to the opened orders, look for cancelled orders, send a notification.
+		if opened, err = self.listen(client, service, level, opened, filled); err != nil {
+			self.error(err, level, service)
+		}
+	}
 }
 
 func (self *Huobi) Order(
