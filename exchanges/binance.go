@@ -875,16 +875,13 @@ func (self *Binance) GetClosed(client interface{}, market string) (model.Orders,
 
 	var out model.Orders
 	for _, order := range orders {
-		// get the orders that got filled during the last 24 hours
-		if order.Status == exchange.OrderStatusTypeFilled && time.Since(order.UpdatedAt()).Hours() < 24 {
-			out = append(out, model.Order{
-				Side:      binanceOrderSide(&order),
-				Market:    order.Symbol,
-				Size:      order.GetSize(),
-				Price:     order.GetPrice(),
-				CreatedAt: time.Unix(order.Time/1000, 0),
-			})
-		}
+		out = append(out, model.Order{
+			Side:      binanceOrderSide(&order),
+			Market:    order.Symbol,
+			Size:      order.GetSize(),
+			Price:     order.GetPrice(),
+			CreatedAt: time.Unix(order.Time/1000, 0),
+		})
 	}
 
 	return out, nil
