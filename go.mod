@@ -29,7 +29,7 @@ require (
 	github.com/smartystreets/goconvey v1.7.2 // indirect
 	github.com/svanas/go-coinbasepro v0.0.0-20210706151135-3ac97ad777f0
 	github.com/svanas/go-crypto-dot-com v0.0.0-20210821090330-15dc76c25616
-	github.com/svanas/go-mining-hamster v0.0.0-20190102110438-73bc620cc6e9
+	github.com/svanas/go-mining-hamster v0.0.0-20211213142718-f710b6b19784
 	github.com/yanzay/tbot v1.0.0
 	golang.org/x/crypto v0.0.0-20211209193657-4570a0811e8b // indirect
 	golang.org/x/sys v0.0.0-20211210111614-af8b64212486 // indirect
