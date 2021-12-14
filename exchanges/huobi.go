@@ -53,12 +53,41 @@ func (self *Huobi) indexByOrderID(orders []exchange.Order, id int64) int {
 
 func (self *Huobi) getSymbols(client *exchange.Client, cached bool) ([]exchange.Symbol, error) {
 	if self.symbols == nil || !cached {
-		var err error
-		if self.symbols, err = client.Symbols(); err != nil {
+		symbols, err := client.Symbols()
+		if err != nil {
 			return nil, errors.Wrap(err, 1)
+		}
+		self.symbols = nil
+		for _, symbol := range symbols {
+			if symbol.Online() && symbol.Enabled() {
+				self.symbols = append(self.symbols, symbol)
+			}
 		}
 	}
 	return self.symbols, nil
+}
+
+func (self *Huobi) getSymbolsEx(client *exchange.Client, quotes []string, cached bool) ([]exchange.Symbol, error) {
+	symbols, err := self.getSymbols(client, cached)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(quotes) == 0 {
+		return symbols, err
+	}
+
+	var out []exchange.Symbol
+	for _, symbol := range symbols {
+		for _, quote := range quotes {
+			if strings.EqualFold(symbol.QuoteCurrency, quote) {
+				out = append(out, symbol)
+			}
+		}
+	}
+
+	return out, nil
 }
 
 func (self *Huobi) getSymbol(client *exchange.Client, market string) (*exchange.Symbol, error) {
@@ -141,7 +170,7 @@ func (self *Huobi) GetMarkets(cached, sandbox bool, blacklist []string) ([]model
 	}
 
 	for _, symbol := range symbols {
-		if symbol.Online() && symbol.Enabled() && func() bool {
+		if func() bool {
 			for _, ignore := range blacklist {
 				if strings.EqualFold(symbol.Symbol, ignore) {
 					return false
@@ -167,12 +196,13 @@ func (self *Huobi) FormatMarket(base, quote string) string {
 // listen to the opened orders, look for cancelled orders, send a notification.
 func (self *Huobi) listen(
 	client *exchange.Client,
+	quotes []string,
 	service model.Notify,
 	level int64,
 	old []exchange.Order,
 	filled []exchange.Order,
 ) ([]exchange.Order, error) {
-	symbols, err := self.getSymbols(client, true)
+	symbols, err := self.getSymbolsEx(client, quotes, true)
 	if err != nil {
 		return old, err
 	}
@@ -238,13 +268,14 @@ func (self *Huobi) listen(
 // listen to the filled orders, look for newly filled orders, automatically place new LIMIT SELL orders.
 func (self *Huobi) sell(
 	client *exchange.Client,
+	quotes []string,
 	mult multiplier.Mult,
 	hold, earn model.Markets,
 	service model.Notify,
 	level int64,
 	old []exchange.Order,
 ) ([]exchange.Order, error) {
-	symbols, err := self.getSymbols(client, true)
+	symbols, err := self.getSymbolsEx(client, quotes, true)
 	if err != nil {
 		return old, err
 	}
@@ -361,15 +392,23 @@ func (self *Huobi) Sell(
 
 	client := exchange.New(self.getBaseURL(sandbox), apiKey, apiSecret)
 
-	symbols, err := self.getSymbols(client, true)
-	if err != nil {
-		return err
-	}
-
 	var (
+		quotes []string = []string{model.BTC}
 		filled []exchange.Order
 		opened []exchange.Order
 	)
+
+	flg := flag.Get("quote")
+	if flg.Exists {
+		quotes = flg.Split()
+	} else {
+		flag.Set("quote", strings.Join(quotes, ","))
+	}
+
+	symbols, err := self.getSymbolsEx(client, quotes, true)
+	if err != nil {
+		return err
+	}
 
 	// get my filled orders
 	for _, market := range symbols {
@@ -396,8 +435,9 @@ func (self *Huobi) Sell(
 	for {
 		// read the dynamic settings
 		var (
-			level int64 = notify.LEVEL_DEFAULT
-			mult  multiplier.Mult
+			level  int64 = notify.LEVEL_DEFAULT
+			mult   multiplier.Mult
+			quotes []string = flag.Get("quote").Split()
 		)
 		if level, err = notify.Level(); err != nil {
 			self.error(err, level, service)
@@ -405,11 +445,11 @@ func (self *Huobi) Sell(
 			self.error(err, level, service)
 		} else
 		// listen to the filled orders, look for newly filled orders, automatically place new LIMIT SELL orders.
-		if filled, err = self.sell(client, mult, hold, earn, service, level, filled); err != nil {
+		if filled, err = self.sell(client, quotes, mult, hold, earn, service, level, filled); err != nil {
 			self.error(err, level, service)
 		} else
 		// listen to the opened orders, look for cancelled orders, send a notification.
-		if opened, err = self.listen(client, service, level, opened, filled); err != nil {
+		if opened, err = self.listen(client, quotes, service, level, opened, filled); err != nil {
 			self.error(err, level, service)
 		}
 	}
