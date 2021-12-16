@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +18,7 @@ import (
 	"github.com/svanas/nefertiti/binance"
 	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
+	"github.com/svanas/nefertiti/logger"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/multiplier"
 	"github.com/svanas/nefertiti/notify"
@@ -211,53 +211,6 @@ func (self *Binance) baseURL(sandbox bool) string {
 	return output
 }
 
-// send a warning to StdOut
-func (self *Binance) warn(err error) {
-	pc, file, line, _ := runtime.Caller(1)
-	log.Printf("[WARN] %s %v",
-		errors.FormatCaller(pc, file, line), err,
-	)
-}
-
-// send an error to StdOut
-func (self *Binance) error(err error) {
-	pc, file, line, _ := runtime.Caller(1)
-	log.Printf("[ERROR] %s %v",
-		errors.FormatCaller(pc, file, line), err,
-	)
-}
-
-// send an error to StdOut *and* a notification to Pushover/Telegram
-func (self *Binance) notify(err error, level int64, service model.Notify) {
-	pc, file, line, _ := runtime.Caller(1)
-	prefix := errors.FormatCaller(pc, file, line)
-
-	msg := fmt.Sprintf("%s %v", prefix, err)
-	_, ok := err.(*errors.Error)
-	if ok && flag.Debug() {
-		log.Printf("[ERROR] %s", err.(*errors.Error).ErrorStack(prefix, ""))
-	} else {
-		log.Printf("[ERROR] %s", msg)
-	}
-
-	if service != nil {
-		if notify.CanSend(level, notify.ERROR) {
-			// --- BEGIN --- svanas 2020-09-12 --- do not push -1001 internal error ----
-			//			binanceError, ok := isBinanceError(err)
-			//			if ok {
-			//				if binanceError.Code == -1001 {
-			//					return
-			//				}
-			//			}
-			// ---- END ---- svanas 2020-09-12 -----------------------------------------
-			err := service.SendMessage(msg, "Binance - ERROR", model.ONCE_PER_MINUTE)
-			if err != nil {
-				self.error(err)
-			}
-		}
-	}
-}
-
 func (self *Binance) newClientOrderID(metadata string) string {
 	if metadata != "" {
 		metadata = strings.Replace(metadata, ".", "_", -1)
@@ -381,7 +334,7 @@ func (self *Binance) listen(client *binance.Client, service model.Notify, level 
 				if side != model.ORDER_SIDE_NONE {
 					if notify.CanSend(level, notify.OPENED) || (level == notify.LEVEL_DEFAULT && side == model.SELL) {
 						if err = service.SendMessage(order, ("Binance - Open " + model.FormatOrderSide(side)), model.ALWAYS); err != nil {
-							self.error(err)
+							log.Printf("[ERROR] %v", err)
 						}
 					}
 				}
@@ -453,7 +406,7 @@ func (self *Binance) sell(
 							}
 						}
 						if err = service.SendMessage(order, title, model.ALWAYS); err != nil {
-							self.error(err)
+							log.Printf("[ERROR] %v", err)
 						}
 					}
 					if twitter != nil {
@@ -563,7 +516,7 @@ func (self *Binance) sell(
 														}(),
 														strconv.FormatFloat(bought, 'f', -1, 64),
 													); err != nil {
-														self.warn(err)
+														logger.Warn(err)
 														err = limit()
 													}
 												} else {
@@ -671,19 +624,19 @@ func (self *Binance) Sell(
 			quotes []string = flag.Get("quote").Split()
 		)
 		if level, err = notify.Level(); err != nil {
-			self.notify(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
-			self.notify(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else if stop, err = multiplier.Stop(); err != nil {
-			self.notify(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else
 		// listen to the filled orders, look for newly filled orders, automatically place new sell orders.
 		if filled, err = self.sell(client, strategy, quotes, mult, stop, hold, earn, service, twitter, level, filled, sandbox, debug); err != nil {
-			self.notify(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else
 		// listen to the open orders, send a notification on newly opened orders.
 		if open, err = self.listen(client, service, level, open); err != nil {
-			self.notify(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		}
 	}
 }
@@ -769,7 +722,7 @@ func (self *Binance) StopLoss(client interface{}, market string, size float64, p
 		// --- BEGIN --- svanas 2019-02-07 ------------------------------------
 		_, ok := isBinanceError(err)
 		if ok {
-			self.warn(err)
+			logger.Warn(err)
 			// -1013 stop loss orders are not supported for this symbol
 			if kind != model.LIMIT {
 				return self.StopLoss(client, market, size, price, model.LIMIT, metadata)

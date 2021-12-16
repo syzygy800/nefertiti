@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +14,7 @@ import (
 	exchange "github.com/svanas/nefertiti/bitstamp"
 	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
+	"github.com/svanas/nefertiti/logger"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/multiplier"
 	"github.com/svanas/nefertiti/notify"
@@ -78,41 +78,6 @@ func init() {
 
 type Bitstamp struct {
 	*model.ExchangeInfo
-}
-
-func (self *Bitstamp) info(msg string, level int64, service model.Notify) {
-	pc, file, line, _ := runtime.Caller(1)
-	log.Printf("[INFO] %s %s", errors.FormatCaller(pc, file, line), msg)
-	if service != nil {
-		if notify.CanSend(level, notify.INFO) {
-			err := service.SendMessage(msg, "Bitstamp - INFO", model.ALWAYS)
-			if err != nil {
-				log.Printf("[ERROR] %v", err)
-			}
-		}
-	}
-}
-
-func (self *Bitstamp) error(err error, level int64, service model.Notify) {
-	pc, file, line, _ := runtime.Caller(1)
-	prefix := errors.FormatCaller(pc, file, line)
-
-	msg := fmt.Sprintf("%s %v", prefix, err)
-	_, ok := err.(*errors.Error)
-	if ok && flag.Debug() {
-		log.Printf("[ERROR] %s", err.(*errors.Error).ErrorStack(prefix, ""))
-	} else {
-		log.Printf("[ERROR] %s", msg)
-	}
-
-	if service != nil {
-		if notify.CanSend(level, notify.ERROR) {
-			err := service.SendMessage(msg, "Bitstamp - ERROR", model.ONCE_PER_MINUTE)
-			if err != nil {
-				log.Printf("[ERROR] %v", err)
-			}
-		}
-	}
 }
 
 func (self *Bitstamp) GetInfo() *model.ExchangeInfo {
@@ -340,13 +305,13 @@ func (self *Bitstamp) sell(
 	for _, order := range orders {
 		var data []byte
 		if data, err = json.Marshal(order); err != nil {
-			self.error(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else {
 			log.Println("[FILLED] " + string(data))
 			if notify.CanSend(level, notify.FILLED) {
 				var side string
 				if side, err = order.Side(client); err != nil {
-					self.error(err, level, service)
+					logger.Error(self.Name, err, level, service)
 				} else {
 					if service != nil {
 						if err = service.SendMessage(order, fmt.Sprintf("Bitstamp - Done %s (Reason: Filled %f qty)", strings.Title(side), order.Amount(client)), model.ALWAYS); err != nil {
@@ -420,9 +385,9 @@ func (self *Bitstamp) sell(
 			if err != nil {
 				var data []byte
 				if data, _ = json.Marshal(orders[i]); data == nil {
-					self.error(err, level, service)
+					logger.Error(self.Name, err, level, service)
 				} else {
-					self.error(errors.Append(err, "\t", string(data)), level, service)
+					logger.Error(self.Name, errors.Append(err, "\t", string(data)), level, service)
 				}
 			}
 		}
@@ -503,23 +468,23 @@ func (self *Bitstamp) Sell(
 			mult  multiplier.Mult
 		)
 		if level, err = notify.Level(); err != nil {
-			self.error(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
-			self.error(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else
 		// listens to the transaction history, look for newly filled orders, automatically place new LIMIT SELL orders.
 		if transactions, err = self.sell(client, mult, hold, earn, service, twitter, level, transactions, sandbox); err != nil {
-			self.error(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else
 		// listens to the open orders, look for cancelled orders, send a notification.
 		if open, err = self.listen(client, service, level, open, transactions); err != nil {
-			self.error(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else
 		// follow up on the "aggressive" strategy
 		if flag.Dca() && time.Since(reboughtAt).Minutes() > 60 {
 			var markets []exchange.Market
 			if markets, err = exchange.GetMarkets(client, true); err != nil {
-				self.error(err, level, service)
+				logger.Error(self.Name, err, level, service)
 			} else {
 				for _, market := range markets {
 					youngest := time.Time{} // January 1, year 1, 00:00:00.000000000 UTC
@@ -540,27 +505,27 @@ func (self *Bitstamp) Sell(
 						// did we recently sell an "aggressive" order on this market? then prevent us from buying this pump.
 						var closed model.Orders
 						if closed, err = self.GetClosed(client, market.Name); err != nil {
-							self.error(err, level, service)
+							logger.Error(self.Name, err, level, service)
 						} else {
 							if time.Since(closed.Youngest(model.SELL, time.Now())).Hours() < 24*rebuyAfterDays {
 								// continue
 							} else {
-								self.info(fmt.Sprintf(
+								logger.InfoEx(self.Name, fmt.Sprintf(
 									"Re-buying %s because your latest activity on this market (at %s) is older than %d days.",
 									market.Name, youngest.Format(time.RFC1123), rebuyAfterDays,
 								), level, service)
 								var ticker float64
 								if ticker, err = self.GetTicker(client, market.Name); err != nil {
-									self.error(err, level, service)
+									logger.Error(self.Name, err, level, service)
 								} else {
 									var precSize int
 									if precSize, err = self.GetSizePrec(client, market.Name); err != nil {
-										self.error(err, level, service)
+										logger.Error(self.Name, err, level, service)
 									} else {
 										for {
 											var qty float64
 											if qty, err = exchange.GetMinOrderSize(client, market.Name, ticker, precSize); err != nil {
-												self.error(err, level, service)
+												logger.Error(self.Name, err, level, service)
 											} else {
 												if hold.HasMarket(market.Name) {
 													qty = qty * 5
@@ -573,7 +538,7 @@ func (self *Bitstamp) Sell(
 														continue
 													}
 													// ---- END ---- svanas 2020-09-15 ------------------------------------------------
-													self.error(err, level, service)
+													logger.Error(self.Name, err, level, service)
 												}
 											}
 											break
@@ -930,7 +895,7 @@ func (self *Bitstamp) Buy(client interface{}, cancel bool, market string, calls 
 					if strings.Contains(err.Error(), "Order could not be placed") {
 						attempts++
 						if attempts >= 10 {
-							self.error(err, notify.LEVEL_DEFAULT, nil)
+							logger.Error(self.Name, err, notify.LEVEL_DEFAULT, nil)
 							break
 						}
 					} else {

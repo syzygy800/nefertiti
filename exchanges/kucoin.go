@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
 	exchange "github.com/svanas/nefertiti/kucoin"
+	"github.com/svanas/nefertiti/logger"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/multiplier"
 	"github.com/svanas/nefertiti/notify"
@@ -94,34 +94,6 @@ func (self *Kucoin) baseURI(sandbox bool) string {
 		return self.ExchangeInfo.REST.Sandbox
 	}
 	return self.ExchangeInfo.REST.URI
-}
-
-func (self *Kucoin) error(err error, level int64, service model.Notify) {
-	pc, file, line, _ := runtime.Caller(1)
-	prefix := errors.FormatCaller(pc, file, line)
-
-	msg := fmt.Sprintf("%s %v", prefix, err)
-
-	if strings.Contains(err.Error(), "no such host") || strings.Contains(err.Error(), "network is unreachable") {
-		log.Printf("[ERROR] %s", msg)
-		return
-	}
-
-	_, ok := err.(*errors.Error)
-	if ok && flag.Debug() {
-		log.Printf("[ERROR] %s", err.(*errors.Error).ErrorStack(prefix, ""))
-	} else {
-		log.Printf("[ERROR] %s", msg)
-	}
-
-	if service != nil {
-		if notify.CanSend(level, notify.ERROR) {
-			err := service.SendMessage(msg, "Kucoin - ERROR", model.ONCE_PER_MINUTE)
-			if err != nil {
-				log.Printf("[ERROR] %v", err)
-			}
-		}
-	}
 }
 
 //lint:ignore U1000 func is unused
@@ -490,7 +462,7 @@ func (self *Kucoin) sell(
 			for symbol, stop := range stopped {
 				var opened exchange.OrdersModel
 				if opened, err = self.getOrders(client, map[string]string{"status": "active", "symbol": symbol}); err != nil {
-					self.error(err, level, service)
+					logger.Error(self.Name, err, level, service)
 				} else {
 					var cb exchange.OrderPredicate = func(order *exchange.OrderModel) bool {
 						return order.Stop == "loss" && order.Side == "sell"
@@ -508,7 +480,7 @@ func (self *Kucoin) sell(
 							)
 						}
 						if err != nil {
-							self.error(err, level, service)
+							logger.Error(self.Name, err, level, service)
 						}
 					}
 				}
@@ -569,9 +541,9 @@ func (self *Kucoin) sell(
 		if err != nil {
 			var data []byte
 			if data, _ = json.Marshal(buy); data == nil {
-				self.error(err, level, service)
+				logger.Error(self.Name, err, level, service)
 			} else {
-				self.error(errors.Append(err, "\t", string(data)), level, service)
+				logger.Error(self.Name, errors.Append(err, "\t", string(data)), level, service)
 			}
 		}
 	}
@@ -714,19 +686,19 @@ func (self *Kucoin) Sell(
 			stop  multiplier.Mult
 		)
 		if level, err = notify.Level(); err != nil {
-			self.error(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
-			self.error(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else if stop, err = multiplier.Stop(); err != nil {
-			self.error(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else
 		// listens to the filled orders, look for newly filled orders, automatically place new sell orders.
 		if filled, err = self.sell(client, strategy, mult, stop, hold, earn, service, twitter, level, filled, sandbox, debug); err != nil {
-			self.error(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else
 		// listens to the open orders, look for cancelled orders, send a notification on newly opened orders.
 		if opened, err = self.listen(client, service, level, opened, filled); err != nil {
-			self.error(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else
 		// listens to the open orders, follow up on the stop loss strategy
 		if strategy == model.STRATEGY_STOP_LOSS {
@@ -758,9 +730,9 @@ func (self *Kucoin) Sell(
 						if err != nil {
 							var data []byte
 							if data, _ = json.Marshal(order); data == nil {
-								self.error(err, level, service)
+								logger.Error(self.Name, err, level, service)
 							} else {
-								self.error(errors.Append(err, "\t", string(data)), level, service)
+								logger.Error(self.Name, errors.Append(err, "\t", string(data)), level, service)
 							}
 						}
 					}

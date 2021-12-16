@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
 	exchange "github.com/svanas/nefertiti/hitbtc"
+	"github.com/svanas/nefertiti/logger"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/multiplier"
 	"github.com/svanas/nefertiti/notify"
@@ -116,30 +116,6 @@ func (self *HitBTC) getUniquePartnerId() string {
 	out := uuid.New().LongEx("")
 	out = "refzzz18" + out[8:]
 	return out
-}
-
-func (self *HitBTC) error(err error, level int64, service model.Notify) {
-	pc, file, line, _ := runtime.Caller(1)
-	prefix := errors.FormatCaller(pc, file, line)
-
-	msg := fmt.Sprintf("%s %v", prefix, err)
-	_, ok := err.(*errors.Error)
-	if ok && flag.Debug() {
-		log.Printf("[ERROR] %s", err.(*errors.Error).ErrorStack(prefix, ""))
-	} else {
-		log.Printf("[ERROR] %s", msg)
-	}
-
-	if service != nil {
-		if notify.CanSend(level, notify.ERROR) {
-			if err.Error() != "502 Bad Gateway" {
-				err := service.SendMessage(msg, "HitBTC - ERROR", model.ONCE_PER_MINUTE)
-				if err != nil {
-					log.Printf("[ERROR] %v", err)
-				}
-			}
-		}
-	}
 }
 
 func (self *HitBTC) getSymbol(client *exchange.HitBtc, name string) (*exchange.Symbol, error) {
@@ -401,9 +377,9 @@ func (self *HitBTC) sell(
 				if err != nil {
 					var data []byte
 					if data, _ = json.Marshal(new[i]); data == nil {
-						self.error(err, level, service)
+						logger.Error(self.Name, err, level, service)
 					} else {
-						self.error(errors.Append(err, "\t", string(data)), level, service)
+						logger.Error(self.Name, errors.Append(err, "\t", string(data)), level, service)
 					}
 
 				}
@@ -472,17 +448,17 @@ func (self *HitBTC) Sell(
 			mult  multiplier.Mult
 		)
 		if level, err = notify.Level(); err != nil {
-			self.error(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
-			self.error(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else
 		// listens to the filled orders, look for newly filled orders, automatically place new sell orders.
 		if filled, err = self.sell(client, strategy, mult, hold, earn, service, twitter, level, filled, sandbox); err != nil {
-			self.error(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else
 		// listens to the open orders, look for cancelled orders, send a notification.
 		if opened, err = self.listen(client, service, level, opened, filled); err != nil {
-			self.error(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		}
 	}
 }

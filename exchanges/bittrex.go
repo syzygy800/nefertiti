@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +15,7 @@ import (
 	exchange "github.com/svanas/nefertiti/bittrex"
 	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
+	"github.com/svanas/nefertiti/logger"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/multiplier"
 	"github.com/svanas/nefertiti/notify"
@@ -198,70 +198,6 @@ func bittrexParseMarket(market string, version int) (base, quote string, err err
 		return symbols[1], symbols[0], nil
 	}
 	return "", "", errors.Errorf("cannot parse market %s", market)
-}
-
-func bittrexLogInfo(msg string, level int64, service model.Notify) {
-	log.Println("[INFO] " + msg)
-	if service != nil {
-		if notify.CanSend(level, notify.INFO) {
-			err := service.SendMessage(msg, "Bittrex - INFO", model.ALWAYS)
-			if err != nil {
-				log.Printf("[ERROR] %v", err)
-			}
-		}
-	}
-}
-
-func bittrexLogError(err error, level int64, service model.Notify) {
-	pc, file, line, _ := runtime.Caller(1)
-	prefix := errors.FormatCaller(pc, file, line)
-
-	msg := fmt.Sprintf("%s %v", prefix, err)
-	_, ok := err.(*errors.Error)
-	if ok && flag.Debug() {
-		log.Printf("[ERROR] %s", err.(*errors.Error).ErrorStack(prefix, ""))
-	} else {
-		log.Printf("[ERROR] %s", msg)
-	}
-
-	if service != nil {
-		if notify.CanSend(level, notify.ERROR) {
-			err := service.SendMessage(msg, "Bittrex - ERROR", model.ONCE_PER_MINUTE)
-			if err != nil {
-				log.Printf("[ERROR] %v", err)
-			}
-		}
-	}
-}
-
-func bittrexLogErrorEx(err error, order *exchange.Order, level int64, service model.Notify) {
-	pc, file, line, _ := runtime.Caller(1)
-	prefix := errors.FormatCaller(pc, file, line)
-	msg := fmt.Sprintf("%s %v", prefix, err)
-
-	if service != nil {
-		if notify.CanSend(level, notify.ERROR) {
-			err := service.SendMessage(msg, "Bittrex - ERROR", model.ONCE_PER_MINUTE)
-			if err != nil {
-				log.Printf("[ERROR] %v", err)
-			}
-		}
-	}
-
-	_, ok := err.(*errors.Error)
-	if ok && flag.Debug() {
-		if order != nil {
-			var data []byte
-			if data, _ = json.Marshal(order); data != nil {
-				log.Printf("[ERROR] %s", errors.Append(err, "\t", string(data)).ErrorStack(prefix, ""))
-				return
-			}
-		}
-		log.Printf("[ERROR] %s", err.(*errors.Error).ErrorStack(prefix, ""))
-		return
-	}
-
-	log.Printf("[ERROR] %s", msg)
 }
 
 func bittrexCancelOrder(client *exchange.Client, order *exchange.Order) (float64, error) { // -> (ocoTriggerPrice, error)
@@ -539,7 +475,7 @@ func (self *Bittrex) sell(
 									if bought > sold {
 										ticker, _ := self.GetTicker(client, order.MarketName())
 										if ticker > bought {
-											bittrexLogInfo(fmt.Sprintf("Not rebuying %s because ticker %v is higher than limit %v\n", order.MarketName(), ticker, bought), level, service)
+											logger.InfoEx(self.Name, fmt.Sprintf("Not rebuying %s because ticker %v is higher than limit %v\n", order.MarketName(), ticker, bought), level, service)
 											return false
 										}
 									}
@@ -710,19 +646,19 @@ func (self *Bittrex) Sell(
 			stop  multiplier.Mult
 		)
 		if level, err = notify.Level(); err != nil {
-			bittrexLogError(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
-			bittrexLogError(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else if stop, err = multiplier.Stop(); err != nil {
-			bittrexLogError(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else
 		// listens to the order history, look for newly filled orders, automatically place new LIMIT SELL orders.
 		if history, err = self.sell(client, strategy, mult, stop, hold, earn, service, twitter, level, history, sandbox); err != nil {
-			bittrexLogError(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else
 		// listens to the open orders, look for cancelled orders, send a notification.
 		if open, err = self.listen(client, service, level, open, history); err != nil {
-			bittrexLogError(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else
 		// Effective 25-nov-2017, Bittrex will be removing orders that are older than 28 days. Here we will...
 		// 1. check for those every hour, and then
@@ -733,13 +669,13 @@ func (self *Bittrex) Sell(
 				if side != model.ORDER_SIDE_NONE {
 					var online bool
 					if online, err = self.marketOnline(client, order.MarketName()); err != nil {
-						bittrexLogErrorEx(err, &order, level, service)
+						logger.ErrorEx(self.Name, err, &order, level, service)
 					} else if online {
 						var openedAt time.Time
 						if openedAt, err = time.Parse(exchange.TIME_FORMAT, order.CreatedAt); err != nil {
-							bittrexLogErrorEx(errors.Wrap(err, 1), &order, level, service)
+							logger.ErrorEx(self.Name, errors.Wrap(err, 1), &order, level, service)
 						} else if time.Since(openedAt).Hours() >= float64(reopenAfterDays*24) {
-							bittrexLogInfo(fmt.Sprintf(
+							logger.InfoEx(self.Name, fmt.Sprintf(
 								"Cancelling (and reopening) limit %s %s (market: %s, price: %g, qty: %f, opened at %s) because it is older than %d days.",
 								model.OrderSideString[side], order.Id, order.MarketName(), order.Price(), order.Quantity, order.CreatedAt, reopenAfterDays,
 							), level, service)
@@ -754,7 +690,7 @@ func (self *Bittrex) Sell(
 							}
 
 							if err != nil {
-								bittrexLogErrorEx(errors.Wrap(err, 1), &order, level, service)
+								logger.ErrorEx(self.Name, errors.Wrap(err, 1), &order, level, service)
 							}
 						}
 					}

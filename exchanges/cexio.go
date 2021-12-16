@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -15,6 +13,7 @@ import (
 	exchange "github.com/svanas/nefertiti/cexio"
 	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
+	"github.com/svanas/nefertiti/logger"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/multiplier"
 	"github.com/svanas/nefertiti/notify"
@@ -78,28 +77,6 @@ func init() {
 
 type CexIo struct {
 	*model.ExchangeInfo
-}
-
-//lint:ignore U1000 func is unused
-func (self *CexIo) info(msg string, level int64, service model.Notify) {
-	_, file, line, _ := runtime.Caller(1)
-	log.Printf("[INFO] %s:%d %s", filepath.Base(file), line, msg)
-	if service != nil {
-		if notify.CanSend(level, notify.INFO) {
-			service.SendMessage(msg, "CEX.IO - INFO", model.ALWAYS)
-		}
-	}
-}
-
-func (self *CexIo) error(err error, level int64, service model.Notify) {
-	_, file, line, _ := runtime.Caller(1)
-	str := err.Error()
-	log.Printf("[ERROR] %s:%d %s", filepath.Base(file), line, strings.Replace(str, "\n\n", " ", -1))
-	if service != nil {
-		if notify.CanSend(level, notify.ERROR) {
-			service.SendMessage(str, "CEX.IO - ERROR", model.ONCE_PER_MINUTE)
-		}
-	}
 }
 
 func (self *CexIo) encodePair(symbol1, symbol2 string) (string, error) {
@@ -382,17 +359,17 @@ func (self *CexIo) Sell(
 			mult  multiplier.Mult
 		)
 		if level, err = notify.Level(); err != nil {
-			self.error(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
-			self.error(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else
 		// listen to the archived orders, look for newly filled orders, automatically place new LIMIT SELL orders.
 		if archive, err = self.sell(client, mult, hold, earn, service, twitter, level, archive, sandbox); err != nil {
-			self.error(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		} else
 		// listen to the open orders, look for cancelled orders, send a notification.
 		if open, err = self.listen(client, service, level, open); err != nil {
-			self.error(err, level, service)
+			logger.Error(self.Name, err, level, service)
 		}
 	}
 }
