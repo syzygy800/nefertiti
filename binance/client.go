@@ -21,26 +21,61 @@ type Client struct {
 	inner *exchange.Client
 }
 
-// Get all account orders; active, canceled, or filled.
-func (self *Client) Orders(symbol string) ([]Order, error) {
+// Get a limited number of account orders for a symbol starting with the given order id
+// NOTE: Be sure to set the limit equal or less then the limit defined by the exchange.
+func (self *Client) OrdersEx(symbol string, limit int, startid int64) ([]*exchange.Order, error) {
 	var (
 		err    error
 		orders []*exchange.Order
-		output []Order
 	)
+
 	defer AfterRequest()
 	BeforeRequest(self, WEIGHT_ALL_ORDERS)
-	if orders, err = self.inner.NewListOrdersService().Symbol(symbol).Do(context.Background()); err != nil {
+	if orders, err = self.inner.NewListOrdersService().
+		Limit(limit).
+		OrderID(startid).
+		Symbol(symbol).
+		Do(context.Background()); err != nil {
 		self.handleError(err)
 		return nil, err
 	}
-	for _, unwrapped := range orders {
-		var wrapped *Order
-		if wrapped, err = wrap(unwrapped); err != nil {
-			return nil, err
+
+	return orders, nil
+}
+
+// Get all account orders; active, canceled, or filled.
+func (self *Client) Orders(symbol string) ([]Order, error) {
+	var (
+		err     error
+		orders  []*exchange.Order
+		output  []Order
+		count   int
+		limit   int   = 500
+		startid int64 = 0
+	)
+
+	for {
+		orders, err = self.OrdersEx(symbol, limit, startid)
+		count = len(orders)
+
+		// Convert to general order type
+		for _, unwrapped := range orders {
+			var wrapped *Order
+			if wrapped, err = wrap(unwrapped); err != nil {
+				return nil, err
+			}
+			output = append(output, *wrapped)
 		}
-		output = append(output, *wrapped)
+
+		// Stop if all orders were fetched.
+		if count < limit {
+			break
+		}
+
+		// Setup for next round
+		startid = orders[count-1].OrderID + 1
 	}
+
 	return output, nil
 }
 
