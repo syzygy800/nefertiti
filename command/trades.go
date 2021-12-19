@@ -77,7 +77,56 @@ func (c *TradesCommand) Run(args []string) int {
 		return c.ReturnError(err)
 	}
 
+	var orders model.Orders
+
+	// Get all closed orders
+	orders, err = exchange.GetClosed(client, market)
+
+	// Filter sell orders
+	var filledsells model.Orders
+	for _, order := range orders {
+		if model.FormatOrderSide(order.Side) == "Sell" {
+			if !date.IsZero() {
+				if dateEqual(order.UpdatedAt, date) {
+					filledsells = append(filledsells, order)
+				}
+			} else {
+				filledsells = append(filledsells, order)
+			}
+		}
+	}
+
+	// Calc and output profits
+	var totalProceeds = 0.0
+	var timestring string
+	for _, order := range filledsells {
+		var proceeds = order.Size * (order.Price - order.BoughtAt)
+		totalProceeds += proceeds
+
+		if verbose {
+			if date.IsZero() {
+				timestring = order.UpdatedAt.Format("2006-01-02 15:04")
+			} else {
+				timestring = order.UpdatedAt.Format("15:04")
+			}
+			fmt.Printf("%s %s: %.2f\n", timestring, order.Market, proceeds)
+		}
+	}
+
+	if verbose {
+		fmt.Printf("Total: %.2f\n", totalProceeds)
+	} else {
+		fmt.Printf("%.2f\n", totalProceeds)
+	}
+
 	return 0
+}
+
+func dateEqual(date1, date2 time.Time) bool {
+	y1, m1, d1 := date1.Date()
+	y2, m2, d2 := date2.Date()
+
+	return y1 == y2 && m1 == m2 && d1 == d2
 }
 
 func (c *TradesCommand) Help() string {
