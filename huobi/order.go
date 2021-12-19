@@ -46,13 +46,13 @@ type Order struct {
 	Price            float64    `json:"price,string"` // the limit price of limit order
 	CreatedAt        int64      `json:"created-at"`   // the timestamp in milliseconds when the order was created
 	AccountId        int64      `json:"account-id"`
-	ClientOrderId    string     `json:"client-order-id"`           // the identity defined by the client
-	FilledAmount     float64    `json:"filled-amount,string"`      // the amount which has been filled
-	FilledCashAmount float64    `json:"filled-cash-amount,string"` // the filled total in quote currency
-	FilledFees       float64    `json:"filled-fees,string"`        // transaction fee
-	Id               int64      `json:"id"`                        // the unique identity for the order
-	State            OrderState `json:"state"`                     // order status (see above)
-	OrderType        OrderType  `json:"type"`                      // order type (see above)
+	ClientOrderId    string     `json:"client-order-id"`          // the identity defined by the client
+	FilledAmount     float64    `json:"field-amount,string"`      // the amount which has been filled
+	FilledCashAmount float64    `json:"field-cash-amount,string"` // the filled total in quote currency
+	FilledFees       float64    `json:"field-fees,string"`        // transaction fee
+	Id               int64      `json:"id"`                       // the unique identity for the order
+	State            OrderState `json:"state"`                    // order status (see above)
+	OrderType        OrderType  `json:"type"`                     // order type (see above)
 }
 
 func (order *Order) IsBuy() bool {

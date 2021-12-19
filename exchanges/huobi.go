@@ -295,13 +295,25 @@ func (self *Huobi) sell(
 	// has a buy order been filled? then place a sell order
 	for i := 0; i < len(new); i++ {
 		if new[i].IsBuy() {
-			qty := new[i].FilledAmount
+			qty := func() float64 {
+				if new[i].FilledAmount == 0 {
+					return new[i].Amount
+				} else {
+					return new[i].FilledAmount
+				}
+			}()
 
 			// add up amount(s), hereby preventing a problem with partial matches
 			n := i + 1
 			for n < len(new) {
 				if new[n].Symbol == new[i].Symbol && new[n].Side() == new[i].Side() && new[n].Price == new[i].Price {
-					qty = qty + new[n].FilledAmount
+					qty = qty + func() float64 {
+						if new[n].FilledAmount == 0 {
+							return new[n].Amount
+						} else {
+							return new[n].FilledAmount
+						}
+					}()
 					new = append(new[:n], new[n+1:]...)
 				} else {
 					n++
