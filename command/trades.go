@@ -17,13 +17,18 @@ type (
 	}
 )
 
+var (
+	exchange model.Exchange
+	date     time.Time
+	verbose  = false
+)
+
 func (c *TradesCommand) Run(args []string) int {
 	var (
 		err error
 		flg *flag.Flag
 	)
 
-	var exchange model.Exchange
 	if exchange, err = exchanges.GetExchange(); err != nil {
 		return c.ReturnError(err)
 	}
@@ -37,7 +42,6 @@ func (c *TradesCommand) Run(args []string) int {
 		return c.ReturnError(errors.Errorf("side %v is invalid", flg))
 	}
 
-	var date time.Time
 	flg = flag.Get("date")
 	if !flg.Exists {
 		date = time.Now()
@@ -52,7 +56,6 @@ func (c *TradesCommand) Run(args []string) int {
 		}
 	}
 
-	var verbose = false
 	flg = flag.Get("verbose")
 	if flg.Exists {
 		verbose = true
@@ -67,9 +70,25 @@ func (c *TradesCommand) Run(args []string) int {
 		}
 	}
 
+	// Flag --market takes precedence over --quote
+	var symbols []string
+	var quote string
 	var market string
-	if market, err = model.GetMarket(exchange); err != nil {
-		return c.ReturnError(err)
+	flg = flag.Get("market")
+	if flg.Exists {
+		if market, err = model.GetMarket(exchange); err != nil {
+			return c.ReturnError(err)
+		} else {
+			symbols = append(symbols, market)
+		}
+	} else {
+		flg = flag.Get("quote")
+		if flg.Exists {
+			quote = flg.String()
+			symbols = getMarketsWithQuote(quote)
+		} else {
+			err = errors.New("missing argument: Either '--market' or '--quote' is mandantory")
+		}
 	}
 
 	var client interface{}
@@ -77,21 +96,26 @@ func (c *TradesCommand) Run(args []string) int {
 		return c.ReturnError(err)
 	}
 
-	var orders model.Orders
-
 	// Get all closed orders
-	orders, err = exchange.GetClosed(client, market)
-
-	// Filter sell orders
+	var orders model.Orders
 	var filledsells model.Orders
-	for _, order := range orders {
-		if model.FormatOrderSide(order.Side) == "Sell" {
-			if !date.IsZero() {
-				if dateEqual(order.UpdatedAt, date) {
+
+	for _, m := range symbols {
+		orders, err = exchange.GetClosed(client, m)
+		if err != nil {
+			fmt.Printf("%s ERROR: %v\n", m, err)
+		}
+
+		// Filter sell orders
+		for _, order := range orders {
+			if model.FormatOrderSide(order.Side) == "Sell" {
+				if !date.IsZero() {
+					if dateEqual(order.UpdatedAt, date) {
+						filledsells = append(filledsells, order)
+					}
+				} else {
 					filledsells = append(filledsells, order)
 				}
-			} else {
-				filledsells = append(filledsells, order)
 			}
 		}
 	}
@@ -122,6 +146,23 @@ func (c *TradesCommand) Run(args []string) int {
 	return 0
 }
 
+// Filter all exchange's markets by the quote currency
+func getMarketsWithQuote(quote string) []string {
+	var symbols []string
+	var blacklist []string
+
+	if len(quote) > 0 {
+		markets, _ := exchange.GetMarkets(true, false, blacklist)
+		for _, m := range markets {
+			if m.Quote == quote {
+				symbols = append(symbols, m.Name)
+			}
+		}
+	}
+
+	return symbols
+}
+
 // Check if two days (year, month, day) are equal
 func dateEqual(date1, date2 time.Time) bool {
 	y1, m1, d1 := date1.Date()
@@ -149,7 +190,7 @@ Options:
   --exchange = name (currently Binance only!)
   --side     = [buy|sell] (Not used ATM)
   --market   = selects the market pair for which the info is queried
-  --quote    = (NOT IMPLEMENTED YET) selects the markets by base currency
+  --quote    = selects the markets by base currency
   --date     = the day of interest. Either 'Y' for yesterday or "YYYY-MM-DD". Default: Today
   --verbose  = show more detailed info
 `
