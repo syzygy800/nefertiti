@@ -492,30 +492,39 @@ func (self *Gdax) sell(
 												logger.Error(self.Name, err, level, service)
 											} else {
 												if hold.HasMarket(product.ID) {
-													qty = qty * 5
+													qty = precision.Round((qty * 5), func() int {
+														prec, err := self.GetSizePrec(client, product.ID)
+														if err != nil {
+															return 0
+														} else {
+															return prec
+														}
+													}())
 												}
 
-												order := (&gdax.Order{
-													Order: &exchange.Order{
-														Type:      model.OrderTypeString[model.MARKET],
-														Side:      model.OrderSideString[model.BUY],
-														ProductID: product.ID,
-													},
-												}).SetSize(qty)
+												if qty > 0 {
+													order := (&gdax.Order{
+														Order: &exchange.Order{
+															Type:      model.OrderTypeString[model.MARKET],
+															Side:      model.OrderSideString[model.BUY],
+															ProductID: product.ID,
+														},
+													}).SetSize(qty)
 
-												// log the newly created BUY order
-												var raw []byte
-												if raw, err = json.Marshal(order); err == nil {
-													log.Println("[INFO] " + string(raw))
-													if service != nil {
-														if notify.CanSend(level, notify.INFO) {
-															service.SendMessage(order, "Coinbase Pro - New Buy", model.ALWAYS)
+													// log the newly created BUY order
+													var raw []byte
+													if raw, err = json.Marshal(order); err == nil {
+														log.Println("[INFO] " + string(raw))
+														if service != nil {
+															if notify.CanSend(level, notify.INFO) {
+																service.SendMessage(order, "Coinbase Pro - New Buy", model.ALWAYS)
+															}
 														}
 													}
-												}
 
-												if _, err = client.CreateOrder(order); err != nil {
-													logger.Error(self.Name, errors.Wrap(err, 1), level, service)
+													if _, err = client.CreateOrder(order); err != nil {
+														logger.Error(self.Name, errors.Wrap(err, 1), level, service)
+													}
 												}
 											}
 										}
