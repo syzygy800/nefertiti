@@ -125,7 +125,13 @@ func (c *TradesCommand) Run(args []string) int {
 	var timestring string
 	for _, order := range filledsells {
 		var proceeds = order.Size * (order.Price - order.BoughtAt)
-		totalProceeds += proceeds
+		if proceeds > 0 {
+			totalProceeds += proceeds
+		} else {
+			if flag.Debug() {
+				fmt.Printf("[DEBUG] Profit < 0! Order: %+v.", order)
+			}
+		}
 
 		if verbose {
 			if date.IsZero() {
@@ -133,7 +139,9 @@ func (c *TradesCommand) Run(args []string) int {
 			} else {
 				timestring = order.UpdatedAt.Format("15:04")
 			}
-			fmt.Printf("%s %s: %.2f\n", timestring, order.Market, proceeds)
+			if proceeds > 0 {
+				fmt.Printf("%s %s: %.2f\n", timestring, order.Market, proceeds)
+			}
 		}
 	}
 
