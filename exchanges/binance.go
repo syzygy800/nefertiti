@@ -3,11 +3,14 @@ package exchanges
 
 import (
 	"context"
+	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"os"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -861,22 +864,85 @@ func (self *Binance) OCO(client interface{}, market string, size float64, price,
 }
 
 //
-// Retreives the "bought at" price vom the metadata in the client order id.
+// Retreives the "bought at" price vom the metadata in the ClientOrderId.
+// The format has changed in the past and depends on the version the sell order was with:
+//  1) <0.0.161
+//  2) [..]
+//  3) >0.0.172
 // Currently only the newest encoding is supported!
 // If something goes wrong, the sell price is returned.
-func getBoughtAt(order binance.Order) float64 {
-	var price = order.GetPrice()
-	var parts = strings.Split(order.ClientOrderID, "-")
+func getBoughtAt(order binance.Order, mult float64) float64 {
+	var price = math.Inf(1)
+	var coid = order.ClientOrderID
+	var parts = strings.Split(coid, "-")
 	var err error
 
-	if len(parts) > 2 {
-		price, err = strconv.ParseFloat(strings.Replace(parts[2], "_", ".", -1), 64)
-		if err != nil {
-			fmt.Println(err)
+	// Orders set via the web frontend contain no metadata
+	if !strings.Contains(coid, "web_") {
+
+		// format after 0.0.172
+		if len(parts) == 4 {
+			price, err = strconv.ParseFloat(strings.Replace(parts[2], "_", ".", -1), 64)
+			if err != nil {
+				fmt.Println(err)
+			}
+		} else {
+			price = getBoughtAt_old(order.ClientOrderID)
+
+			// Couldn't extract price
+			if math.IsInf(price, 0) {
+				price = order.GetPrice() / mult
+			}
 		}
+	} else {
+		price = order.GetPrice() / mult
+	}
+
+	if math.IsInf(price, 0) && flag.Debug() {
+		log.Printf("[DEBUG] Couldn't extract price from: %s.", coid)
 	}
 
 	return price
+}
+
+func getBoughtAt_old(clientorderid string) float64 {
+
+	type Metadata struct {
+		P float64
+		M float64
+	}
+	var (
+		ret     = math.Inf(1)
+		err     error
+		isMatch bool
+		meta    Metadata
+		decoded []byte
+	)
+
+	marker := clientorderid[:2]
+	metadata := clientorderid[2:]
+	isMatch, err = regexp.Match("[[:digit:]]{2}", []byte(marker))
+
+	if isMatch {
+		// Decode base64
+		padlen := 4 - (len(metadata) % 4)
+		if padlen < 4 {
+			metadata = metadata + "===="[:padlen]
+		}
+		decoded, err = b64.StdEncoding.DecodeString(metadata)
+		if err != nil {
+			fmt.Printf("Metadate: %s decoded to: %s. Error %v\n", metadata, decoded, err)
+		}
+
+		// Create object from JSON
+		err = json.Unmarshal(decoded, &meta)
+		if err == nil {
+			ret = meta.P
+		} else {
+			fmt.Println(err)
+		}
+	}
+	return ret
 }
 
 func (self *Binance) GetClosed(client interface{}, market string) (model.Orders, error) {
@@ -902,7 +968,7 @@ func (self *Binance) GetClosed(client interface{}, market string) (model.Orders,
 				Price:     order.GetPrice(),
 				CreatedAt: time.Unix(order.Time/1000, 0),
 				UpdatedAt: time.Unix(order.UpdateTime/1000, 0),
-				BoughtAt:  getBoughtAt(order),
+				BoughtAt:  getBoughtAt(order, 1.05),
 			})
 		}
 	}

@@ -200,6 +200,7 @@ Options:
   --market   = selects the market pair for which the info is queried
   --quote    = selects the markets by base currency
   --date     = the day of interest. Either 'Y' for yesterday or "YYYY-MM-DD". Default: Today
+  --mult     = use this multiplicator if sell order doesn't contain the buy price
   --verbose  = show more detailed info
 `
 	return strings.TrimSpace(text)
