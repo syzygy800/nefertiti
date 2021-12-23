@@ -8,7 +8,9 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"time"
 
+	filemutex "github.com/alexflint/go-filemutex"
 	"github.com/svanas/nefertiti/aggregation"
 	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
@@ -19,7 +21,61 @@ import (
 	"github.com/svanas/nefertiti/notify"
 	"github.com/svanas/nefertiti/precision"
 	"github.com/svanas/nefertiti/pricing"
+	"github.com/svanas/nefertiti/session"
 )
+
+var (
+	huobiMutex *filemutex.FileMutex
+)
+
+const (
+	huobiSessionFile = "huobi.time"
+	huobiSessionLock = "huobi.lock"
+)
+
+func init() {
+	exchange.BeforeRequest = func(method, path string) error {
+		var err error
+
+		if huobiMutex == nil {
+			if huobiMutex, err = filemutex.New(session.GetSessionFile(huobiSessionLock)); err != nil {
+				return err
+			}
+		}
+
+		if err = huobiMutex.Lock(); err != nil {
+			return err
+		}
+
+		var lastRequest *time.Time
+		if lastRequest, err = session.GetLastRequest(huobiSessionFile); err != nil {
+			return err
+		}
+
+		if lastRequest != nil {
+			elapsed := time.Since(*lastRequest)
+			if elapsed.Seconds() < (float64(1) / exchange.RequestsPerSecond) {
+				sleep := time.Duration((float64(time.Second) / exchange.RequestsPerSecond) - float64(elapsed))
+				if flag.Debug() {
+					log.Printf("[DEBUG] sleeping %f seconds\n", sleep.Seconds())
+				}
+				time.Sleep(sleep)
+			}
+		}
+
+		if flag.Debug() {
+			log.Printf("[DEBUG] %s %s\n", method, path)
+		}
+
+		return nil
+	}
+	exchange.AfterRequest = func() {
+		defer func() {
+			huobiMutex.Unlock()
+		}()
+		session.SetLastRequest(huobiSessionFile, time.Now())
+	}
+}
 
 type Huobi struct {
 	*model.ExchangeInfo
@@ -57,10 +113,15 @@ func (self *Huobi) getSymbols(client *exchange.Client, cached bool) ([]exchange.
 		if err != nil {
 			return nil, errors.Wrap(err, 1)
 		}
+
 		self.symbols = nil
+		partition := flag.Get("partition")
+
 		for _, symbol := range symbols {
 			if symbol.Online() && symbol.Enabled() {
-				self.symbols = append(self.symbols, symbol)
+				if !partition.Exists || partition.Contains(symbol.Partition) {
+					self.symbols = append(self.symbols, symbol)
+				}
 			}
 		}
 	}

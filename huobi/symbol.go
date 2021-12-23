@@ -9,6 +9,7 @@ type Symbol struct {
 	QuoteCurrency          string  `json:"quote-currency"`
 	PricePrecision         int     `json:"price-precision"`  // quote currency precision
 	AmountPrecision        int     `json:"amount-precision"` // base currency precision
+	Partition              string  `json:"symbol-partition"`
 	Symbol                 string  `json:"symbol"`
 	State                  string  `json:"state"`                      // "online" or "offline" or "suspended"
 	ValuePrecision         int     `json:"value-precision"`            // precision of value in quote currency (value = price * amount)
@@ -18,7 +19,6 @@ type Symbol struct {
 	SellMarketMaxOrderAmt  float64 `json:"sell-market-max-order-amt"`  // max order amount of sell-market order in base currency
 	BuyMarketMaxOrderValue float64 `json:"buy-market-max-order-value"` // max order value of buy-market order in quote currency
 	MinOrderValue          float64 `json:"min-order-value"`            // minimum order value of limit order and buy-market order in quote currency
-	MaxOrderValue          float64 `json:"max-order-value"`            // max order value of limit order and buy-market order in usdt
 	ApiTrading             string  `json:"api-trading"`                // "enabled" or "disabled"
 }
 
