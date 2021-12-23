@@ -948,6 +948,16 @@ func getBoughtAt_old(clientorderid string) float64 {
 func (self *Binance) GetClosed(client interface{}, market string) (model.Orders, error) {
 	var err error
 
+	var val_mult = 1.05
+	flg_mult := flag.Get("mult")
+
+	if flg_mult.Exists {
+		val_mult, err = strconv.ParseFloat(flg_mult.String(), 64)
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+
 	binanceClient, ok := client.(*binance.Client)
 	if !ok {
 		return nil, errors.New("invalid argument: client")
@@ -959,8 +969,12 @@ func (self *Binance) GetClosed(client interface{}, market string) (model.Orders,
 	}
 
 	var out model.Orders
+	var boughtAt float64
 	for _, order := range orders {
 		if order.Status == exchange.OrderStatusTypeFilled {
+			if order.Side == exchange.SideTypeSell {
+				boughtAt = getBoughtAt(order, val_mult)
+			}
 			out = append(out, model.Order{
 				Side:      binanceOrderSide(&order),
 				Market:    order.Symbol,
@@ -968,7 +982,7 @@ func (self *Binance) GetClosed(client interface{}, market string) (model.Orders,
 				Price:     order.GetPrice(),
 				CreatedAt: time.Unix(order.Time/1000, 0),
 				UpdatedAt: time.Unix(order.UpdateTime/1000, 0),
-				BoughtAt:  getBoughtAt(order, 1.05),
+				BoughtAt:  boughtAt,
 			})
 		}
 	}
