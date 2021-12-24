@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -70,7 +71,17 @@ func (c *TradesCommand) Run(args []string) int {
 		}
 	}
 
+	var prec uint64 = 7
+	flg = flag.Get("prec")
+	if flg.Exists {
+		prec, err = strconv.ParseUint(flg.String(), 10, 64)
+		if err != nil {
+			return c.ReturnError(err)
+		}
+	}
+
 	// Flag --market takes precedence over --quote
+	var symwidth = 9
 	var symbols []string
 	var quote string
 	var market string
@@ -80,6 +91,7 @@ func (c *TradesCommand) Run(args []string) int {
 			return c.ReturnError(err)
 		} else {
 			symbols = append(symbols, market)
+			symwidth = len(market)
 		}
 	} else {
 		flg = flag.Get("quote")
@@ -140,15 +152,15 @@ func (c *TradesCommand) Run(args []string) int {
 				timestring = order.UpdatedAt.Format("15:04")
 			}
 			if proceeds > 0 {
-				fmt.Printf("%s %s: %.2f\n", timestring, order.Market, proceeds)
+				fmt.Printf("%s %-*s %-.*f\n", timestring, symwidth, order.Market, prec, proceeds)
 			}
 		}
 	}
 
 	if verbose {
-		fmt.Printf("Total: %.2f\n", totalProceeds)
+		fmt.Printf("Total: %.*f\n", prec, totalProceeds)
 	} else {
-		fmt.Printf("%.2f\n", totalProceeds)
+		fmt.Printf("%.*f\n", prec, totalProceeds)
 	}
 
 	return 0
@@ -201,6 +213,7 @@ Options:
   --quote    = selects the markets by base currency
   --date     = the day of interest. Either 'Y' for yesterday or "YYYY-MM-DD". Default: Today
   --mult     = use this multiplicator if sell order doesn't contain the buy price
+  --prec     = specifies the number of decimal digits in the output. (optional, defaults to 7)
   --verbose  = show more detailed info
 `
 	return strings.TrimSpace(text)
