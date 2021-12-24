@@ -209,10 +209,10 @@ NOTE:
 Options:
   --exchange = name (currently Binance only!)
   --side     = [buy|sell] (Not used ATM)
-  --market   = selects the market pair for which the info is queried
-  --quote    = selects the markets by base currency
-  --date     = the day of interest. Either 'Y' for yesterday or "YYYY-MM-DD". Default: Today
-  --mult     = use this multiplicator if sell order doesn't contain the buy price
+  --market   = selects the market pair for which the info is queried. (market or quote is mandantory. market priotized)
+  --quote    = selects the markets by quote currency (market or quote is mandantory. market priotized)
+  --date     = the day of interest. Either 'Y' for yesterday or "YYYY-MM-DD". (optional, defaults to today)
+  --mult     = use this multiplicator if sell order doesn't contain the buy price (optional, defaults to 1.05)
   --prec     = specifies the number of decimal digits in the output. (optional, defaults to 7)
   --verbose  = show more detailed info
 `
