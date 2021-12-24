@@ -3,6 +3,7 @@ package binance
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -29,7 +30,7 @@ func (self *Client) Orders(symbol string) ([]Order, error) {
 		output []Order
 	)
 	defer AfterRequest()
-	BeforeRequest(self, WEIGHT_ALL_ORDERS)
+	BeforeRequest(self, Method[ALL_ORDERS], fmt.Sprintf(Path[ALL_ORDERS], symbol), Weight[ALL_ORDERS])
 	if orders, err = self.inner.NewListOrdersService().Symbol(symbol).Do(context.Background()); err != nil {
 		self.handleError(err)
 		return nil, err
@@ -52,7 +53,7 @@ func (self *Client) OpenOrders() ([]Order, error) {
 		output []Order
 	)
 	defer AfterRequest()
-	BeforeRequest(self, WEIGHT_OPEN_ORDERS_WITHOUT_SYMBOL)
+	BeforeRequest(self, Method[OPEN_ORDERS_WITHOUT_SYMBOL], Path[OPEN_ORDERS_WITHOUT_SYMBOL], Weight[OPEN_ORDERS_WITHOUT_SYMBOL])
 	if orders, err = self.inner.NewListOpenOrdersService().Do(context.Background()); err != nil {
 		self.handleError(err)
 		return nil, err
@@ -75,7 +76,7 @@ func (self *Client) OpenOrdersEx(symbol string) ([]Order, error) {
 		output []Order
 	)
 	defer AfterRequest()
-	BeforeRequest(self, WEIGHT_OPEN_ORDERS_WITH_SYMBOL)
+	BeforeRequest(self, Method[OPEN_ORDERS_WITH_SYMBOL], fmt.Sprintf(Path[OPEN_ORDERS_WITH_SYMBOL], symbol), Weight[OPEN_ORDERS_WITH_SYMBOL])
 	if orders, err = self.inner.NewListOpenOrdersService().Symbol(symbol).Do(context.Background()); err != nil {
 		self.handleError(err)
 		return nil, err
@@ -93,7 +94,7 @@ func (self *Client) OpenOrdersEx(symbol string) ([]Order, error) {
 // Cancel an active order.
 func (self *Client) CancelOrder(symbol string, orderID int64) error {
 	defer AfterRequest()
-	BeforeRequest(self, WEIGHT_CANCEL_ORDER)
+	BeforeRequest(self, Method[CANCEL_ORDER], fmt.Sprintf(Path[CANCEL_ORDER], symbol), Weight[CANCEL_ORDER])
 	_, err := self.inner.NewCancelOrderService().Symbol(symbol).OrderID(orderID).Do(context.Background())
 	self.handleError(err)
 	return err

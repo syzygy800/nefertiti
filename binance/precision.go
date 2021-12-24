@@ -49,7 +49,7 @@ func getPrecs(client *Client) (Precs, error) {
 	var out Precs
 
 	defer AfterRequest()
-	BeforeRequest(client, WEIGHT_EXCHANGE_INFO)
+	BeforeRequest(client, Method[EXCHANGE_INFO], Path[EXCHANGE_INFO], Weight[EXCHANGE_INFO])
 
 	info, err := client.inner.NewExchangeInfoService().Do(context.Background())
 	if err != nil {

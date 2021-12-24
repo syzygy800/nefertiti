@@ -39,7 +39,7 @@ const (
 //-------------------- globals -------------------
 
 func init() {
-	binance.BeforeRequest = func(client *binance.Client, weight int) error {
+	binance.BeforeRequest = func(client *binance.Client, method, path string, weight int) error {
 		var err error
 
 		if binanceMutex == nil {
@@ -70,6 +70,10 @@ func init() {
 				}
 				time.Sleep(sleep)
 			}
+		}
+
+		if flag.Debug() {
+			log.Printf("[DEBUG] %s %s (weight: %d)\n", method, path, weight)
 		}
 
 		return nil

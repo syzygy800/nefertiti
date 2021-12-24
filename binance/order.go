@@ -4,6 +4,7 @@ package binance
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -13,11 +14,15 @@ import (
 //---------------------------- CreateOrderService -----------------------------
 
 type CreateOrderService struct {
-	client *Client
-	inner  *exchange.CreateOrderService
+	client    *Client
+	symbol    string
+	side      exchange.SideType
+	orderType exchange.OrderType
+	inner     *exchange.CreateOrderService
 }
 
 func (self *CreateOrderService) Symbol(symbol string) *CreateOrderService {
+	self.symbol = symbol
 	self.inner.Symbol(symbol)
 	return self
 }
@@ -33,6 +38,7 @@ func (self *CreateOrderService) NewClientOrderID(newClientOrderID string) *Creat
 }
 
 func (self *CreateOrderService) Type(orderType exchange.OrderType) *CreateOrderService {
+	self.orderType = orderType
 	self.inner.Type(orderType)
 	return self
 }
@@ -48,6 +54,7 @@ func (self *CreateOrderService) Price(price float64) *CreateOrderService {
 }
 
 func (self *CreateOrderService) Side(side exchange.SideType) *CreateOrderService {
+	self.side = side
 	self.inner.Side(side)
 	return self
 }
@@ -59,7 +66,7 @@ func (self *CreateOrderService) StopPrice(stopPrice float64) *CreateOrderService
 
 func (self *CreateOrderService) Do(ctx context.Context, opts ...exchange.RequestOption) (*exchange.CreateOrderResponse, error) {
 	defer AfterRequest()
-	BeforeRequest(self.client, WEIGHT_CREATE_ORDER)
+	BeforeRequest(self.client, Method[CREATE_ORDER], fmt.Sprintf(Path[CREATE_ORDER], self.symbol, self.side, self.orderType), Weight[CREATE_ORDER])
 	res, err := self.inner.Do(ctx, opts...)
 	self.client.handleError(err)
 	return res, err
@@ -68,31 +75,41 @@ func (self *CreateOrderService) Do(ctx context.Context, opts ...exchange.Request
 //---------------------------- NewCreateOCOService ----------------------------
 
 type CreateOCOService struct {
-	client *Client
-	inner  *exchange.CreateOCOService
+	client    *Client
+	symbol    string
+	side      exchange.SideType
+	quantity  float64
+	price     float64
+	stopPrice float64
+	inner     *exchange.CreateOCOService
 }
 
 func (self *CreateOCOService) Symbol(symbol string) *CreateOCOService {
+	self.symbol = symbol
 	self.inner.Symbol(symbol)
 	return self
 }
 
 func (self *CreateOCOService) Side(side exchange.SideType) *CreateOCOService {
+	self.side = side
 	self.inner.Side(side)
 	return self
 }
 
 func (self *CreateOCOService) Quantity(quantity float64) *CreateOCOService {
+	self.quantity = quantity
 	self.inner.Quantity(strconv.FormatFloat(quantity, 'f', -1, 64))
 	return self
 }
 
 func (self *CreateOCOService) Price(price float64) *CreateOCOService {
+	self.price = price
 	self.inner.Price(strconv.FormatFloat(price, 'f', -1, 64))
 	return self
 }
 
 func (self *CreateOCOService) StopPrice(stopPrice float64) *CreateOCOService {
+	self.stopPrice = stopPrice
 	self.inner.StopPrice(strconv.FormatFloat(stopPrice, 'f', -1, 64))
 	return self
 }
@@ -119,7 +136,7 @@ func (self *CreateOCOService) StopLimitTimeInForce(stopLimitTimeInForce exchange
 
 func (self *CreateOCOService) Do(ctx context.Context, opts ...exchange.RequestOption) (*exchange.CreateOCOResponse, error) {
 	defer AfterRequest()
-	BeforeRequest(self.client, WEIGHT_CREATE_OCO_ORDER)
+	BeforeRequest(self.client, Method[CREATE_OCO_ORDER], fmt.Sprintf(Path[CREATE_OCO_ORDER], self.symbol, self.side, self.quantity, self.price, self.stopPrice), Weight[CREATE_OCO_ORDER])
 	res, err := self.inner.Do(ctx, opts...)
 	self.client.handleError(err)
 	return res, err

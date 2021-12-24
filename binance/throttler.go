@@ -9,10 +9,10 @@ import (
 
 var (
 	lastRequest       time.Time
-	lastWeight        int                                    = 1
-	requestsPerSecond float64                                = 0
-	BeforeRequest     func(client *Client, weight int) error = nil
-	AfterRequest      func()                                 = nil
+	lastWeight        int                                                         = 1
+	requestsPerSecond float64                                                     = 0
+	BeforeRequest     func(client *Client, method, path string, weight int) error = nil
+	AfterRequest      func()                                                      = nil
 )
 
 func getIntervalNum(rl exchange.RateLimit) int64 {
@@ -64,7 +64,7 @@ func GetRequestsPerSecond(client *Client, weight int) (float64, error) {
 }
 
 func init() {
-	BeforeRequest = func(client *Client, weight int) error {
+	BeforeRequest = func(client *Client, method, path string, weight int) error {
 		rps, err := GetRequestsPerSecond(client, weight)
 		if err != nil {
 			return err
