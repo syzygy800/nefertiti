@@ -360,7 +360,7 @@ func (self *Huobi) sell(
 				if new[i].FilledAmount == 0 {
 					return new[i].Amount
 				} else {
-					return new[i].FilledAmount
+					return new[i].FilledAmount - new[i].FilledFees
 				}
 			}()
 
@@ -372,7 +372,7 @@ func (self *Huobi) sell(
 						if new[n].FilledAmount == 0 {
 							return new[n].Amount
 						} else {
-							return new[n].FilledAmount
+							return new[n].FilledAmount - new[n].FilledFees
 						}
 					}()
 					new = append(new[:n], new[n+1:]...)
