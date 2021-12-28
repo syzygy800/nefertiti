@@ -39,7 +39,7 @@ type CryptoDotComSessionInfo struct {
 	Cooldown bool `json:"cooldown"`
 }
 
-func cryptoDotComRequestsPerSecond() (float64, error) {
+func cryptoDotComRequestsPerSecond(def float64) (float64, error) {
 	var (
 		err  error
 		data []byte
@@ -56,15 +56,16 @@ func cryptoDotComRequestsPerSecond() (float64, error) {
 			}
 		}
 	}
-	return exchange.RequestsPerSecond[exchange.RATE_LIMIT_NORMAL], nil
+	if def == 0 {
+		return exchange.RequestsPerSecond[exchange.RATE_LIMIT_NORMAL], nil
+	} else {
+		return def, nil
+	}
 }
 
 func init() {
-	exchange.BeforeRequest = func(method, path string, params *url.Values) error {
-		var (
-			err error
-			rps float64 = exchange.RequestsPerSecond[exchange.RATE_LIMIT_NORMAL]
-		)
+	exchange.BeforeRequest = func(method, path string, params *url.Values, rps float64) error {
+		var err error
 
 		if cryptoDotComMutex == nil {
 			if cryptoDotComMutex, err = filemutex.New(session.GetSessionFile(cryptoDotComSessionLock)); err != nil {
@@ -83,7 +84,7 @@ func init() {
 
 		if lastRequest != nil {
 			elapsed := time.Since(*lastRequest)
-			if rps, err = cryptoDotComRequestsPerSecond(); err != nil {
+			if rps, err = cryptoDotComRequestsPerSecond(rps); err != nil {
 				return err
 			}
 			if elapsed.Seconds() < (float64(1) / rps) {
@@ -99,7 +100,7 @@ func init() {
 			if params == nil {
 				log.Printf("[DEBUG] %s %s\n", method, path)
 			} else {
-				log.Printf("[DEBUG] %s %s %#v\n", method, path, params)
+				log.Printf("[DEBUG] %s %s?%s\n", method, path, params.Encode())
 			}
 		}
 

@@ -170,6 +170,8 @@ github.com/svanas/go-coinbasepro v0.0.0-20210706151135-3ac97ad777f0 h1:HgPnvZJXH
 github.com/svanas/go-coinbasepro v0.0.0-20210706151135-3ac97ad777f0/go.mod h1:j/XCmlCzuAykfb9KUZATFRcvttTwn7QUL0yKLgRJg2s=
 github.com/svanas/go-crypto-dot-com v0.0.0-20210821090330-15dc76c25616 h1:eS/RkYF6g54VnCTfBtmqYgQagdCH7aaPiSUMhIHYx+8=
 github.com/svanas/go-crypto-dot-com v0.0.0-20210821090330-15dc76c25616/go.mod h1:Ke5f0VKSFvz5/LLvcthq1WaCpqTAZeUkfIhUSrA/IJk=
+github.com/svanas/go-crypto-dot-com v0.0.0-20211228170715-b6680c315f65 h1:NuIacMhcOW5Y5qoTg/KB26Sv/eMoMSTG6Sn+NffrPGA=
+github.com/svanas/go-crypto-dot-com v0.0.0-20211228170715-b6680c315f65/go.mod h1:vs0zlihKJc7a0QxDGQ4m+etjNI/rySa3vXTQJt5fVOA=
 github.com/svanas/go-mining-hamster v0.0.0-20211213142718-f710b6b19784 h1:8PARshewhBPGWh3PDBv/HvvBPf6f/PCql4MJz+9542M=
 github.com/svanas/go-mining-hamster v0.0.0-20211213142718-f710b6b19784/go.mod h1:MHx8wPKQzJw5LP5dk0IqLwVj+TerjtEgmvc4OIFFBCY=
 github.com/tcnksm/go-gitconfig v0.1.2 h1:iiDhRitByXAEyjgBqsKi9QU4o2TNtv9kPP3RgPgXBPw=
