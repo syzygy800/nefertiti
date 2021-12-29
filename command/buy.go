@@ -307,9 +307,16 @@ func buy(
 				return market, aggregation.EOrderBookTooThin
 			}
 		}
+
 		// distance between the buy orders must be at least 2%
 		if dist > 0 {
 			if len(book2) > 1 {
+
+				// Check if "--dist" should be enforced or just output a warning
+				if flag.Get("strict").Exists {
+					book2 = book2.RespectDist(float64(dist))
+				}
+
 				var hi, lo, delta float64
 				cnt := math.Min(float64(len(book2)), float64(top))
 			outer:
