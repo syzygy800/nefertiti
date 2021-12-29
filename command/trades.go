@@ -108,29 +108,8 @@ func (c *TradesCommand) Run(args []string) int {
 		return c.ReturnError(err)
 	}
 
-	// Get all closed orders
-	var orders model.Orders
-	var filledsells model.Orders
-
-	for _, m := range symbols {
-		orders, err = exchange.GetClosed(client, m)
-		if err != nil {
-			fmt.Printf("%s ERROR: %v\n", m, err)
-		}
-
-		// Filter sell orders
-		for _, order := range orders {
-			if model.FormatOrderSide(order.Side) == "Sell" {
-				if !date.IsZero() {
-					if dateEqual(order.UpdatedAt, date) {
-						filledsells = append(filledsells, order)
-					}
-				} else {
-					filledsells = append(filledsells, order)
-				}
-			}
-		}
-	}
+	// Get filled sell orders
+	var filledsells = getFilledSellOrders(client, symbols)
 
 	// Calc and output profits
 	var totalProceeds = 0.0
@@ -164,6 +143,35 @@ func (c *TradesCommand) Run(args []string) int {
 	}
 
 	return 0
+}
+
+// Get filled sell orders for a list of markets
+func getFilledSellOrders(client interface{}, symbols []string) model.Orders {
+	var orders model.Orders
+	var filledsells model.Orders
+	var err error
+
+	for _, m := range symbols {
+		orders, err = exchange.GetClosed(client, m)
+		if err != nil {
+			fmt.Printf("%s ERROR: %v\n", m, err)
+		}
+
+		// Filter sell orders
+		for _, order := range orders {
+			if model.FormatOrderSide(order.Side) == "Sell" {
+				if !date.IsZero() {
+					if dateEqual(order.UpdatedAt, date) {
+						filledsells = append(filledsells, order)
+					}
+				} else {
+					filledsells = append(filledsells, order)
+				}
+			}
+		}
+	}
+
+	return filledsells
 }
 
 // Filter all exchange's markets by the quote currency
