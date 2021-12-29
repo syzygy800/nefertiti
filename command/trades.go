@@ -21,7 +21,9 @@ type (
 var (
 	exchange model.Exchange
 	date     time.Time
-	verbose  = false
+	verbose         = false
+	symwidth        = 9
+	prec     uint64 = 7
 )
 
 func (c *TradesCommand) Run(args []string) int {
@@ -71,7 +73,6 @@ func (c *TradesCommand) Run(args []string) int {
 		}
 	}
 
-	var prec uint64 = 7
 	flg = flag.Get("prec")
 	if flg.Exists {
 		prec, err = strconv.ParseUint(flg.String(), 10, 64)
@@ -81,7 +82,6 @@ func (c *TradesCommand) Run(args []string) int {
 	}
 
 	// Flag --market takes precedence over --quote
-	var symwidth = 9
 	var symbols []string
 	var quote string
 	var market string
@@ -113,7 +113,6 @@ func (c *TradesCommand) Run(args []string) int {
 
 	// Calc and output profits
 	var totalProceeds = 0.0
-	var timestring string
 	for _, order := range filledsells {
 		var proceeds = order.Size * (order.Price - order.BoughtAt)
 		if proceeds > 0 {
@@ -124,15 +123,9 @@ func (c *TradesCommand) Run(args []string) int {
 			}
 		}
 
+		// Output each profitable trade
 		if verbose {
-			if date.IsZero() {
-				timestring = order.UpdatedAt.Format("2006-01-02 15:04")
-			} else {
-				timestring = order.UpdatedAt.Format("15:04")
-			}
-			if proceeds > 0 {
-				fmt.Printf("%s %-*s %-.*f\n", timestring, symwidth, order.Market, prec, proceeds)
-			}
+			outputSingleProfit(order, proceeds, date.IsZero())
 		}
 	}
 
@@ -172,6 +165,21 @@ func getFilledSellOrders(client interface{}, symbols []string) model.Orders {
 	}
 
 	return filledsells
+}
+
+// Output trade profit
+func outputSingleProfit(order model.Order, profit float64, hasDate bool) {
+	var timestring string
+
+	if date.IsZero() {
+		timestring = order.UpdatedAt.Format("2006-01-02 15:04")
+	} else {
+		timestring = order.UpdatedAt.Format("15:04")
+	}
+	if profit > 0 {
+		fmt.Printf("%s %-*s %-.*f\n", timestring, symwidth, order.Market, prec, profit)
+	}
+
 }
 
 // Filter all exchange's markets by the quote currency
