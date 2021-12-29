@@ -198,3 +198,40 @@ func (b Book) EntryByPrice(price float64) *Buy {
 	}
 	return nil
 }
+
+// Sort the book descending by price.
+// Using BubbleSort as a quickhack. Could be enough if the book is not too large.
+func (b Book) SortByPrice() {
+	nrCalls := len(b.Calls())
+
+	for i1 := 0; i1 < nrCalls; i1++ {
+		for i2 := i1 + 1; i2 < nrCalls; i2++ {
+			if b[i1].Price < b[i2].Price {
+				b[i1], b[i2] = b[i2], b[i1]
+			}
+		}
+	}
+}
+
+// Creates a new book containing only entries respecting the specified dist
+func (b Book) RespectDist(dist float64) Book {
+	var thinned Book
+
+	// prerequisit: book sorted by price (descending)
+	b.SortByPrice()
+
+	// The highest value should always be in the book
+	thinned = append(thinned, b[0])
+
+	// Add entry if distance to last one is greater than dist
+	for i := 1; i < len(b); i++ {
+		hi := thinned[len(thinned)-1].Price
+		lo := b[i].Price
+		delta := ((hi - lo) / lo) * 100
+		if delta >= dist {
+			thinned = append(thinned, b[i])
+		}
+	}
+
+	return thinned
+}
