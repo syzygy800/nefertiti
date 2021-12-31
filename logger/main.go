@@ -90,9 +90,15 @@ func WarnEx(title string, err error, level int64, notifier model.Notify) {
 	}
 }
 
-func Info(msg string) {
+func Info(msg string, a ...interface{}) {
 	pc, file, line, _ := runtime.Caller(1)
-	log.Printf("[INFO] %s %s", errors.FormatCaller(pc, file, line), msg)
+	log.Printf("[INFO] %s %s", errors.FormatCaller(pc, file, line), func() string {
+		if a == nil {
+			return msg
+		} else {
+			return fmt.Sprintf(msg, a...)
+		}
+	}())
 }
 
 func InfoEx(title, msg string, level int64, notifier model.Notify) {

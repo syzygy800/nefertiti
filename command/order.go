@@ -88,8 +88,11 @@ func (c *OrderCommand) Run(args []string) int {
 		}
 	}
 
-	var out []byte
-	if _, out, err = exchange.Order(
+	var (
+		oid []byte
+		raw []byte
+	)
+	if oid, raw, err = exchange.Order(
 		client,
 		side,
 		market,
@@ -100,7 +103,11 @@ func (c *OrderCommand) Run(args []string) int {
 		return c.ReturnError(err)
 	}
 
-	fmt.Println(string(out))
+	if raw != nil {
+		fmt.Println(string(raw))
+	} else if oid != nil {
+		fmt.Println(string(oid))
+	}
 
 	return 0
 }

@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -22,6 +23,7 @@ type (
 	Call struct {
 		*Buy
 		Skip   bool   `json:"-"`
+		Reason string `json:"-"`
 		Stop   string `json:"stop,omitempty"`
 		Target string `json:"target,omitempty"`
 	}
@@ -62,6 +64,17 @@ func File2Call(name string) (*Call, error) {
 	return &out, nil
 }
 
+func (c *Call) Ignore(reason string, a ...interface{}) {
+	c.Skip = true
+	if c.Reason == "" {
+		if a == nil {
+			c.Reason = reason
+		} else {
+			c.Reason = fmt.Sprintf(reason, a...)
+		}
+	}
+}
+
 func (c *Call) HasStop() bool {
 	return c.Stop != "" && c.ParseStop() > 0
 }
@@ -86,18 +99,24 @@ func (c *Call) ParseTarget() float64 {
 	return 0
 }
 
-func (c *Call) Corrupt(orderType OrderType) bool {
-	// limit order without a limit? then ignore this signal.
-	if c.Price == 0 && orderType == LIMIT {
-		return true
+func (c *Call) Corrupt(orderType OrderType) (bool, string) { // (corrupt, reason)
+	if c.Size == 0 {
+		return true, "nothing to buy"
 	}
+
+	if c.Price == 0 && orderType == LIMIT {
+		return true, "limit order without a limit"
+	}
+
 	if c.HasTarget() {
-		// is the target lower than the buy zone? then ignore this signal.
-		if c.ParseTarget() < c.Price {
-			return true
+		target := c.ParseTarget()
+		if target < c.Price {
+			return true, fmt.Sprintf("sell target %.8f is lower than buy zone %.8f", target, c.Price)
 		}
 	}
-	return false
+
+	// just because we will want to skip a signal, does not make it corrupt. there should be a good reason for it.
+	return c.Skip && c.Reason != "", c.Reason
 }
 
 // Multiply the buy target. Returns (new order type, deviated buy target). Does not modify the buy signal itself.
@@ -121,7 +140,7 @@ func (c *Call) Deviate(exchange Exchange, client interface{}, kind OrderType, mu
 	return kind, c.Price
 }
 
-func (c Calls) HasBuy() bool {
+func (c Calls) HasAnythingToDo() bool {
 	for _, e := range c {
 		if !e.Skip {
 			return true

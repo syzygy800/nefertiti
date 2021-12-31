@@ -41,6 +41,9 @@ func Format(prec int) string {
 
 func Round(value float64, prec int) float64 {
 	out, _ := strconv.ParseFloat(fmt.Sprintf("%.[2]*[1]f", value, prec), 64)
+	if math.IsInf(out, 0) {
+		return 0
+	}
 	return out
 }
 

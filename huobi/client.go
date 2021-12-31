@@ -73,7 +73,13 @@ func (client *Client) do(req *http.Request) ([]byte, error) {
 
 func (client *Client) get(path string, query url.Values, auth bool) ([]byte, error) {
 	// respect the rate limit
-	err := BeforeRequest(http.MethodGet, path)
+	err := BeforeRequest(http.MethodGet, func() string {
+		if query == nil {
+			return path
+		} else {
+			return path + "?" + query.Encode()
+		}
+	}())
 	if err != nil {
 		return nil, err
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/exchanges"
 	"github.com/svanas/nefertiti/flag"
+	"github.com/svanas/nefertiti/logger"
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/multiplier"
 	"github.com/svanas/nefertiti/notify"
@@ -368,13 +369,27 @@ func buy(
 			}
 		}
 
+		// convert the aggregated order book into signals for the exchange to buy
+		calls := func() model.Calls {
+			if len(book2) < int(top) {
+				return book2.Calls()
+			} else {
+				return book2[:top].Calls()
+			}
+		}()
+
+		// log the supports that are corrupt (if any). possible reasons are: qty is zero, or price is zero, or both are zero.
+		for _, call := range calls {
+			corrupt, reason := call.Corrupt(model.LIMIT)
+			if corrupt {
+				call.Skip = true
+				logger.Info("Ignoring %s. Reason: %s", call.Market, reason)
+			}
+		}
+
 		// cancel your open buy order(s), then place the top X buy orders
 		if !test {
-			if len(book2) < int(top) {
-				err = exchange.Buy(client, true, market, book2.Calls(), deviation, model.LIMIT)
-			} else {
-				err = exchange.Buy(client, true, market, book2[:top].Calls(), deviation, model.LIMIT)
-			}
+			err = exchange.Buy(client, true, market, calls, deviation, model.LIMIT)
 			if err != nil {
 				if len(enumerable) > 1 || flag.Get("ignore").Contains("error") {
 					report(err, market, nil, service, exchange)
@@ -516,9 +531,9 @@ func buySignals(
 				}
 
 				if !calls[i].Skip {
-					if calls[i].Corrupt(channel.GetOrderType()) {
-						log.Printf("[INFO] Ignoring %s because the signal appears to be corrupt.\n", calls[i].Market)
-						calls[i].Skip = true
+					corrupt, reason := calls[i].Corrupt(channel.GetOrderType())
+					if corrupt {
+						calls[i].Ignore(reason)
 					}
 				}
 			}
@@ -531,8 +546,7 @@ func buySignals(
 							limit = ticker
 						}
 						if limit < min {
-							log.Printf("[INFO] Ignoring %s because price %.8f is lower than %.8f\n", calls[i].Market, calls[i].Price, min)
-							calls[i].Skip = true
+							calls[i].Ignore("price %.8f is lower than %.8f", calls[i].Price, min)
 						}
 					}
 				}
@@ -546,8 +560,7 @@ func buySignals(
 							return old, err
 						}
 						if stats.BtcVolume > 0 && stats.BtcVolume < btcVolumeMin {
-							log.Printf("[INFO] Ignoring %s because volume %.2f is lower than %.2f %s\n", calls[i].Market, stats.BtcVolume, btcVolumeMin, quote)
-							calls[i].Skip = true
+							calls[i].Ignore("volume %.2f is lower than %.2f %s", stats.BtcVolume, btcVolumeMin, quote)
 						}
 					}
 				}
@@ -572,8 +585,14 @@ func buySignals(
 							}
 						}
 					}
-					if calls.HasBuy() {
-						// cancel your open buy order(s), then place the new buy orders
+					// log the signals that we are skipping. possible reasons are: they are corrupt, or they don't meet your settings
+					for _, call := range calls {
+						if call.Skip && call.Reason != "" {
+							logger.Info("Ignoring %s. Reason: %s", call.Market, call.Reason)
+						}
+					}
+					// buy the signals (if we got any)
+					if calls.HasAnythingToDo() {
 						err = exchange.Buy(client, false, market, calls, deviation, channel.GetOrderType())
 						if err != nil {
 							report(err, market, channel, service, exchange)
