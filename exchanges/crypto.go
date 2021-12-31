@@ -133,6 +133,25 @@ type CryptoDotCom struct {
 
 //-------------------- private -------------------
 
+func (self *CryptoDotCom) getSymbol(client *exchange.Client, name string) (*exchange.Symbol, error) {
+	cached := true
+	for {
+		symbols, err := self.getSymbols(client, nil, cached)
+		if err != nil {
+			return nil, err
+		}
+		for _, symbol := range symbols {
+			if symbol.Symbol == name {
+				return &symbol, nil
+			}
+		}
+		if !cached {
+			return nil, errors.Errorf("symbol %s does not exist", name)
+		}
+		cached = false
+	}
+}
+
 func (self *CryptoDotCom) getSymbols(client *exchange.Client, quotes []string, cached bool) ([]exchange.Symbol, error) {
 	if len(self.symbols) == 0 || !cached {
 		var err error
@@ -297,17 +316,20 @@ func (self *CryptoDotCom) listen(
 	// look for newly opened orders
 	for _, order := range new {
 		if self.indexByOrderId(old, order.Id) == -1 {
-			var data []byte
-			if data, err = json.Marshal(order); err != nil {
-				return new, errors.Wrap(err, 1)
-			}
+			// if this order has been filled, then it cannot possibly be new.
+			if self.indexByTradeId(filled, order.Id) == -1 {
+				var data []byte
+				if data, err = json.Marshal(order); err != nil {
+					return new, errors.Wrap(err, 1)
+				}
 
-			log.Println("[OPEN] " + string(data))
+				log.Println("[OPEN] " + string(data))
 
-			if service != nil {
-				if notify.CanSend(level, notify.OPENED) || (level == notify.LEVEL_DEFAULT && order.GetSide() == exchange.SELL) {
-					if err = service.SendMessage(order, ("crypto.com - Open " + order.SideMsg), model.ALWAYS); err != nil {
-						log.Printf("[ERROR] %v", err)
+				if service != nil {
+					if notify.CanSend(level, notify.OPENED) || (level == notify.LEVEL_DEFAULT && order.GetSide() == exchange.SELL) {
+						if err = service.SendMessage(order, ("crypto.com - Open " + order.SideMsg), model.ALWAYS); err != nil {
+							log.Printf("[ERROR] %v", err)
+						}
 					}
 				}
 			}
@@ -700,18 +722,13 @@ func (self *CryptoDotCom) Get24h(client interface{}, market string) (*model.Stat
 func (self *CryptoDotCom) GetPricePrec(client interface{}, market string) (int, error) {
 	crypto, ok := client.(*exchange.Client)
 	if !ok {
-		return 0, errors.New("invalid argument: client")
+		return 8, errors.New("invalid argument: client")
 	}
-	symbols, err := self.getSymbols(crypto, nil, true)
+	symbol, err := self.getSymbol(crypto, market)
 	if err != nil {
-		return 0, err
+		return 8, err
 	}
-	for _, symbol := range symbols {
-		if symbol.Symbol == market {
-			return symbol.PriceDecimals, nil
-		}
-	}
-	return 8, nil
+	return symbol.PriceDecimals, nil
 }
 
 func (self *CryptoDotCom) GetSizePrec(client interface{}, market string) (int, error) {
@@ -719,16 +736,11 @@ func (self *CryptoDotCom) GetSizePrec(client interface{}, market string) (int, e
 	if !ok {
 		return 0, errors.New("invalid argument: client")
 	}
-	symbols, err := self.getSymbols(crypto, nil, true)
+	symbol, err := self.getSymbol(crypto, market)
 	if err != nil {
 		return 0, err
 	}
-	for _, symbol := range symbols {
-		if symbol.Symbol == market {
-			return symbol.QuantityDecimals, nil
-		}
-	}
-	return 0, nil
+	return symbol.QuantityDecimals, nil
 }
 
 func (self *CryptoDotCom) GetMaxSize(client interface{}, base, quote string, hold, earn bool, def float64, mult multiplier.Mult) float64 {
