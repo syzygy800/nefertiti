@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	EOrderBookTooThin = errors.New("Cannot find any supports. Order book is too thin. Please reconsider this market.")
+	ECannotFindSupports = errors.New("Cannot find any supports. Please update your settings. Or reconsider this market because it might be illiquid.")
 )
 
 // rounds [input] to to nearest multiple of [agg]
@@ -23,7 +23,7 @@ func Get(
 	market string,
 	dip, pip float64,
 	max, min float64,
-	top int,
+	dist, top int,
 	strict, sandbox bool,
 ) (float64, float64, float64, error) {
 	var (
@@ -50,7 +50,7 @@ func Get(
 		return 0, dip, pip, err
 	}
 
-	return GetEx(exchange, client, market, ticker, avg, dip, pip, max, min, top, strict)
+	return GetEx(exchange, client, market, ticker, avg, dip, pip, max, min, dist, top, strict)
 }
 
 // returns (agg, dip, pip, error)
@@ -62,7 +62,7 @@ func GetEx(
 	avg float64,
 	dip, pip float64,
 	max, min float64,
-	top int,
+	dist, top int,
 	strict bool,
 ) (float64, float64, float64, error) {
 	var (
@@ -83,7 +83,7 @@ func GetEx(
 	}
 
 	for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
-		if out, err = get(exchange, client, market, ticker, avg, book, dip, pip, max, min, cnt); err == nil {
+		if out, err = get(exchange, client, market, ticker, avg, book, dip, pip, max, min, dist, cnt); err == nil {
 			return out, dip, pip, err
 		}
 	}
@@ -95,7 +95,7 @@ func GetEx(
 		for y < 50 {
 			y++
 			for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
-				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, cnt); err == nil {
+				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, cnt); err == nil {
 					return out, x, y, err
 				}
 			}
@@ -104,7 +104,7 @@ func GetEx(
 		for x > 0 {
 			x--
 			for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
-				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, cnt); err == nil {
+				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, cnt); err == nil {
 					return out, x, y, err
 				}
 			}
@@ -113,7 +113,7 @@ func GetEx(
 		for y < 100 {
 			y++
 			for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
-				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, cnt); err == nil {
+				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, cnt); err == nil {
 					return out, x, y, err
 				}
 			}
@@ -123,7 +123,7 @@ func GetEx(
 	if err != nil {
 		return 0, dip, pip, err
 	} else {
-		return 0, dip, pip, EOrderBookTooThin
+		return 0, dip, pip, ECannotFindSupports
 	}
 }
 
@@ -136,7 +136,7 @@ func get(
 	book1 interface{},
 	dip, pip float64,
 	max, min float64,
-	cnt int,
+	dist, cnt int,
 ) (float64, error) {
 	var (
 		err error
@@ -211,6 +211,32 @@ func get(
 				}
 			}
 
+			// distance between the supports must be at least 2%
+			if dist > 0 && len(book2) > 1 {
+				// returns true if the delta between 2 supports is lower than --dist=[percentage], otherwise false
+				if func() bool {
+					for i1 := 0; i1 < len(book2); i1++ {
+						for i2 := 0; i2 < len(book2); i2++ {
+							if i2 != i1 {
+								hi, lo := func() (float64, float64) {
+									if book2[i1].Price < book2[i2].Price {
+										return book2[i2].Price, book2[i1].Price
+									} else {
+										return book2[i1].Price, book2[i2].Price
+									}
+								}()
+								if (((hi - lo) / lo) * 100) < float64(dist) {
+									return true
+								}
+							}
+						}
+					}
+					return false
+				}() {
+					continue
+				}
+			}
+
 			// we need at least 2 supports
 			if len(book2) >= cnt {
 				return agg, nil
@@ -221,7 +247,7 @@ func get(
 				if len(book2) > 0 {
 					return agg, nil
 				} else {
-					return 0, EOrderBookTooThin
+					return 0, ECannotFindSupports
 				}
 			}
 		}

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math"
 	"runtime"
 	"sort"
 	"strings"
@@ -221,8 +220,8 @@ func buy(
 		}
 
 		if magg == 0 {
-			if magg, mdip, mpip, err = aggregation.GetEx(exchange, client, market, ticker, avg, dip, pip, mmax, min, int(top), strict); err != nil {
-				if errors.Is(err, aggregation.EOrderBookTooThin) && (len(enumerable) > 1 || flag.Get("ignore").Contains("error")) {
+			if magg, mdip, mpip, err = aggregation.GetEx(exchange, client, market, ticker, avg, dip, pip, mmax, min, int(dist), int(top), strict); err != nil {
+				if errors.Is(err, aggregation.ECannotFindSupports) && (len(enumerable) > 1 || flag.Get("ignore").Contains("error")) {
 					report(err, market, nil, service, exchange)
 					continue
 				} else {
@@ -302,40 +301,10 @@ func buy(
 		// we need at least one support
 		if len(book2) == 0 {
 			if len(enumerable) > 1 || flag.Get("ignore").Contains("error") {
-				report(aggregation.EOrderBookTooThin, market, nil, service, exchange)
+				report(aggregation.ECannotFindSupports, market, nil, service, exchange)
 				continue
 			} else {
-				return market, aggregation.EOrderBookTooThin
-			}
-		}
-		// distance between the buy orders must be at least 2%
-		if dist > 0 {
-			if len(book2) > 1 {
-				var hi, lo, delta float64
-				cnt := math.Min(float64(len(book2)), float64(top))
-			outer:
-				for i1 := 0; i1 < int(cnt); i1++ {
-					for i2 := 0; i2 < int(cnt); i2++ {
-						if i2 != i1 {
-							hi = book2[i1].Price
-							lo = book2[i2].Price
-							if hi < lo {
-								hi = book2[i2].Price
-								lo = book2[i1].Price
-							}
-							delta = ((hi - lo) / lo) * 100
-							if delta < float64(dist) {
-								msg := fmt.Sprintf("Distance between your %s orders is %.2f percent (too low, less than %d percent)", market, delta, dist)
-								if agg == 0 {
-									log.Printf("[WARN] %s\n", msg)
-									break outer
-								} else {
-									return market, errors.New(msg + ". Please update your aggregation.")
-								}
-							}
-						}
-					}
-				}
+				return market, aggregation.ECannotFindSupports
 			}
 		}
 
@@ -839,11 +808,8 @@ func (c *BuyCommand) Run(args []string) int {
 	}
 
 	var dist int64 = 2
-	flg = flag.Get("dist")
-	if flg.Exists {
-		if dist, err = flg.Int64(); err != nil {
-			return c.ReturnError(errors.Errorf("dist %v is invalid", flg))
-		}
+	if dist, err = flag.Dist(); err != nil {
+		return c.ReturnError(err)
 	}
 
 	var top int64 = 2
