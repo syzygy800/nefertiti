@@ -90,6 +90,21 @@ func Min() (float64, error) {
 	return min, nil
 }
 
+// --dist=X
+func Dist() (int64, error) {
+	var (
+		err  error
+		dist int64 = 2
+	)
+	arg := Get("dist")
+	if arg.Exists {
+		if dist, err = arg.Int64(); err != nil {
+			return dist, errors.Errorf("dist %v is invalid", arg)
+		}
+	}
+	return dist, nil
+}
+
 // --sandbox=[Y|N]
 func Sandbox() bool {
 	arg := Get("sandbox")
