@@ -119,6 +119,7 @@ func (self *Client) handleError(err error) {
 			if offset, err := self.inner.NewSetServerTimeService().Do(context.Background()); err == nil {
 				SERVER_TIME_OFFSET = offset
 				SERVER_TIME_UPDATE = time.Now()
+				self.inner.TimeOffset = SERVER_TIME_OFFSET
 			}
 		}
 	}
@@ -142,9 +143,9 @@ func New(baseURL, apiKey, apiSecret string) *Client {
 			SERVER_TIME_OFFSET = offset
 			SERVER_TIME_UPDATE = time.Now()
 		}
-	} else {
-		client.TimeOffset = SERVER_TIME_OFFSET
 	}
+
+	client.TimeOffset = SERVER_TIME_OFFSET
 
 	return &Client{inner: client}
 }
