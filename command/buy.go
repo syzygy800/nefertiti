@@ -824,7 +824,7 @@ func (c *BuyCommand) Run(args []string) int {
 	}
 
 	var dip float64 = 5
-	if dip, err = flag.Dip(); err != nil {
+	if dip, err = flag.Dip(dip); err != nil {
 		return c.ReturnError(err)
 	}
 

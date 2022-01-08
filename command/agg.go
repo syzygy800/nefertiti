@@ -27,7 +27,7 @@ func (c *AggCommand) Run(args []string) int {
 		return c.ReturnError(err)
 	}
 
-	dip, err := flag.Dip()
+	dip, err := flag.Dip(5)
 	if err != nil {
 		return c.ReturnError(err)
 	}

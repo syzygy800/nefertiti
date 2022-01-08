@@ -107,10 +107,18 @@ func (self *CryptoBase) GetCrackedAt() (*time.Time, error) {
 	return &out, nil
 }
 
-func (self *CryptoBase) Buy(exchange model.Exchange, algorithm CryptoBaseScannerAlgo, btcVolumeMin, successRatio float64, sandbox, debug bool) (bool, error) {
+func (self *CryptoBase) Buy(exchange model.Exchange, algorithm CryptoBaseScannerAlgo, btcVolumeMin, dip, successRatio float64, sandbox, debug bool) (bool, error) {
 	market := self.Market(exchange)
 
-	medianDrop, err := self.MarketStats.medianDrop(algorithm)
+	medianDrop, err := func() (float64, error) {
+		if dip != 0 {
+			if dip < 0 {
+				return dip, nil
+			}
+			return dip * -1, nil
+		}
+		return self.MarketStats.medianDrop(algorithm)
+	}()
 	if err != nil {
 		return false, errors.Errorf("%v. Market: %s", err, market)
 	}
@@ -176,6 +184,7 @@ func (self *CryptoBaseScanner) get(
 	quote model.Assets,
 	algorithm CryptoBaseScannerAlgo,
 	btcVolumeMin,
+	dip,
 	successRatio float64,
 	validity time.Duration,
 	sandbox, debug bool,
@@ -231,7 +240,7 @@ func (self *CryptoBaseScanner) get(
 		if exchange.GetInfo().Equals(base.ExchangeName) {
 			if quote.HasAsset(base.QuoteCurrency) {
 				var buy bool
-				if buy, err = base.Buy(exchange, algorithm, btcVolumeMin, successRatio, sandbox, debug); err != nil {
+				if buy, err = base.Buy(exchange, algorithm, btcVolumeMin, dip, successRatio, sandbox, debug); err != nil {
 					log.Printf("[ERROR] %v\n", err)
 				} else {
 					if buy {
@@ -306,10 +315,15 @@ func (self *CryptoBaseScanner) GetMarkets(
 		out model.Markets
 	)
 
-	var success_ratio float64 = 60
+	var dip float64
+	if dip, err = flag.Dip(0); err != nil {
+		return nil, err
+	}
+
+	var successRatio float64 = 60
 	flg = flag.Get("success")
 	if flg.Exists {
-		success_ratio, err = flg.Float64()
+		successRatio, err = flg.Float64()
 		if err != nil {
 			return nil, errors.Errorf("success %v is invalid", flg)
 		}
@@ -324,7 +338,7 @@ func (self *CryptoBaseScanner) GetMarkets(
 		}
 	}
 
-	if err = self.get(exchange, quote, algo, btcVolumeMin, success_ratio, valid, sandbox, debug); err != nil {
+	if err = self.get(exchange, quote, algo, btcVolumeMin, dip, successRatio, valid, sandbox, debug); err != nil {
 		return nil, err
 	}
 

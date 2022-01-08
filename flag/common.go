@@ -17,11 +17,9 @@ func Debug() bool {
 }
 
 // --dip=[0..99]
-func Dip() (float64, error) {
-	var (
-		err error
-		dip float64 = 5
-	)
+func Dip(def float64) (float64, error) {
+	var err error
+	dip := def
 	arg := Get("dip")
 	if !arg.Exists {
 		Set("dip", strconv.FormatFloat(dip, 'f', -1, 64))
@@ -40,7 +38,7 @@ func Dip() (float64, error) {
 func Pip() (float64, error) {
 	var (
 		err error
-		dip float64
+		dip float64 = 5
 		pip float64 = 30
 	)
 	arg := Get("pip")
@@ -50,7 +48,7 @@ func Pip() (float64, error) {
 		if pip, err = arg.Float64(); err != nil {
 			return pip, errors.Errorf("pip %v is invalid", arg)
 		}
-		if dip, err = Dip(); err != nil {
+		if dip, err = Dip(dip); err != nil {
 			return pip, err
 		}
 		if pip <= dip || pip > 100 {
