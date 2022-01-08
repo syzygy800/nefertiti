@@ -2,6 +2,7 @@ package aggregation
 
 import (
 	"math"
+	"strconv"
 
 	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/model"
@@ -32,6 +33,7 @@ func Get(
 		ticker float64
 		stats  *model.Stats // 24-hour statistics
 		avg    float64      // 24-hour average
+		prec   int          // price precision
 	)
 
 	if client, err = exchange.GetClient(model.BOOK, sandbox); err != nil {
@@ -50,7 +52,11 @@ func Get(
 		return 0, dip, pip, err
 	}
 
-	return GetEx(exchange, client, market, ticker, avg, dip, pip, max, min, dist, top, strict)
+	if prec, err = exchange.GetPricePrec(client, market); err != nil {
+		return 0, dip, pip, err
+	}
+
+	return GetEx(exchange, client, market, ticker, avg, dip, pip, max, min, dist, prec, top, strict)
 }
 
 // returns (agg, dip, pip, error)
@@ -62,7 +68,7 @@ func GetEx(
 	avg float64,
 	dip, pip float64,
 	max, min float64,
-	dist, top int,
+	dist, prec, top int,
 	strict bool,
 ) (float64, float64, float64, error) {
 	var (
@@ -83,7 +89,7 @@ func GetEx(
 	}
 
 	for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
-		if out, err = get(exchange, client, market, ticker, avg, book, dip, pip, max, min, dist, cnt); err == nil {
+		if out, err = get(exchange, client, market, ticker, avg, book, dip, pip, max, min, dist, prec, cnt); err == nil {
 			return out, dip, pip, err
 		}
 	}
@@ -95,7 +101,7 @@ func GetEx(
 		for y < 50 {
 			y++
 			for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
-				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, cnt); err == nil {
+				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, prec, cnt); err == nil {
 					return out, x, y, err
 				}
 			}
@@ -104,7 +110,7 @@ func GetEx(
 		for x > 0 {
 			x--
 			for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
-				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, cnt); err == nil {
+				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, prec, cnt); err == nil {
 					return out, x, y, err
 				}
 			}
@@ -113,7 +119,7 @@ func GetEx(
 		for y < 100 {
 			y++
 			for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
-				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, cnt); err == nil {
+				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, prec, cnt); err == nil {
 					return out, x, y, err
 				}
 			}
@@ -136,12 +142,21 @@ func get(
 	book1 interface{},
 	dip, pip float64,
 	max, min float64,
-	dist, cnt int,
+	dist, prec, cnt int,
 ) (float64, error) {
 	var (
-		err error
-		agg float64 = 500
+		err  error
+		agg  float64 = 500
+		last float64 // the last step we can make
 	)
+
+	next := func(step float64) float64 {
+		return precision.Round((agg * step), prec)
+	}
+
+	if last, err = strconv.ParseFloat(precision.Format(prec), 64); err != nil {
+		return 0, err
+	}
 
 	var steps = [...]float64{
 		0.5, // 250
@@ -155,7 +170,9 @@ func get(
 
 	for {
 		for _, step := range steps {
-			agg = precision.Round((agg * step), 8)
+			if agg = next(step); agg == 0 {
+				return 0, ECannotFindSupports
+			}
 
 			var book2 model.Book
 			if book2, err = exchange.Aggregate(client, book1, market, agg); err != nil {
@@ -233,7 +250,13 @@ func get(
 					}
 					return false
 				}() {
-					continue
+					// continue with the next step (if there is any)
+					if agg > last && func() bool {
+						next := next(step)
+						return next > 0 && next != agg
+					}() {
+						continue
+					}
 				}
 			}
 
@@ -242,8 +265,11 @@ func get(
 				return agg, nil
 			}
 
-			// since we're rounding to 8 decimals, prevent this func from getting stuck in an infinite loop
-			if agg <= 0.00000001 {
+			// since we're rounding to [prec] decimals, prevent this func from getting stuck in an infinite loop
+			if agg <= last || func() bool {
+				next := next(step)
+				return next == 0 || next == agg
+			}() {
 				if len(book2) > 0 {
 					return agg, nil
 				} else {

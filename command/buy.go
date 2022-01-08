@@ -151,9 +151,10 @@ func buy(
 		}
 
 		var (
-			ticker float64
-			stats  *model.Stats // 24-hour statistics
-			avg    float64      // 24-hour average
+			ticker    float64
+			stats     *model.Stats // 24-hour statistics
+			avg       float64      // 24-hour average
+			pricePrec int          // price precision
 		)
 
 		if ticker, err = exchange.GetTicker(client, market); err != nil {
@@ -170,6 +171,10 @@ func buy(
 		}
 
 		if avg, err = stats.Avg(exchange, sandbox); err != nil {
+			return market, err
+		}
+
+		if pricePrec, err = exchange.GetPricePrec(client, market); err != nil {
 			return market, err
 		}
 
@@ -206,11 +211,7 @@ func buy(
 			for _, fill := range closed {
 				if fill.Side == model.BUY {
 					// step 2: has this filled BUY order NOT been sold?
-					var prec int
-					if prec, err = exchange.GetPricePrec(client, market); err != nil {
-						return market, err
-					}
-					if opened.IndexByPrice(model.SELL, market, pricing.Multiply(fill.Price, mult, prec)) > -1 {
+					if opened.IndexByPrice(model.SELL, market, pricing.Multiply(fill.Price, mult, pricePrec)) > -1 {
 						if mmax == 0 || mmax >= fill.Price {
 							mmax = fill.Price
 						}
@@ -220,7 +221,7 @@ func buy(
 		}
 
 		if magg == 0 {
-			if magg, mdip, mpip, err = aggregation.GetEx(exchange, client, market, ticker, avg, dip, pip, mmax, min, int(dist), int(top), strict); err != nil {
+			if magg, mdip, mpip, err = aggregation.GetEx(exchange, client, market, ticker, avg, dip, pip, mmax, min, int(dist), pricePrec, int(top), strict); err != nil {
 				if errors.Is(err, aggregation.ECannotFindSupports) && (len(enumerable) > 1 || flag.Get("ignore").Contains("error")) {
 					report(err, market, nil, service, exchange)
 					continue
@@ -308,8 +309,8 @@ func buy(
 			}
 		}
 
-		var prec int
-		if prec, err = exchange.GetSizePrec(client, market); err != nil {
+		var sizePrec int
+		if sizePrec, err = exchange.GetSizePrec(client, market); err != nil {
 			return market, err
 		}
 
@@ -323,12 +324,12 @@ func buy(
 
 			// if we have an arg named --price, then we'll calculate the desired size here
 			if price != 0 {
-				book2[i].Size = precision.Round((price / book2[i].Price), prec)
+				book2[i].Size = precision.Round((price / book2[i].Price), sizePrec)
 			}
 
 			// the more non-sold sell orders we have, the bigger the new buy order size
 			if flag.Dca() {
-				book2[i].Size = precision.Round((book2[i].Size * (1 + (float64(hasOpenSell) * 0.2))), prec)
+				book2[i].Size = precision.Round((book2[i].Size * (1 + (float64(hasOpenSell) * 0.2))), sizePrec)
 			}
 
 			// for BTC and ETH, there is a minimum size (otherwise, we would never be hodl'ing)
