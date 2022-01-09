@@ -3,6 +3,7 @@ package signals
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -136,7 +137,7 @@ func (self *CryptoBase) Buy(exchange model.Exchange, algorithm CryptoBaseScanner
 					return false, errors.Errorf("%v. Market: %s", err, market)
 				}
 				if ratio < successRatio {
-					log.Printf("[INFO] Ignoring %s because success ratio %f is lower than %.2f\n", market, ratio, successRatio)
+					log.Printf("[INFO] Ignoring %s because success ratio %.2f is lower than %.2f\n", market, ratio, successRatio)
 					return false, nil
 				}
 			}
@@ -144,10 +145,16 @@ func (self *CryptoBase) Buy(exchange model.Exchange, algorithm CryptoBaseScanner
 			return true, nil
 		} else {
 			if debug {
-				log.Printf("[DEBUG] Ignoring %s because latestBase.currentDrop: %f is above marketStats[%s].medianDrop: %f\n",
+				log.Printf("[DEBUG] Ignoring %s because latestBase.currentDrop: %.2f is above %s: %.2f\n",
 					market,
 					self.LatestBase.CurrentDrop,
-					algorithm.String(),
+					func() string {
+						if dip != 0 {
+							return "--dip"
+						} else {
+							return fmt.Sprintf("marketStats[%s].medianDrop", algorithm.String())
+						}
+					}(),
 					medianDrop)
 			}
 		}
@@ -310,31 +317,38 @@ func (self *CryptoBaseScanner) GetMarkets(
 	ignore []string,
 ) (model.Markets, error) {
 	var (
-		err error
-		flg *flag.Flag
-		out model.Markets
+		err  error
+		dip  float64
+		arg  *flag.Flag
+		out  model.Markets
+		algo CryptoBaseScannerAlgo = CBS_ALGO_DAY_TRADE
 	)
 
-	var dip float64
 	if dip, err = flag.Dip(0); err != nil {
 		return nil, err
 	}
 
-	var successRatio float64 = 60
-	flg = flag.Get("success")
-	if flg.Exists {
-		successRatio, err = flg.Float64()
+	successRatio := func() float64 {
+		if dip == 0 {
+			return 0
+		} else {
+			return 60
+		}
+	}()
+
+	arg = flag.Get("success")
+	if arg.Exists {
+		successRatio, err = arg.Float64()
 		if err != nil {
-			return nil, errors.Errorf("success %v is invalid", flg)
+			return nil, errors.Errorf("success %v is invalid", arg)
 		}
 	}
 
-	var algo CryptoBaseScannerAlgo = CBS_ALGO_DAY_TRADE
-	flg = flag.Get("algo")
-	if flg.Exists {
-		algo, err = NewCryptoBaseScannerAlgo(flg.String())
+	arg = flag.Get("algo")
+	if arg.Exists {
+		algo, err = NewCryptoBaseScannerAlgo(arg.String())
 		if err != nil {
-			return nil, errors.Errorf("algo %v does not exist", flg)
+			return nil, errors.Errorf("algo %v does not exist", arg)
 		}
 	}
 
@@ -344,8 +358,8 @@ func (self *CryptoBaseScanner) GetMarkets(
 
 	for _, base := range self.cache {
 		if debug {
-			var msg []byte
-			if msg, err = json.Marshal(base); err == nil {
+			msg, err := json.Marshal(base)
+			if err == nil {
 				log.Printf("[DEBUG] %s", string(msg))
 			}
 		}

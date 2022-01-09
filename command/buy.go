@@ -457,7 +457,11 @@ func buySignals(
 	// ---- END ---- svanas 2018-12-06 ---------------------------------------------
 
 	for _, market := range markets {
-		if model.HasMarket(all, market) {
+		if !model.HasMarket(all, market) {
+			if debug {
+				log.Printf("[DEBUG] %s trading is not available in your region.\n", market)
+			}
+		} else {
 			if flag.Get("ignore").Contains("leveraged") {
 				var base string
 				if base, err = model.GetBaseCurr(all, market); err == nil {
