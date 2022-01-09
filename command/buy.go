@@ -380,6 +380,9 @@ Standard (built-in) strategy:
                (optional, defaults to 2%)
   --top      = number of orders to place in your book.
                (optional, defaults to 2)   
+  --max-orders=if included, then no buy order is set, when there are already
+               [max-orders] open sell orders for the market
+               (optional, default to 0 -> check disabled)
   --test     = if included, merely reports what it would do.
                (optional, defaults to false)
 

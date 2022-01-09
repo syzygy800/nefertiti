@@ -99,6 +99,24 @@ func Dist(def int64) (int64, error) {
 	return out, nil
 }
 
+// --max-orders=X
+func MaxOrders() (int, error) {
+	var (
+		err error = nil
+		ret int   = 0
+		max int64
+	)
+
+	arg := Get("max-orders")
+	if arg.Exists {
+		if max, err = arg.Int64(); err == nil {
+			ret = int(max)
+		}
+	}
+
+	return ret, err
+}
+
 // --sandbox=[Y|N]
 func Sandbox() bool {
 	arg := Get("sandbox")
