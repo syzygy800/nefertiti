@@ -146,7 +146,7 @@ func get(
 ) (float64, error) {
 	var (
 		err  error
-		agg  float64 = 500
+		agg  float64 = 5000
 		last float64 // the last step we can make
 	)
 
@@ -174,12 +174,12 @@ func get(
 				return 0, ECannotFindSupports
 			}
 
-			var book2 model.Book
-			if book2, err = exchange.Aggregate(client, book1, market, agg); err != nil {
+			book2, err := exchange.Aggregate(client, book1, market, agg)
+			if err != nil {
 				return 0, err
 			}
 
-			// ignore orders that are more expense than ticker
+			// ignore supports that are more expense than ticker
 			i := 0
 			for i < len(book2) {
 				if book2[i].Price > ticker {
@@ -189,7 +189,7 @@ func get(
 				}
 			}
 
-			// ignore orders that are cheaper than ticker minus 30%
+			// ignore supports that are cheaper than ticker minus 30%
 			if min == 0 && pip < 100 {
 				min = ticker - ((pip / 100) * ticker)
 			}
@@ -204,7 +204,7 @@ func get(
 				}
 			}
 
-			// ignore orders that are more expensive than 24h average minus 5%
+			// ignore supports that are more expensive than 24h average minus 5%
 			if dip > 0 {
 				i = 0
 				for i < len(book2) {
@@ -216,7 +216,7 @@ func get(
 				}
 			}
 
-			// ignore BUY orders that are more expensive than max (optional)
+			// ignore supports that are more expensive than max (optional)
 			if max > 0 {
 				i = 0
 				for i < len(book2) {
@@ -256,6 +256,8 @@ func get(
 						return next > 0 && next != agg
 					}() {
 						continue
+					} else {
+						return agg, ECannotFindSupports
 					}
 				}
 			}
