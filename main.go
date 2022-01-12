@@ -146,7 +146,7 @@ func main() {
 		prefix := errors.FormatCaller(cnt, file, line)
 		_, ok := err.(*errors.Error)
 		if ok && flag.Debug() {
-			log.Printf("[ERROR] %s", err.(*errors.Error).ErrorStack(prefix, ""))
+			log.Printf("[ERROR] %s", err.(*errors.Error).ErrorStack(prefix))
 		} else {
 			log.Printf("[ERROR] %s", fmt.Sprintf("%s %v", prefix, err))
 		}

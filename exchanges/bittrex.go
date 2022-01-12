@@ -574,7 +574,7 @@ func (self *Bittrex) sell(
 						}
 					}
 					if err != nil {
-						return new, errors.Append(err, "\t", string(data))
+						return new, errors.Append(err, order)
 					}
 				}
 			}
@@ -669,11 +669,11 @@ func (self *Bittrex) Sell(
 				if side != model.ORDER_SIDE_NONE {
 					var online bool
 					if online, err = self.marketOnline(client, order.MarketName()); err != nil {
-						logger.ErrorEx(self.Name, err, &order, level, service)
+						logger.Error(self.Name, errors.Append(err, order), level, service)
 					} else if online {
 						var openedAt time.Time
 						if openedAt, err = time.Parse(exchange.TIME_FORMAT, order.CreatedAt); err != nil {
-							logger.ErrorEx(self.Name, errors.Wrap(err, 1), &order, level, service)
+							logger.Error(self.Name, errors.Append(errors.Wrap(err, 1), order), level, service)
 						} else if time.Since(openedAt).Hours() >= float64(reopenAfterDays*24) {
 							logger.InfoEx(self.Name, fmt.Sprintf(
 								"Cancelling (and reopening) limit %s %s (market: %s, price: %g, qty: %f, opened at %s) because it is older than %d days.",
@@ -690,7 +690,7 @@ func (self *Bittrex) Sell(
 							}
 
 							if err != nil {
-								logger.ErrorEx(self.Name, errors.Wrap(err, 1), &order, level, service)
+								logger.Error(self.Name, errors.Append(errors.Wrap(err, 1), order), level, service)
 							}
 						}
 					}

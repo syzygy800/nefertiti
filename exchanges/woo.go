@@ -345,12 +345,7 @@ func (self *Woo) sell(
 			}
 
 			if err != nil {
-				data, _ := json.Marshal(new[i])
-				if data == nil {
-					logger.Error(self.Name, err, level, service)
-				} else {
-					logger.Error(self.Name, errors.Append(err, "\t", string(data)), level, service)
-				}
+				logger.Error(self.Name, errors.Append(errors.Wrap(err, 1), new[i]), level, service)
 			}
 		}
 	}

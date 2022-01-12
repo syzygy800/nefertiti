@@ -434,7 +434,7 @@ func (self *Binance) sell(
 									)
 								}
 								if err != nil {
-									return new, errors.Append(err, "\t", string(data))
+									return new, errors.Append(err, string(data))
 								}
 							}
 						}
@@ -536,7 +536,7 @@ func (self *Binance) sell(
 						}
 					}
 					if err != nil {
-						return new, errors.Append(err, "\t", string(data))
+						return new, errors.Append(err, string(data))
 					}
 				}
 			}

@@ -539,12 +539,7 @@ func (self *Kucoin) sell(
 		}
 
 		if err != nil {
-			var data []byte
-			if data, _ = json.Marshal(buy); data == nil {
-				logger.Error(self.Name, err, level, service)
-			} else {
-				logger.Error(self.Name, errors.Append(err, "\t", string(data)), level, service)
-			}
+			logger.Error(self.Name, errors.Append(err, buy), level, service)
 		}
 	}
 
@@ -728,12 +723,7 @@ func (self *Kucoin) Sell(
 							}
 						}
 						if err != nil {
-							var data []byte
-							if data, _ = json.Marshal(order); data == nil {
-								logger.Error(self.Name, err, level, service)
-							} else {
-								logger.Error(self.Name, errors.Append(err, "\t", string(data)), level, service)
-							}
+							logger.Error(self.Name, errors.Append(errors.Wrap(err, 1), order), level, service)
 						}
 					}
 				}

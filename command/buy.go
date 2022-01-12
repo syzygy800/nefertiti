@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -28,39 +27,6 @@ type (
 	}
 )
 
-func report(err error,
-	market string,
-	channel model.Channel,
-	service model.Notify,
-	exchange model.Exchange,
-) {
-	pc, file, line, _ := runtime.Caller(1)
-	prefix := errors.FormatCaller(pc, file, line)
-
-	var suffix string
-	if market != "" {
-		suffix = fmt.Sprintf("%s Market: %v.", suffix, market)
-	}
-	if channel != nil {
-		suffix = fmt.Sprintf("%s Channel: %s.", suffix, channel.GetName())
-	}
-
-	msg := fmt.Sprintf("%s %v%s", prefix, err, suffix)
-	_, ok := err.(*errors.Error)
-	if ok && flag.Debug() {
-		log.Printf("[ERROR] %s", err.(*errors.Error).ErrorStack(prefix, suffix))
-	} else {
-		log.Printf("[ERROR] %s", msg)
-	}
-
-	if service != nil {
-		err := service.SendMessage(msg, (exchange.GetInfo().Name + " - ERROR"), model.ONCE_PER_MINUTE)
-		if err != nil {
-			log.Printf("[ERROR] %v", err)
-		}
-	}
-}
-
 func buyEvery(
 	d time.Duration,
 	client interface{},
@@ -79,15 +45,20 @@ func buyEvery(
 	price float64,
 	btcVolumeMin,
 	deviation float64,
-	service model.Notify,
+	notifier model.Notify,
+	level int64,
 	strict bool,
 	sandbox bool,
 	debug bool,
 ) {
 	for range time.Tick(d) {
-		market, err := buy(client, exchange, markets, hold, agg, size, dip, pip, mult, dist, top, max, min, price, btcVolumeMin, deviation, service, strict, sandbox, false, debug)
+		market, err := buy(client, exchange, markets, hold, agg, size, dip, pip, mult, dist, top, max, min, price, btcVolumeMin, deviation, notifier, level, strict, sandbox, false, debug)
 		if err != nil {
-			report(err, market, nil, service, exchange)
+			logger.Error(
+				exchange.GetInfo().Name,
+				errors.Append(err, fmt.Sprintf("Market: %s", market)),
+				level, notifier,
+			)
 		}
 	}
 }
@@ -109,7 +80,8 @@ func buy(
 	price float64,
 	btcVolumeMin,
 	deviation float64,
-	service model.Notify,
+	notifier model.Notify,
+	level int64,
 	strict bool,
 	sandbox bool,
 	test bool,
@@ -223,7 +195,11 @@ func buy(
 		if magg == 0 {
 			if magg, mdip, mpip, err = aggregation.GetEx(exchange, client, market, ticker, avg, dip, pip, mmax, min, int(dist), pricePrec, int(top), strict); err != nil {
 				if errors.Is(err, aggregation.ECannotFindSupports) && (len(enumerable) > 1 || flag.Get("ignore").Contains("error")) {
-					report(err, market, nil, service, exchange)
+					logger.Error(
+						exchange.GetInfo().Name,
+						errors.Append(err, fmt.Sprintf("Market: %s", market)),
+						level, notifier,
+					)
 					continue
 				} else {
 					return market, err
@@ -302,7 +278,11 @@ func buy(
 		// we need at least one support
 		if len(book2) == 0 {
 			if len(enumerable) > 1 || flag.Get("ignore").Contains("error") {
-				report(aggregation.ECannotFindSupports, market, nil, service, exchange)
+				logger.Error(
+					exchange.GetInfo().Name,
+					errors.Append(aggregation.ECannotFindSupports, fmt.Sprintf("Market: %s", market)),
+					level, notifier,
+				)
 				continue
 			} else {
 				return market, aggregation.ECannotFindSupports
@@ -362,7 +342,11 @@ func buy(
 			err = exchange.Buy(client, true, market, calls, deviation, model.LIMIT)
 			if err != nil {
 				if len(enumerable) > 1 || flag.Get("ignore").Contains("error") {
-					report(err, market, nil, service, exchange)
+					logger.Error(
+						exchange.GetInfo().Name,
+						errors.Append(err, fmt.Sprintf("Market: %s", market)),
+						level, notifier,
+					)
 					continue
 				} else {
 					return market, err
@@ -397,15 +381,20 @@ func buySignalsEvery(
 	min float64,
 	btcVolumeMin,
 	deviation float64,
-	service model.Notify,
+	notifier model.Notify,
+	level int64,
 	sandbox bool,
 	debug bool,
 ) {
 	var err error
 	for range time.Tick(d) {
-		calls, err = buySignals(channel, client, exchange, quote, price, valid, calls, min, btcVolumeMin, deviation, service, sandbox, false, debug)
+		calls, err = buySignals(channel, client, exchange, quote, price, valid, calls, min, btcVolumeMin, deviation, notifier, level, sandbox, false, debug)
 		if err != nil {
-			report(err, "", channel, service, exchange)
+			logger.Error(
+				exchange.GetInfo().Name,
+				errors.Append(err, fmt.Sprintf("Channel: %s", channel.GetName())),
+				level, notifier,
+			)
 		}
 	}
 }
@@ -421,7 +410,8 @@ func buySignals(
 	min float64,
 	btcVolumeMin,
 	deviation float64,
-	service model.Notify,
+	notifier model.Notify,
+	level int64,
 	sandbox bool,
 	test bool,
 	debug bool,
@@ -569,7 +559,14 @@ func buySignals(
 					if calls.HasAnythingToDo() {
 						err = exchange.Buy(client, false, market, calls, deviation, channel.GetOrderType())
 						if err != nil {
-							report(err, market, channel, service, exchange)
+							logger.Error(
+								exchange.GetInfo().Name,
+								errors.Append(
+									errors.Append(err,
+										fmt.Sprintf("Market: %s", market),
+									), fmt.Sprintf("Channel: %s", channel.GetName())),
+								level, notifier,
+							)
 						}
 					}
 				}
@@ -631,9 +628,17 @@ func (c *BuyCommand) Run(args []string) int {
 		return c.ReturnError(err)
 	}
 
-	var service model.Notify = nil
+	var (
+		level    int64        = notify.LEVEL_DEFAULT
+		notifier model.Notify = nil
+	)
+
+	if level, err = notify.Level(); err != nil {
+		return c.ReturnError(err)
+	}
+
 	if !test {
-		if service, err = notify.New().Init(flag.Interactive(), true); err != nil {
+		if notifier, err = notify.New().Init(flag.Interactive(), true); err != nil {
 			return c.ReturnError(err)
 		}
 	}
@@ -698,7 +703,7 @@ func (c *BuyCommand) Run(args []string) int {
 		}
 		// initial run starts here
 		var calls model.Calls
-		if calls, err = buySignals(channel, client, exchange, flag.Get("quote").Split(), price, duration2, nil, min, btcVolumeMin, deviation, service, flag.Sandbox(), test, flag.Debug()); err != nil {
+		if calls, err = buySignals(channel, client, exchange, flag.Get("quote").Split(), price, duration2, nil, min, btcVolumeMin, deviation, notifier, level, flag.Sandbox(), test, flag.Debug()); err != nil {
 			if flag.Get("ignore").Contains("error") {
 				log.Printf("[ERROR] %v\n", err)
 			} else {
@@ -727,13 +732,13 @@ func (c *BuyCommand) Run(args []string) int {
 					}
 					msg := fmt.Sprintf("Listening to %s...", channel.GetName())
 					log.Println("[INFO] " + msg)
-					if service != nil {
-						service.SendMessage(msg, (exchange.GetInfo().Name + " - INFO"), model.ALWAYS)
+					if notifier != nil {
+						notifier.SendMessage(msg, (exchange.GetInfo().Name + " - INFO"), model.ALWAYS)
 					}
 					if err = c.ReturnSuccess(); err != nil {
 						return c.ReturnError(err)
 					}
-					buySignalsEvery(duration1, channel, client, exchange, flag.Get("quote").Split(), price, duration2, calls, min, btcVolumeMin, deviation, service, flag.Sandbox(), flag.Debug())
+					buySignalsEvery(duration1, channel, client, exchange, flag.Get("quote").Split(), price, duration2, calls, min, btcVolumeMin, deviation, notifier, level, flag.Sandbox(), flag.Debug())
 				}
 			}
 		}
@@ -830,7 +835,7 @@ func (c *BuyCommand) Run(args []string) int {
 		return c.ReturnError(err)
 	}
 
-	if _, err = buy(client, exchange, splitted, hold, agg, size, dip, pip, mult, dist, top, max, min, price, btcVolumeMin, deviation, service, flag.Strict(), flag.Sandbox(), test, flag.Debug()); err != nil {
+	if _, err = buy(client, exchange, splitted, hold, agg, size, dip, pip, mult, dist, top, max, min, price, btcVolumeMin, deviation, notifier, level, flag.Strict(), flag.Sandbox(), test, flag.Debug()); err != nil {
 		if flag.Get("ignore").Contains("error") {
 			log.Printf("[ERROR] %v\n", err)
 		} else {
@@ -848,7 +853,7 @@ func (c *BuyCommand) Run(args []string) int {
 			if err = c.ReturnSuccess(); err != nil {
 				return c.ReturnError(err)
 			}
-			buyEvery(time.Duration(repeat*float64(time.Hour)), client, exchange, splitted, hold, agg, size, dip, pip, mult, dist, top, max, min, price, btcVolumeMin, deviation, service, flag.Strict(), flag.Sandbox(), flag.Debug())
+			buyEvery(time.Duration(repeat*float64(time.Hour)), client, exchange, splitted, hold, agg, size, dip, pip, mult, dist, top, max, min, price, btcVolumeMin, deviation, notifier, level, flag.Strict(), flag.Sandbox(), flag.Debug())
 		}
 	}
 

@@ -984,12 +984,7 @@ func (self *Gdax) Buy(client interface{}, cancel bool, market string, calls mode
 				},
 			}).SetSize(call.Size).SetPrice(limit)
 			if _, err = gdaxClient.CreateOrder(order); err != nil {
-				var raw []byte
-				if raw, _ = json.Marshal(order); raw == nil {
-					return errors.Wrap(err, 1)
-				} else {
-					return errors.Wrap(errors.Append(err, "\t", string(raw)), 1)
-				}
+				return errors.Append(errors.Wrap(err, 1), order)
 			}
 		}
 	}

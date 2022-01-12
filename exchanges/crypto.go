@@ -430,12 +430,7 @@ func (self *CryptoDotCom) sell(
 			}
 
 			if err != nil {
-				var data []byte
-				if data, _ = json.Marshal(new[i]); data == nil {
-					logger.Error(self.Name, err, level, service)
-				} else {
-					logger.Error(self.Name, errors.Append(err, "\t", string(data)), level, service)
-				}
+				logger.Error(self.Name, errors.Append(errors.Wrap(err, 1), new[i]), level, service)
 			}
 		}
 	}

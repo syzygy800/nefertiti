@@ -383,12 +383,7 @@ func (self *Bitstamp) sell(
 			}
 
 			if err != nil {
-				var data []byte
-				if data, _ = json.Marshal(orders[i]); data == nil {
-					logger.Error(self.Name, err, level, service)
-				} else {
-					logger.Error(self.Name, errors.Append(err, "\t", string(data)), level, service)
-				}
+				logger.Error(self.Name, errors.Append(err, orders[i]), level, service)
 			}
 		}
 	}
