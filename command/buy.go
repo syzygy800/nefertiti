@@ -1,14 +1,12 @@
 package command
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
-	"sort"
 	"strings"
 	"time"
 
-	"github.com/svanas/nefertiti/aggregation"
+	"github.com/svanas/nefertiti/command/buy"
 	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/exchanges"
 	"github.com/svanas/nefertiti/flag"
@@ -16,8 +14,6 @@ import (
 	"github.com/svanas/nefertiti/model"
 	"github.com/svanas/nefertiti/multiplier"
 	"github.com/svanas/nefertiti/notify"
-	"github.com/svanas/nefertiti/precision"
-	"github.com/svanas/nefertiti/pricing"
 	"github.com/svanas/nefertiti/signals"
 )
 
@@ -27,683 +23,123 @@ type (
 	}
 )
 
-func buyEvery(
-	d time.Duration,
-	client interface{},
-	exchange model.Exchange,
-	markets []string,
-	hold model.Markets,
-	agg float64,
-	size float64,
-	dip float64,
-	pip float64,
-	mult multiplier.Mult,
-	dist int64,
-	top int64,
-	max float64,
-	min float64,
-	price float64,
-	btcVolumeMin,
-	deviation float64,
-	notifier model.Notify,
-	level int64,
-	strict bool,
-	sandbox bool,
-	debug bool,
-) {
-	for range time.Tick(d) {
-		market, err := buy(client, exchange, markets, hold, agg, size, dip, pip, mult, dist, top, max, min, price, btcVolumeMin, deviation, notifier, level, strict, sandbox, false, debug)
-		if err != nil {
-			logger.Error(
-				exchange.GetInfo().Name,
-				errors.Append(err, fmt.Sprintf("Market: %s", market)),
-				level, notifier,
-			)
-		}
-	}
-}
-
-func buy(
-	client interface{},
-	exchange model.Exchange,
-	markets []string,
-	hold model.Markets,
-	agg float64,
-	size float64,
-	dip float64,
-	pip float64,
-	mult multiplier.Mult,
-	dist int64,
-	top int64,
-	max float64,
-	min float64,
-	price float64,
-	btcVolumeMin,
-	deviation float64,
-	notifier model.Notify,
-	level int64,
-	strict bool,
-	sandbox bool,
-	test bool,
-	debug bool,
-) (string, error) { // -> (market, error)
-	var err error
-
-	// true if we're told to open buys for every market, otherwise false.
-	wildcard := len(markets) == 1 && markets[0] == "all"
-
-	var (
-		available  []model.Market // all available markets
-		enumerable []string       // the markets we enumerate/buy
-	)
-
-	if available, err = exchange.GetMarkets(!wildcard, sandbox, flag.Get("ignore").Split()); err != nil {
-		return "", err
-	}
-
-	if !wildcard {
-		enumerable = markets
-	} else {
-		quote := flag.Get("quote").String()
-		if quote == "" {
-			return "", errors.New("missing argument: quote")
-		}
-		for _, market := range available {
-			if strings.EqualFold(market.Quote, quote) {
-				enumerable = append(enumerable, market.Name)
-			}
-		}
-	}
-
-	for _, market := range enumerable {
-		// "algo" orders are stop-loss, take-profit, and OCO (aka one-cancels-the-other) orders
-		if hasAlgoOrder, _ := exchange.HasAlgoOrder(client, market); hasAlgoOrder {
-			log.Printf("[INFO] Ignoring %s because you have at least one \"algo\" order open on this market.\n", market)
-			continue
-		}
-
-		var (
-			ticker    float64
-			stats     *model.Stats // 24-hour statistics
-			avg       float64      // 24-hour average
-			pricePrec int          // price precision
-		)
-
-		if ticker, err = exchange.GetTicker(client, market); err != nil {
-			return market, err
-		}
-
-		if stats, err = exchange.Get24h(client, market); err != nil {
-			return market, err
-		}
-
-		if btcVolumeMin > 0 && stats.BtcVolume > 0 && stats.BtcVolume < btcVolumeMin {
-			log.Printf("[INFO] Ignoring %s because volume %.2f is lower than %.2f BTC\n", market, stats.BtcVolume, btcVolumeMin)
-			continue
-		}
-
-		if avg, err = stats.Avg(exchange, sandbox); err != nil {
-			return market, err
-		}
-
-		if pricePrec, err = exchange.GetPricePrec(client, market); err != nil {
-			return market, err
-		}
-
-		var (
-			magg float64
-			mdip float64
-			mpip float64
-			mmin float64
-			mmax float64
-		)
-
-		magg = agg
-		mdip = dip
-		mpip = pip
-		mmax = max
-
-		hasOpenSell := 0
-		// ignore supports where the price is higher than BUY order(s) that were (a) filled and (b) not been sold (yet)
-		if !test {
-			var opened model.Orders
-			if opened, err = exchange.GetOpened(client, market); err != nil {
-				return market, err
-			}
-			for _, order := range opened {
-				if order.Side == model.SELL {
-					hasOpenSell++
-				}
-			}
-			// step 1: loop through the filled BUY orders
-			var closed model.Orders
-			if closed, err = exchange.GetClosed(client, market); err != nil {
-				return market, err
-			}
-			for _, fill := range closed {
-				if fill.Side == model.BUY {
-					// step 2: has this filled BUY order NOT been sold?
-					if opened.IndexByPrice(model.SELL, market, pricing.Multiply(fill.Price, mult, pricePrec)) > -1 {
-						if mmax == 0 || mmax >= fill.Price {
-							mmax = fill.Price
-						}
-					}
-				}
-			}
-		}
-
-		if magg == 0 {
-			if magg, mdip, mpip, err = aggregation.GetEx(exchange, client, market, ticker, avg, dip, pip, mmax, min, int(dist), pricePrec, int(top), strict); err != nil {
-				if errors.Is(err, aggregation.ECannotFindSupports) && (len(enumerable) > 1 || flag.Get("ignore").Contains("error")) {
-					logger.Error(
-						exchange.GetInfo().Name,
-						errors.Append(err, fmt.Sprintf("Market: %s", market)),
-						level, notifier,
-					)
-					continue
-				} else {
-					return market, err
-				}
-			}
-		}
-
-		var (
-			book1 interface{}
-			book2 model.Book
-		)
-
-		if book1, err = exchange.GetBook(client, market, model.BOOK_SIDE_BIDS); err != nil {
-			return market, err
-		}
-
-		if book2, err = exchange.Aggregate(client, book1, market, magg); err != nil {
-			return market, err
-		}
-
-		// ignore orders that are more expensive than ticker
-		i := 0
-		for i < len(book2) {
-			if book2[i].Price > ticker {
-				book2 = append(book2[:i], book2[i+1:]...)
-			} else {
-				i++
-			}
-		}
-
-		// ignore orders that are cheaper than ticker minus 30%
-		mmin = min
-		if mmin == 0 && mpip < 100 {
-			mmin = ticker - ((mpip / 100) * ticker)
-		}
-		if mmin > 0 {
-			i = 0
-			for i < len(book2) {
-				if book2[i].Price < mmin {
-					book2 = append(book2[:i], book2[i+1:]...)
-				} else {
-					i++
-				}
-			}
-		}
-
-		// ignore orders that are more expensive than 24h average minus 5%
-		if mdip > 0 {
-			i = 0
-			for i < len(book2) {
-				if book2[i].Price > (avg - ((mdip / 100) * avg)) {
-					book2 = append(book2[:i], book2[i+1:]...)
-				} else {
-					i++
-				}
-			}
-		}
-
-		// ignore BUY orders that are more expensive than max (optional)
-		if mmax > 0 {
-			i = 0
-			for i < len(book2) {
-				if book2[i].Price >= mmax {
-					book2 = append(book2[:i], book2[i+1:]...)
-				} else {
-					i++
-				}
-			}
-		}
-
-		// sort the order book by size (highest order size first)
-		sort.Slice(book2, func(i1, i2 int) bool {
-			return book2[i1].Size > book2[i2].Size
-		})
-
-		// we need at least one support
-		if len(book2) == 0 {
-			if len(enumerable) > 1 || flag.Get("ignore").Contains("error") {
-				logger.Error(
-					exchange.GetInfo().Name,
-					errors.Append(aggregation.ECannotFindSupports, fmt.Sprintf("Market: %s", market)),
-					level, notifier,
-				)
-				continue
-			} else {
-				return market, aggregation.ECannotFindSupports
-			}
-		}
-
-		var sizePrec int
-		if sizePrec, err = exchange.GetSizePrec(client, market); err != nil {
-			return market, err
-		}
-
-		var base string
-		if base, err = model.GetBaseCurr(available, market); err != nil {
-			return market, err
-		}
-
-		for i := 0; i < len(book2); i++ {
-			book2[i].Size = size
-
-			// if we have an arg named --price, then we'll calculate the desired size here
-			if price != 0 {
-				book2[i].Size = precision.Round((price / book2[i].Price), sizePrec)
-			}
-
-			// the more non-sold sell orders we have, the bigger the new buy order size
-			if flag.Dca() {
-				book2[i].Size = precision.Round((book2[i].Size * (1 + (float64(hasOpenSell) * 0.2))), sizePrec)
-			}
-
-			// for BTC and ETH, there is a minimum size (otherwise, we would never be hodl'ing)
-			units := model.GetSizeMin(hold.HasMarket(market), base)
-			if book2[i].Size < units {
-				return market, errors.Errorf("Cannot buy %s. Size is too low. You must buy at least %f units.", market, units)
-			}
-		}
-
-		// convert the aggregated order book into signals for the exchange to buy
-		calls := func() model.Calls {
-			if len(book2) < int(top) {
-				return book2.Calls()
-			} else {
-				return book2[:top].Calls()
-			}
-		}()
-
-		// log the supports that are corrupt (if any). possible reasons are: qty is zero, or price is zero, or both are zero.
-		for _, call := range calls {
-			corrupt, reason := call.Corrupt(model.LIMIT)
-			if corrupt {
-				call.Skip = true
-				logger.Info("Ignoring %s. Reason: %s", call.Market, reason)
-			}
-		}
-
-		// cancel your open buy order(s), then place the top X buy orders
-		if !test {
-			err = exchange.Buy(client, true, market, calls, deviation, model.LIMIT)
-			if err != nil {
-				if len(enumerable) > 1 || flag.Get("ignore").Contains("error") {
-					logger.Error(
-						exchange.GetInfo().Name,
-						errors.Append(err, fmt.Sprintf("Market: %s", market)),
-						level, notifier,
-					)
-					continue
-				} else {
-					return market, err
-				}
-			}
-		}
-
-		var out []byte
-		if len(book2) < int(top) {
-			out, err = json.Marshal(book2)
-		} else {
-			out, err = json.Marshal(book2[:top])
-		}
-		if err != nil {
-			return market, err
-		}
-		log.Println(string(out))
-	}
-
-	return "", nil
-}
-
-func buySignalsEvery(
-	d time.Duration,
-	channel model.Channel,
-	client interface{},
-	exchange model.Exchange,
-	quote model.Assets,
-	price float64,
-	valid time.Duration,
-	calls model.Calls,
-	min float64,
-	btcVolumeMin,
-	deviation float64,
-	notifier model.Notify,
-	level int64,
-	sandbox bool,
-	debug bool,
-) {
-	var err error
-	for range time.Tick(d) {
-		calls, err = buySignals(channel, client, exchange, quote, price, valid, calls, min, btcVolumeMin, deviation, notifier, level, sandbox, false, debug)
-		if err != nil {
-			logger.Error(
-				exchange.GetInfo().Name,
-				errors.Append(err, fmt.Sprintf("Channel: %s", channel.GetName())),
-				level, notifier,
-			)
-		}
-	}
-}
-
-func buySignals(
-	channel model.Channel,
-	client interface{},
-	exchange model.Exchange,
-	quote model.Assets,
-	price float64,
-	valid time.Duration,
-	old model.Calls,
-	min float64,
-	btcVolumeMin,
-	deviation float64,
-	notifier model.Notify,
-	level int64,
-	sandbox bool,
-	test bool,
-	debug bool,
-) (model.Calls, error) {
-	var (
-		err error
-		new model.Calls
-	)
-
-	if quote.IsEmpty() {
-		return old, errors.New("missing argument: quote")
-	}
-
-	var all []model.Market
-	if all, err = exchange.GetMarkets(true, sandbox, flag.Get("ignore").Split()); err != nil {
-		return old, err
-	}
-
-	var markets []string
-	if markets, err = channel.GetMarkets(exchange, quote, btcVolumeMin, valid, sandbox, debug, flag.Get("ignore").Split()); err != nil {
-		return old, err
-	}
-
-	// --- BEGIN --- svanas 2018-12-06 --- allow for signals to buy new listings ---
-	for _, market := range markets {
-		if !model.HasMarket(all, market) {
-			if all, err = exchange.GetMarkets(false, sandbox, flag.Get("ignore").Split()); err != nil {
-				return old, err
-			}
-			break
-		}
-	}
-	// ---- END ---- svanas 2018-12-06 ---------------------------------------------
-
-	for _, market := range markets {
-		if !model.HasMarket(all, market) {
-			if debug {
-				log.Printf("[DEBUG] %s trading is not available in your region.\n", market)
-			}
-		} else {
-			if flag.Get("ignore").Contains("leveraged") {
-				var base string
-				if base, err = model.GetBaseCurr(all, market); err == nil {
-					if exchange.IsLeveragedToken(base) {
-						log.Printf("[INFO] Ignoring %s because %s is a leveraged token.\n", market, base)
-						continue
-					}
-				}
-			}
-
-			var ticker float64
-			if ticker, err = exchange.GetTicker(client, market); err != nil {
-				return old, err
-			}
-
-			var prec int
-			if prec, err = exchange.GetSizePrec(client, market); err != nil {
-				return old, err
-			}
-
-			var calls model.Calls
-			if calls, err = channel.GetCalls(exchange, market, sandbox, debug); err != nil {
-				return old, err
-			}
-
-			for i := range calls {
-				calls[i].Size = precision.Round(price/ticker, prec)
-
-				if flag.Dca() {
-					hasOpenSell := 0
-					var opened model.Orders
-					if opened, err = exchange.GetOpened(client, market); err != nil {
-						return old, err
-					}
-					for _, order := range opened {
-						if order.Side == model.SELL {
-							hasOpenSell++
-						}
-					}
-					calls[i].Size = precision.Round((calls[i].Size * (1 + (float64(hasOpenSell) * 0.2))), prec)
-				}
-
-				if !calls[i].Skip {
-					corrupt, reason := calls[i].Corrupt(channel.GetOrderType())
-					if corrupt {
-						calls[i].Ignore(reason)
-					}
-				}
-			}
-
-			if min > 0 {
-				for i := range calls {
-					if !calls[i].Skip {
-						limit := calls[i].Price
-						if limit == 0 {
-							limit = ticker
-						}
-						if limit < min {
-							calls[i].Ignore("price %.8f is lower than %.8f", calls[i].Price, min)
-						}
-					}
-				}
-			}
-
-			if btcVolumeMin > 0 {
-				for i := range calls {
-					if !calls[i].Skip {
-						stats, err := exchange.Get24h(client, calls[i].Market)
-						if err != nil {
-							return old, err
-						}
-						if stats.BtcVolume > 0 && stats.BtcVolume < btcVolumeMin {
-							calls[i].Ignore("volume %.2f is lower than %.2f %s", stats.BtcVolume, btcVolumeMin, quote)
-						}
-					}
-				}
-			}
-
-			if len(calls) > 0 {
-				new = append(new, calls...)
-				if !test {
-					// do not (re)open buy orders for signals that we already know about
-					if old != nil {
-						for i := range calls {
-							if !calls[i].Skip {
-								n := -1
-								if channel.GetOrderType() == model.MARKET {
-									n = old.IndexByMarket(calls[i].Market)
-								} else {
-									n = old.IndexByMarketPrice(calls[i].Market, calls[i].Price)
-								}
-								if n > -1 {
-									calls[i].Skip = true
-								}
-							}
-						}
-					}
-					// log the signals that we are skipping. possible reasons are: they are corrupt, or they don't meet your settings
-					for _, call := range calls {
-						if call.Skip && call.Reason != "" {
-							logger.Info("Ignoring %s. Reason: %s", call.Market, call.Reason)
-						}
-					}
-					// buy the signals (if we got any)
-					if calls.HasAnythingToDo() {
-						err = exchange.Buy(client, false, market, calls, deviation, channel.GetOrderType())
-						if err != nil {
-							logger.Error(
-								exchange.GetInfo().Name,
-								errors.Append(
-									errors.Append(err,
-										fmt.Sprintf("Market: %s", market),
-									), fmt.Sprintf("Channel: %s", channel.GetName())),
-								level, notifier,
-							)
-						}
-					}
-				}
-			}
-		}
-	}
-
-	//lint:ignore S1031 unnecessary nil check around range
-	if old != nil {
-		// cancel open orders that are removed from the channel
-		for _, entry := range old {
-			n := 0
-			if channel.GetOrderType() == model.MARKET {
-				n = new.IndexByMarket(entry.Market)
-			} else {
-				n = new.IndexByMarketPrice(entry.Market, entry.Price)
-			}
-			if n == -1 {
-				var data []byte
-				if data, err = json.Marshal(entry); err == nil {
-					log.Println("[CANCELLED] " + string(data))
-				}
-				if err = exchange.Cancel(client, entry.Market, model.BUY); err != nil {
-					return new, err
-				}
-			}
-		}
-	}
-
-	// echo the new book to the console
-	if len(new) > 0 {
-		var out []byte
-		if out, err = json.Marshal(new); err != nil {
-			return new, err
-		}
-		log.Println(string(out))
-	} else {
-		log.Println("[INFO] No new signals available.")
-	}
-
-	return new, nil
-}
-
 func (c *BuyCommand) Run(args []string) int {
-	var (
-		err error
-		flg *flag.Flag
-	)
-
-	var exchange model.Exchange
-	if exchange, err = exchanges.GetExchange(); err != nil {
+	exchange, err := exchanges.GetExchange()
+	if err != nil {
 		return c.ReturnError(err)
 	}
 
 	test := flag.Exists("test")
 
-	var client interface{}
-	if client, err = exchange.GetClient(model.PRIVATE, flag.Sandbox()); err != nil {
+	client, err := exchange.GetClient(model.PRIVATE, flag.Sandbox())
+	if err != nil {
 		return c.ReturnError(err)
 	}
 
-	var (
-		level    int64        = notify.LEVEL_DEFAULT
-		notifier model.Notify = nil
-	)
-
-	if level, err = notify.Level(); err != nil {
+	notifier, err := func() (model.Notify, error) {
+		if test {
+			return nil, nil
+		}
+		return notify.New().Init(flag.Interactive(), true)
+	}()
+	if err != nil {
 		return c.ReturnError(err)
 	}
 
-	if !test {
-		if notifier, err = notify.New().Init(flag.Interactive(), true); err != nil {
+	level, err := notify.Level()
+	if err != nil {
+		return c.ReturnError(err)
+	}
+
+	min, err := flag.Min()
+	if err != nil {
+		return c.ReturnError(err)
+	}
+
+	// --volume=X
+	volume, err := func() (float64, error) {
+		arg := flag.Get("volume")
+		if arg.Exists {
+			out, err := arg.Float64()
+			if err != nil {
+				return 0, errors.Errorf("volume %v is invalid", arg)
+			}
+			return out, nil
+		}
+		return 0, nil
+	}()
+	if err != nil {
+		return c.ReturnError(err)
+	}
+
+	// --devn=X
+	devn, err := func() (float64, error) {
+		arg := flag.Get("devn")
+		if arg.Exists {
+			out, err := arg.Float64()
+			if err != nil {
+				return 0, errors.Errorf("devn %v is invalid", arg)
+			}
+			return out, nil
+		}
+		return 1, nil
+	}()
+	if err != nil {
+		return c.ReturnError(err)
+	}
+
+	arg := flag.Get("signals")
+	if arg.Exists {
+		channel, err := func() (model.Channel, error) {
+			out, err := signals.New().FindByName(arg.String())
+			if err != nil {
+				return nil, err
+			}
+			if out == nil {
+				return nil, errors.Errorf("signals %v does not exist", arg)
+			}
+			return out, nil
+		}()
+		if err != nil {
 			return c.ReturnError(err)
 		}
-	}
-
-	var min float64 = 0
-	if min, err = flag.Min(); err != nil {
-		return c.ReturnError(err)
-	}
-
-	// --volume=x
-	var btcVolumeMin float64 = 0
-	flg = flag.Get("volume")
-	if flg.Exists {
-		if btcVolumeMin, err = flg.Float64(); err != nil {
-			return c.ReturnError(errors.Errorf("volume %v is invalid", flg))
-		}
-	}
-
-	// --devn=x
-	var deviation float64 = 1.0
-	flg = flag.Get("devn")
-	if flg.Exists {
-		if deviation, err = flg.Float64(); err != nil {
-			return c.ReturnError(errors.Errorf("devn %v is invalid", flg))
-		}
-	}
-
-	flg = flag.Get("signals")
-	if flg.Exists {
-		var channel model.Channel
-		if channel, err = signals.New().FindByName(flg.String()); err != nil {
-			if channel == nil {
-				return c.ReturnError(err)
-			} else {
-				return c.ReturnError(errors.Errorf("%v. Channel: %s", err, channel.GetName()))
+		// --price=X
+		price, err := func() (float64, error) {
+			arg := flag.Get("price")
+			if !arg.Exists {
+				return 0, errors.New("missing argument: price")
 			}
-		}
-		if channel == nil {
-			return c.ReturnError(errors.Errorf("signals %v does not exist", flg))
-		}
-		// --price=x
-		flg = flag.Get("price")
-		if !flg.Exists {
-			return c.ReturnError(errors.New("missing argument: price"))
-		}
-		var price float64
-		if price, err = flg.Float64(); err != nil {
-			return c.ReturnError(errors.Errorf("price %v is invalid", flg))
-		}
-		// --valid=x
-		var duration2 time.Duration
-		if duration2, err = channel.GetValidity(); err != nil {
+			out, err := arg.Float64()
+			if err != nil {
+				return 0, errors.Errorf("price %v is invalid", arg)
+			}
+			return out, nil
+		}()
+		if err != nil {
 			return c.ReturnError(err)
 		}
-		flg = flag.Get("valid")
-		if flg.Exists {
-			var valid float64 = 1
-			if valid, err = flg.Float64(); err != nil {
-				return c.ReturnError(errors.Errorf("valid %v is incorrect", flg))
+		// --valid=X
+		valid, err := func() (time.Duration, error) {
+			out, err := channel.GetValidity()
+			if err != nil {
+				return 0, err
 			}
-			duration2 = time.Duration(valid * float64(time.Hour))
+			arg := flag.Get("valid")
+			if arg.Exists {
+				valid, err := arg.Float64()
+				if err != nil {
+					return 0, errors.Errorf("valid %v is incorrect", arg)
+				}
+				out = time.Duration(valid * float64(time.Hour))
+			}
+			return out, nil
+		}()
+		if err != nil {
+			return c.ReturnError(err)
 		}
 		// initial run starts here
-		var calls model.Calls
-		if calls, err = buySignals(channel, client, exchange, flag.Get("quote").Split(), price, duration2, nil, min, btcVolumeMin, deviation, notifier, level, flag.Sandbox(), test, flag.Debug()); err != nil {
+		calls, err := buy.Signals(channel, client, exchange, price, valid, nil, min, volume, devn, notifier, level, test)
+		if err != nil {
 			if flag.Get("ignore").Contains("error") {
 				log.Printf("[ERROR] %v\n", err)
 			} else {
@@ -712,57 +148,72 @@ func (c *BuyCommand) Run(args []string) int {
 		}
 		// iterations start here
 		if !test {
-			flg = flag.Get("repeat")
-			if flg.Exists {
-				var repeat float64 = 1
-				if repeat, err = flg.Float64(); err != nil {
-					return c.ReturnError(errors.Errorf("repeat %v is invalid", flg))
+			// --repeat=X
+			repeat, err := func() (time.Duration, error) {
+				arg := flag.Get("repeat")
+				if arg.Exists {
+					out, err := arg.Float64()
+					if err != nil {
+						return 0, errors.Errorf("repeat %v is invalid", arg)
+					}
+					return time.Duration(out * float64(time.Hour)), nil
 				}
-				duration1 := time.Duration(repeat * float64(time.Hour))
-				if duration1 > 0 {
-					limit := channel.GetRateLimit()
-					if limit > 0 {
-						if duration1 < limit {
-							if flag.Exists("backdoor") {
-								// bypass the rate limit
-							} else {
-								return c.ReturnError(errors.Errorf("repeat %v is invalid. min value is %g", flg, (float64(limit) / float64(time.Hour))))
-							}
+				return 0, nil
+			}()
+			if err != nil {
+				return c.ReturnError(err)
+			}
+			if repeat > 0 {
+				limit := channel.GetRateLimit()
+				if limit > 0 {
+					if repeat < limit {
+						if flag.Exists("backdoor") {
+							// bypass the rate limit
+						} else {
+							return c.ReturnError(errors.Errorf("repeat is invalid. min value is %g", (float64(limit) / float64(time.Hour))))
 						}
 					}
-					msg := fmt.Sprintf("Listening to %s...", channel.GetName())
-					log.Println("[INFO] " + msg)
-					if notifier != nil {
-						notifier.SendMessage(msg, (exchange.GetInfo().Name + " - INFO"), model.ALWAYS)
-					}
-					if err = c.ReturnSuccess(); err != nil {
-						return c.ReturnError(err)
-					}
-					buySignalsEvery(duration1, channel, client, exchange, flag.Get("quote").Split(), price, duration2, calls, min, btcVolumeMin, deviation, notifier, level, flag.Sandbox(), flag.Debug())
 				}
+				logger.InfoEx(
+					(exchange.GetInfo().Name + " - INFO"),
+					fmt.Sprintf("Listening to %s...", channel.GetName()),
+					level, notifier,
+				)
+				if err = c.ReturnSuccess(); err != nil {
+					return c.ReturnError(err)
+				}
+				buy.SignalsEvery(repeat, channel, client, exchange, price, valid, calls, min, volume, devn, notifier, level)
 			}
 		}
 		return 0
 	}
 
-	var all []model.Market
-	if all, err = exchange.GetMarkets(true, flag.Sandbox(), flag.Get("ignore").Split()); err != nil {
+	all, err := exchange.GetMarkets(true, flag.Sandbox(), flag.Get("ignore").Split())
+	if err != nil {
 		return c.ReturnError(err)
 	}
 
-	flg = flag.Get("market")
-	if !flg.Exists {
-		return c.ReturnError(errors.New("missing argument: market"))
-	}
-	splitted := flg.Split()
-	if len(splitted) > 1 || (len(splitted) == 1 && splitted[0] != "all") {
-		for _, market := range splitted {
-			if !model.HasMarket(all, market) {
-				return c.ReturnError(errors.Errorf("market %s does not exist", market))
+	// --market=X,Y,Z
+	markets, err := func() ([]string, error) {
+		arg := flag.Get("market")
+		if !arg.Exists {
+			return nil, errors.New("missing argument: market")
+		}
+		out := arg.Split()
+		if len(out) > 1 || (len(out) == 1 && out[0] != "all") {
+			for _, market := range out {
+				if !model.HasMarket(all, market) {
+					return nil, errors.Errorf("market %s does not exist", market)
+				}
 			}
 		}
+		return out, nil
+	}()
+	if err != nil {
+		return c.ReturnError(err)
 	}
 
+	// --hold=X,Y,Z
 	hold := flag.Get("hold").Split()
 	if len(hold) > 0 && hold[0] != "" {
 		for _, market := range hold {
@@ -772,70 +223,99 @@ func (c *BuyCommand) Run(args []string) int {
 		}
 	}
 
-	var agg float64 = 0
-	flg = flag.Get("agg")
-	if flg.Exists {
-		if agg, err = flg.Float64(); err != nil {
-			return c.ReturnError(errors.Errorf("agg %v is invalid", flg))
+	// --agg=X
+	agg, err := func() (float64, error) {
+		arg := flag.Get("agg")
+		if arg.Exists {
+			out, err := arg.Float64()
+			if err != nil {
+				return 0, errors.Errorf("agg %v is invalid", arg)
+			}
+			return out, nil
 		}
+		return 0, nil
+	}()
+	if err != nil {
+		return c.ReturnError(err)
 	}
 
-	var (
-		size  float64 = 0
-		price float64 = 0
-	)
-	// if we have an arg named --size, then that one will take precedence
-	flg = flag.Get("size")
-	if flg.Exists {
-		if size, err = flg.Float64(); err != nil {
-			return c.ReturnError(errors.Errorf("size %v is invalid", flg))
-		}
-	} else {
-		// if we have an arg named --price, then we'll calculate the desired size later
-		flg = flag.Get("price")
-		if !flg.Exists {
-			return c.ReturnError(errors.New("missing argument: size"))
+	size, price, err := func() (float64, float64, error) {
+		var (
+			err  error
+			arg  *flag.Flag
+			out1 float64 = 0
+			out2 float64 = 0
+		)
+		// if we have an arg named --size, then that one will take precedence
+		arg = flag.Get("size")
+		if arg.Exists {
+			if out1, err = arg.Float64(); err != nil {
+				return 0, 0, errors.Errorf("size %v is invalid", arg)
+			}
 		} else {
-			if price, err = flg.Float64(); err != nil {
-				return c.ReturnError(errors.Errorf("price %v is invalid", flg))
+			// if we have an arg named --price, then we'll calculate the desired size later
+			arg = flag.Get("price")
+			if !arg.Exists {
+				return 0, 0, errors.New("missing argument: size")
+			} else {
+				if out2, err = arg.Float64(); err != nil {
+					return 0, 0, errors.Errorf("price %v is invalid", arg)
+				}
 			}
 		}
-	}
-
-	var dip float64 = 5
-	if dip, err = flag.Dip(dip); err != nil {
+		return out1, out2, nil
+	}()
+	if err != nil {
 		return c.ReturnError(err)
 	}
 
-	var pip float64 = 30
-	if pip, err = flag.Pip(); err != nil {
+	// --dip-5
+	dip, err := flag.Dip(5)
+	if err != nil {
 		return c.ReturnError(err)
 	}
 
-	var mult multiplier.Mult
-	if mult, err = multiplier.Get(multiplier.FIVE_PERCENT); err != nil {
+	// --pip=30
+	pip, err := flag.Pip(30)
+	if err != nil {
 		return c.ReturnError(err)
 	}
 
-	var dist int64 = 2
-	if dist, err = flag.Dist(); err != nil {
+	// --mult=1.05
+	mult, err := multiplier.Get(multiplier.FIVE_PERCENT)
+	if err != nil {
 		return c.ReturnError(err)
 	}
 
-	var top int64 = 2
-	flg = flag.Get("top")
-	if flg.Exists {
-		if top, err = flg.Int64(); err != nil {
-			return c.ReturnError(errors.Errorf("top %v is invalid", flg))
+	// --dist=2
+	dist, err := flag.Dist(2)
+	if err != nil {
+		return c.ReturnError(err)
+	}
+
+	// --top=2
+	top, err := func() (int64, error) {
+		arg := flag.Get("top")
+		if arg.Exists {
+			out, err := arg.Int64()
+			if err != nil {
+				return 0, errors.Errorf("top %v is invalid", arg)
+			}
+			return out, nil
 		}
-	}
-
-	var max float64 = 0
-	if max, err = flag.Max(); err != nil {
+		return 2, nil
+	}()
+	if err != nil {
 		return c.ReturnError(err)
 	}
 
-	if _, err = buy(client, exchange, splitted, hold, agg, size, dip, pip, mult, dist, top, max, min, price, btcVolumeMin, deviation, notifier, level, flag.Strict(), flag.Sandbox(), test, flag.Debug()); err != nil {
+	// --max=X
+	max, err := flag.Max()
+	if err != nil {
+		return c.ReturnError(err)
+	}
+
+	if err, _ = buy.Standard(client, exchange, markets, hold, agg, size, dip, pip, mult, dist, top, max, min, price, volume, devn, notifier, level, test); err != nil {
 		if flag.Get("ignore").Contains("error") {
 			log.Printf("[ERROR] %v\n", err)
 		} else {
@@ -844,16 +324,26 @@ func (c *BuyCommand) Run(args []string) int {
 	}
 
 	if !test {
-		var repeat float64 = 1
-		flg = flag.Get("repeat")
-		if flg.Exists {
-			if repeat, err = flg.Float64(); err != nil {
-				return c.ReturnError(errors.Errorf("repeat %v is invalid", flg))
+		// --repeat=X
+		repeat, err := func() (time.Duration, error) {
+			arg := flag.Get("repeat")
+			if arg.Exists {
+				out, err := arg.Float64()
+				if err != nil {
+					return 0, errors.Errorf("repeat %v is invalid", arg)
+				}
+				return time.Duration(out * float64(time.Hour)), nil
 			}
+			return 0, nil
+		}()
+		if err != nil {
+			return c.ReturnError(err)
+		}
+		if repeat > 0 {
 			if err = c.ReturnSuccess(); err != nil {
 				return c.ReturnError(err)
 			}
-			buyEvery(time.Duration(repeat*float64(time.Hour)), client, exchange, splitted, hold, agg, size, dip, pip, mult, dist, top, max, min, price, btcVolumeMin, deviation, notifier, level, flag.Strict(), flag.Sandbox(), flag.Debug())
+			buy.StandardEvery(repeat, client, exchange, markets, hold, agg, size, dip, pip, mult, dist, top, max, min, price, volume, devn, notifier, level)
 		}
 	}
 
@@ -864,16 +354,23 @@ func (c *BuyCommand) Help() string {
 	text := `
 Usage: ./nefertiti buy [options]
 
-The buy command opens new limit buy orders on the specified exchange/market.
+The buy command opens new limit buy orders on the specified exchange/market(s).
 
-Options:
+Global options:
   --exchange = name, for example: Bittrex
-  --market   = a valid market pair.
-  --size     = amount of cryptocurrency to buy per order. please note --size is
-               mutually exclusive with --price, eg. the price in quote currency
-               you will want to pay for an order.
-  --agg      = aggregate public order book to nearest multiple of agg.
-               (optional)
+  --price    = the price in quote asset you will want to pay for one order.
+  --volume   = minimum BTC volume on the market(s) over the last 24 hours.
+               (optional, for example: --volume=10)
+  --min      = minimum price that you will want to pay for the base asset.
+               (optional, for example: --min=0.00000050)
+  --dca      = if included, then slowly but surely, the bot will proportionally
+               increase your bag while lowering your average buying price.
+               (optional, defaults to false)
+  --repeat   = if included, repeats this command every X hours.
+               (optional, for example: --repeat=1)	
+
+Standard (built-in) strategy:
+  --market   = a comma-separated list of valid market pair(s).
   --dip      = percentage that will kick the bot into action.
                (optional, defaults to 5%)
   --pip      = range in where the market is suspected to move up and down.
@@ -882,48 +379,29 @@ Options:
   --dist     = distribution/distance between your orders.
                (optional, defaults to 2%)
   --top      = number of orders to place in your book.
-               (optional, defaults to 2)
-  --max      = maximum price that you will want to pay for the coins.
-               (optional)
-  --min      = minimum price that you will want to pay for the coins.
-               (optional)
-  --volume   = minimum BTC volume over the last 24 hours.
-               optional, for example: --volume=10			   
-  --dca      = if included, then slowly but surely, the bot will proportionally
-               increase your stack while lowering your average buying price.
-               (optional)
+               (optional, defaults to 2)   
   --test     = if included, merely reports what it would do.
                (optional, defaults to false)
-  --repeat   = if included, repeats this command every X hours.
-               (optional, defaults to false)
 
-Alternative Strategy:
+Alternative strategy:
   The trading bot can listen to signals (for example: Telegram bots) as an
   alternative to the built-in strategy. Please refer to the below options.
 
-Alternative Strategy Options:
-  --exchange = name, for example: Bittrex
+Alternative strategy options:
   --signals  = provider, for example: MiningHamster
-  --price    = price (in quote currency) that you will want to pay for an order
-  --quote    = currency that is used as the reference, for example: BTC or USDT
-  --min      = minimum price for a unit of quote currency.
-               optional, for example: 0.00000050
-  --volume   = minimum BTC volume over the last 24 hours.
-               optional, for example: --volume=10
+  --quote    = asset that is used as the reference, for example: BTC or USDT              
   --devn     = buy price deviation. this multiplier is applied to the suggested
                price from the signal, to calculate your actual limit price.
-               optional, for example: --devn=1.01
+               (optional, for example: --devn=1.01)
   --valid    = if included, specifies the time (in hours, defaults to 1 hour)
-               that the signal is "active". after this timeout elapses, the
+               that the signal is "active" for. after this timeout elapses, the
                bot will cancel the (non-filled) limit buy order(s) associated
                with the signal.
                (optional, defaults to 1 hour)
-  --repeat   = if included, repeats this command every X hours.
-               (optional, defaults to false)
 `
 	return strings.TrimSpace(text)
 }
 
 func (c *BuyCommand) Synopsis() string {
-	return "Opens new limit buy orders on the specified exchange/market."
+	return "Opens new limit buy orders on the specified exchange/market(s)."
 }

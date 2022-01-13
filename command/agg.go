@@ -32,7 +32,7 @@ func (c *AggCommand) Run(args []string) int {
 		return c.ReturnError(err)
 	}
 
-	pip, err := flag.Pip()
+	pip, err := flag.Pip(30)
 	if err != nil {
 		return c.ReturnError(err)
 	}
@@ -47,7 +47,7 @@ func (c *AggCommand) Run(args []string) int {
 		return c.ReturnError(err)
 	}
 
-	dist, err := flag.Dist()
+	dist, err := flag.Dist(2)
 	if err != nil {
 		return c.ReturnError(err)
 	}
