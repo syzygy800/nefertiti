@@ -181,7 +181,7 @@ func (self *Gdax) getProducts(client interface{}, cached bool) ([]exchange.Produ
 		}
 		self.products = nil
 		for _, product := range products {
-			if !product.TradingDisabled {
+			if !product.CancelOnly && !product.TradingDisabled {
 				self.products = append(self.products, product)
 			}
 		}
