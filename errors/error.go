@@ -153,6 +153,16 @@ func (err *Error) TypeName() string {
 	return reflect.TypeOf(err.Err).String()
 }
 
+// Remove the suffix(es) from this error (if any)
+func Clear(err error) error {
+	if err != nil {
+		if e, ok := err.(*Error); ok {
+			e.suffix = nil
+		}
+	}
+	return err
+}
+
 // Appends a suffix to this error.
 func Append(err error, suffix interface{}) *Error {
 	if err == nil {
@@ -168,12 +178,26 @@ func Append(err error, suffix interface{}) *Error {
 		out = Wrap(e, 1)
 	}
 
-	if str, ok := suffix.(string); ok {
-		out.suffix = append(out.suffix, str)
-	} else {
-		if buf, _ := json.Marshal(suffix); buf != nil {
-			out.suffix = append(out.suffix, string(buf))
+	new := func() string {
+		if str, ok := suffix.(string); ok {
+			return str
 		}
+		if buf, _ := json.Marshal(suffix); buf != nil {
+			return string(buf)
+		}
+		return ""
+	}()
+
+	// do not add any empty or duplicate strings
+	if new != "" && !func() bool {
+		for _, old := range out.suffix {
+			if new == old {
+				return true
+			}
+		}
+		return false
+	}() {
+		out.suffix = append(out.suffix, new)
 	}
 
 	return out

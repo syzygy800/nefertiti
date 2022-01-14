@@ -42,11 +42,11 @@ func StandardEvery(
 	for range time.Tick(repeat) {
 		err, market := Standard(client, exchange, markets, hold, agg, size, dip, pip, mult, dist, top, max, min, price, volume, devn, notifier, level, false)
 		if err != nil {
-			logger.Error(
+			errors.Clear(logger.Error(
 				exchange.GetInfo().Name,
 				errors.Append(err, fmt.Sprintf("Market: %s", market)),
 				level, notifier,
-			)
+			))
 		}
 	}
 }
@@ -139,9 +139,6 @@ func Standard(
 			return err, market
 		}
 
-		magg := agg
-		mdip := dip
-		mpip := pip
 		mmin := min
 		mmax := max
 
@@ -174,20 +171,22 @@ func Standard(
 			}
 		}
 
-		if magg == 0 {
-			var err error
-			magg, mdip, mpip, err = aggregation.GetEx(exchange, client, market, ticker, avg, dip, pip, mmax, min, int(dist), pricePrec, int(top), flag.Strict())
-			if err != nil {
-				if errors.Is(err, aggregation.ECannotFindSupports) && (len(enumerable) > 1 || flag.Get("ignore").Contains("error")) {
-					logger.Error(
-						exchange.GetInfo().Name,
-						errors.Append(err, fmt.Sprintf("Market: %s", market)),
-						level, notifier,
-					)
-					continue
-				} else {
-					return err, market
-				}
+		magg, mdip, mpip, err := func() (float64, float64, float64, error) {
+			if agg != 0 {
+				return agg, dip, pip, nil
+			}
+			return aggregation.GetEx(exchange, client, market, ticker, avg, dip, pip, mmax, min, int(dist), pricePrec, int(top), flag.Strict())
+		}()
+		if err != nil {
+			if errors.Is(err, aggregation.ECannotFindSupports) && (len(enumerable) > 1 || flag.Get("ignore").Contains("error")) {
+				errors.Clear(logger.Error(
+					exchange.GetInfo().Name,
+					errors.Append(err, fmt.Sprintf("Market: %s", market)),
+					level, notifier,
+				))
+				continue
+			} else {
+				return err, market
 			}
 		}
 
@@ -322,11 +321,11 @@ func Standard(
 			err := exchange.Buy(client, true, market, calls, devn, model.LIMIT)
 			if err != nil {
 				if len(enumerable) > 1 || flag.Get("ignore").Contains("error") {
-					logger.Error(
+					errors.Clear(logger.Error(
 						exchange.GetInfo().Name,
 						errors.Append(err, fmt.Sprintf("Market: %s", market)),
 						level, notifier,
-					)
+					))
 					continue
 				} else {
 					return err, market

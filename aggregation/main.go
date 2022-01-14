@@ -27,32 +27,30 @@ func Get(
 	dist, top int,
 	strict, sandbox bool,
 ) (float64, float64, float64, error) {
-	var (
-		err    error
-		client interface{}
-		ticker float64
-		stats  *model.Stats // 24-hour statistics
-		avg    float64      // 24-hour average
-		prec   int          // price precision
-	)
-
-	if client, err = exchange.GetClient(model.BOOK, sandbox); err != nil {
+	client, err := exchange.GetClient(model.BOOK, sandbox)
+	if err != nil {
 		return 0, dip, pip, err
 	}
 
-	if ticker, err = exchange.GetTicker(client, market); err != nil {
+	ticker, err := exchange.GetTicker(client, market)
+	if err != nil {
 		return 0, dip, pip, err
 	}
 
-	if stats, err = exchange.Get24h(client, market); err != nil {
+	// 24-hour statistics
+	stats, err := exchange.Get24h(client, market)
+	if err != nil {
 		return 0, dip, pip, err
 	}
 
-	if avg, err = stats.Avg(exchange, sandbox); err != nil {
+	// 24-hour average
+	avg, err := stats.Avg(exchange, sandbox)
+	if err != nil {
 		return 0, dip, pip, err
 	}
 
-	if prec, err = exchange.GetPricePrec(client, market); err != nil {
+	prec, err := exchange.GetPricePrec(client, market)
+	if err != nil {
 		return 0, dip, pip, err
 	}
 
@@ -71,12 +69,6 @@ func GetEx(
 	dist, prec, top int,
 	strict bool,
 ) (float64, float64, float64, error) {
-	var (
-		err  error
-		out  float64
-		book interface{} // bids
-	)
-
 	Max := func(a, b int) int {
 		if a > b {
 			return a
@@ -84,12 +76,13 @@ func GetEx(
 		return b
 	}
 
-	if book, err = exchange.GetBook(client, market, model.BOOK_SIDE_BIDS); err != nil {
+	book, err := exchange.GetBook(client, market, model.BOOK_SIDE_BIDS)
+	if err != nil {
 		return 0, dip, pip, err
 	}
 
 	for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
-		if out, err = get(exchange, client, market, ticker, avg, book, dip, pip, max, min, dist, prec, cnt); err == nil {
+		if out, err := get(exchange, client, market, ticker, avg, book, dip, pip, max, min, dist, prec, cnt); err == nil {
 			return out, dip, pip, err
 		}
 	}
@@ -101,7 +94,7 @@ func GetEx(
 		for y < 50 {
 			y++
 			for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
-				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, prec, cnt); err == nil {
+				if out, err := get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, prec, cnt); err == nil {
 					return out, x, y, err
 				}
 			}
@@ -110,7 +103,7 @@ func GetEx(
 		for x > 0 {
 			x--
 			for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
-				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, prec, cnt); err == nil {
+				if out, err := get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, prec, cnt); err == nil {
 					return out, x, y, err
 				}
 			}
@@ -119,7 +112,7 @@ func GetEx(
 		for y < 100 {
 			y++
 			for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
-				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, prec, cnt); err == nil {
+				if out, err := get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, prec, cnt); err == nil {
 					return out, x, y, err
 				}
 			}
@@ -144,17 +137,15 @@ func get(
 	max, min float64,
 	dist, prec, cnt int,
 ) (float64, error) {
-	var (
-		err  error
-		agg  float64 = 5000
-		last float64 // the last step we can make
-	)
+	agg := float64(5000)
 
 	next := func(step float64) float64 {
 		return precision.Round((agg * step), prec)
 	}
 
-	if last, err = strconv.ParseFloat(precision.Format(prec), 64); err != nil {
+	// the last step we can make
+	last, err := strconv.ParseFloat(precision.Format(prec), 64)
+	if err != nil {
 		return 0, err
 	}
 

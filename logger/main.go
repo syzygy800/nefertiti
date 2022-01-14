@@ -13,7 +13,7 @@ import (
 )
 
 // send an error to StdOut *and* a notification to Pushover/Telegram
-func Error(title string, err error, level int64, notifier model.Notify) {
+func Error(title string, err error, level int64, notifier model.Notify) error {
 	pc, file, line, _ := runtime.Caller(1)
 	prefix := errors.FormatCaller(pc, file, line)
 	msg := fmt.Sprintf("%s %v", prefix, err)
@@ -21,7 +21,7 @@ func Error(title string, err error, level int64, notifier model.Notify) {
 	// exclude common TCP/IP errors that we don't want to notify the user about
 	if strings.Contains(err.Error(), "502 Bad Gateway") || strings.Contains(err.Error(), "no such host") || strings.Contains(err.Error(), "network is unreachable") {
 		log.Printf("[ERROR] %s", msg)
-		return
+		return err
 	}
 
 	// include stack trace if (a) we have any, and (b) the user has included --debug
@@ -34,11 +34,12 @@ func Error(title string, err error, level int64, notifier model.Notify) {
 
 	// send notification to Pushover or Telegram
 	if notifier != nil && notify.CanSend(level, notify.ERROR) {
-		err := notifier.SendMessage(msg, fmt.Sprintf("%s - ERROR", title), model.ONCE_PER_MINUTE)
-		if err != nil {
-			log.Printf("[ERROR] %v", err)
+		if e := notifier.SendMessage(msg, fmt.Sprintf("%s - ERROR", title), model.ONCE_PER_MINUTE); e != nil {
+			log.Printf("[ERROR] %v", e)
 		}
 	}
+
+	return err
 }
 
 // send a warning to StdOut
@@ -52,9 +53,8 @@ func WarnEx(title string, err error, level int64, notifier model.Notify) {
 	pc, file, line, _ := runtime.Caller(1)
 	log.Printf("[WARNING] %s %v", errors.FormatCaller(pc, file, line), err)
 	if notifier != nil && notify.CanSend(level, notify.INFO) {
-		err := notifier.SendMessage(err.Error(), fmt.Sprintf("%s - WARNING", title), model.ALWAYS)
-		if err != nil {
-			log.Printf("[ERROR] %v", err)
+		if e := notifier.SendMessage(err.Error(), fmt.Sprintf("%s - WARNING", title), model.ALWAYS); e != nil {
+			log.Printf("[ERROR] %v", e)
 		}
 	}
 }
@@ -74,9 +74,8 @@ func InfoEx(title, msg string, level int64, notifier model.Notify) {
 	pc, file, line, _ := runtime.Caller(1)
 	log.Printf("[INFO] %s %s", errors.FormatCaller(pc, file, line), msg)
 	if notifier != nil && notify.CanSend(level, notify.INFO) {
-		err := notifier.SendMessage(msg, fmt.Sprintf("%s - INFO", title), model.ALWAYS)
-		if err != nil {
-			log.Printf("[ERROR] %v", err)
+		if e := notifier.SendMessage(msg, fmt.Sprintf("%s - INFO", title), model.ALWAYS); e != nil {
+			log.Printf("[ERROR] %v", e)
 		}
 	}
 }
