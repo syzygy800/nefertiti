@@ -30,7 +30,6 @@ buy the dip, then sell those trades as soon as possible.
 <a href="https://crypto.com/exch/rf3v8ucd4k"><img src="https://nefertiti-tradebot.com/wp-content/uploads/2020/09/crypto-com-review.png"></a> &nbsp; &nbsp; &nbsp;
 <a href="https://bit.ly/3orINEF"><img src="https://nefertiti-tradebot.com/wp-content/uploads/2021/12/WOO_X_Additional_L.png"></a> &nbsp; &nbsp; &nbsp;
 <a href="https://www.huobi.com/en-us/topic/double-reward/?invite_code=8ab23"><img src="https://nefertiti-tradebot.com/wp-content/uploads/2021/12/2021-12-09-19.10.43.jpg"></a> &nbsp; &nbsp; &nbsp;
-<a href="https://profile.cex.io/auth/registration"><img src="https://i.ibb.co/sRG9skk/cexio.png" alt="cexio" height="52"></a>
 </p>
 
 ## Signal Providers
