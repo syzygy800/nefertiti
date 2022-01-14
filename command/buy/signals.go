@@ -27,8 +27,8 @@ func SignalsEvery(
 	notifier model.Notify,
 	level int64,
 ) {
-	var err error
 	for range time.Tick(repeat) {
+		var err error
 		calls, err = Signals(channel, client, exchange, price, valid, calls, min, volume, devn, notifier, level, false)
 		if err != nil {
 			logger.Error(
@@ -54,10 +54,7 @@ func Signals(
 	level int64,
 	test bool,
 ) (model.Calls, error) {
-	var (
-		err error
-		new model.Calls
-	)
+	var new model.Calls
 
 	quote := model.Assets(flag.Get("quote").Split())
 	if quote.IsEmpty() {
@@ -197,7 +194,7 @@ func Signals(
 					}
 					// buy the signals (if we got any at this point)
 					if calls.HasAnythingToDo() {
-						err = exchange.Buy(client, false, market, calls, devn, channel.GetOrderType())
+						err := exchange.Buy(client, false, market, calls, devn, channel.GetOrderType())
 						if err != nil {
 							logger.Error(
 								exchange.GetInfo().Name,

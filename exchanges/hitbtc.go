@@ -690,15 +690,19 @@ func (self *HitBTC) Get24h(client interface{}, market string) (*model.Stats, err
 		Market: market,
 		High:   ticker.High,
 		Low:    ticker.Low,
-		BtcVolume: func() float64 {
+		BtcVolume: func(ticker1 exchange.Ticker) float64 {
 			symbol, err := self.getSymbol(hitbtc, market)
 			if err == nil {
 				if strings.EqualFold(symbol.QuoteCurrency, model.BTC) {
-					return ticker.VolumeQuote
+					return ticker1.VolumeQuote
+				}
+				ticker2, err := hitbtc.GetTicker(self.FormatMarket(model.BTC, symbol.QuoteCurrency))
+				if err == nil {
+					return ticker1.VolumeQuote / ticker2.Last
 				}
 			}
 			return 0
-		}(),
+		}(ticker),
 	}, nil
 }
 

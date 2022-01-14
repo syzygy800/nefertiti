@@ -73,8 +73,6 @@ func Standard(
 	test bool,
 	//lint:ignore ST1008 error should be returned as the last argument
 ) (error, string) { // -> (error, market)
-	var err error
-
 	// true if we're told to open buys for every market, otherwise false.
 	all := len(markets) == 1 && markets[0] == "all"
 
@@ -177,7 +175,9 @@ func Standard(
 		}
 
 		if magg == 0 {
-			if magg, mdip, mpip, err = aggregation.GetEx(exchange, client, market, ticker, avg, dip, pip, mmax, min, int(dist), pricePrec, int(top), flag.Strict()); err != nil {
+			var err error
+			magg, mdip, mpip, err = aggregation.GetEx(exchange, client, market, ticker, avg, dip, pip, mmax, min, int(dist), pricePrec, int(top), flag.Strict())
+			if err != nil {
 				if errors.Is(err, aggregation.ECannotFindSupports) && (len(enumerable) > 1 || flag.Get("ignore").Contains("error")) {
 					logger.Error(
 						exchange.GetInfo().Name,
@@ -319,7 +319,7 @@ func Standard(
 
 		// cancel your open buy order(s), then place the top X buy orders
 		if !test {
-			err = exchange.Buy(client, true, market, calls, devn, model.LIMIT)
+			err := exchange.Buy(client, true, market, calls, devn, model.LIMIT)
 			if err != nil {
 				if len(enumerable) > 1 || flag.Get("ignore").Contains("error") {
 					logger.Error(

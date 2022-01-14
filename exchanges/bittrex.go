@@ -965,15 +965,19 @@ func (self *Bittrex) Get24h(client interface{}, market1 string) (*model.Stats, e
 		Market: market1,
 		High:   sum.High,
 		Low:    sum.Low,
-		BtcVolume: func() float64 {
+		BtcVolume: func(ticker1 *exchange.MarketSummary) float64 {
 			_, quote, err := bittrexParseMarket(market1, 1)
 			if err == nil {
 				if strings.EqualFold(quote, model.BTC) {
-					return sum.QuoteVolume
+					return ticker1.QuoteVolume
+				}
+				ticker2, err := bittrex.GetTicker(self.FormatMarket(model.BTC, quote))
+				if err == nil {
+					return ticker1.QuoteVolume / ticker2.LastTradeRate
 				}
 			}
 			return 0
-		}(),
+		}(sum),
 	}, nil
 }
 

@@ -977,27 +977,26 @@ func (self *Binance) Get24h(client interface{}, market string) (*model.Stats, er
 		Market: market,
 		High:   high,
 		Low:    low,
-		BtcVolume: func() float64 {
+		BtcVolume: func(ticker1 *exchange.PriceChangeStats) float64 {
 			symbol, err := binance.GetSymbol(binanceClient, market)
 			if err == nil {
-				volume, err := strconv.ParseFloat(stats.QuoteVolume, 64)
+				volume, err := strconv.ParseFloat(ticker1.QuoteVolume, 64)
 				if err == nil {
 					if strings.EqualFold(symbol.QuoteAsset, model.BTC) {
 						return volume
 					} else {
-						btcSymbol := self.FormatMarket(model.BTC, symbol.QuoteAsset)
-						ticker2, err := binanceClient.Ticker(btcSymbol)
+						ticker2, err := binanceClient.Ticker(self.FormatMarket(model.BTC, symbol.QuoteAsset))
 						if err == nil {
-							price, err := strconv.ParseFloat(ticker2.LastPrice, 64)
+							last, err := strconv.ParseFloat(ticker2.LastPrice, 64)
 							if err == nil {
-								return volume / price
+								return volume / last
 							}
 						}
 					}
 				}
 			}
 			return 0
-		}(),
+		}(stats),
 	}, nil
 }
 

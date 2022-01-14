@@ -984,12 +984,12 @@ func (self *Kucoin) Get24h(client interface{}, market string) (*model.Stats, err
 	var (
 		err  error
 		resp *exchange.ApiResponse
-		json exchange.Stats24hrModel
+		stat exchange.Stats24hrModel
 	)
 	if resp, err = kucoin.Stats24hr(market); err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
-	if err = resp.ReadData(&json); err != nil {
+	if err = resp.ReadData(&stat); err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
 
@@ -997,10 +997,10 @@ func (self *Kucoin) Get24h(client interface{}, market string) (*model.Stats, err
 		high float64
 		low  float64
 	)
-	if high, err = strconv.ParseFloat(json.High, 64); err != nil {
+	if high, err = strconv.ParseFloat(stat.High, 64); err != nil {
 		return nil, err
 	}
-	if low, err = strconv.ParseFloat(json.Low, 64); err != nil {
+	if low, err = strconv.ParseFloat(stat.Low, 64); err != nil {
 		return nil, err
 	}
 
@@ -1008,18 +1008,23 @@ func (self *Kucoin) Get24h(client interface{}, market string) (*model.Stats, err
 		Market: market,
 		High:   high,
 		Low:    low,
-		BtcVolume: func() float64 {
+		BtcVolume: func(ticker1 exchange.Stats24hrModel) float64 {
 			symbol, err := self.getSymbol(kucoin, market)
 			if err == nil {
-				if strings.EqualFold(symbol.QuoteCurrency, model.BTC) {
-					out, err := strconv.ParseFloat(json.VolValue, 64)
-					if err == nil {
-						return out
+				volume, err := strconv.ParseFloat(ticker1.VolValue, 64)
+				if err == nil {
+					if strings.EqualFold(symbol.QuoteCurrency, model.BTC) {
+						return volume
+					} else {
+						ticker2, err := self.GetTicker(client, self.FormatMarket(model.BTC, symbol.QuoteCurrency))
+						if err == nil {
+							return volume / ticker2
+						}
 					}
 				}
 			}
 			return 0
-		}(),
+		}(stat),
 	}, nil
 }
 
