@@ -471,7 +471,7 @@ func (self *Bittrex) sell(
 							if func() bool {
 								sold := order.Price()
 								if sold > 0 {
-									bought := sold * (1 + (1 - float64(stop)))
+									bought := sold / float64(stop)
 									if bought > sold {
 										ticker, _ := self.GetTicker(client, order.MarketName())
 										if ticker > bought {
@@ -484,18 +484,16 @@ func (self *Bittrex) sell(
 							}() {
 								var (
 									prec int
-									size float64 = 2.2 * order.QuantityFilled()
+									size float64
 								)
 								if prec, err = self.GetSizePrec(client, order.MarketName()); err != nil {
 									return new, err
 								}
+								if size, err = multiplier.DoubleOrNothing(order.QuantityFilled(), prec, order.Price()); err != nil {
+									return new, err
+								}
 								for {
-									_, _, err = self.Order(client,
-										model.BUY,
-										order.MarketName(),
-										precision.Round(size, prec),
-										0, model.MARKET, "",
-									)
+									_, _, err = self.Order(client, model.BUY, order.MarketName(), size, 0, model.MARKET, "")
 									if err == nil {
 										break
 									} else if !strings.Contains(err.Error(), "ORDERBOOK_DEPTH") {

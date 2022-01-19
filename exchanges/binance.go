@@ -419,23 +419,20 @@ func (self *Binance) sell(
 				}
 
 				// has a stop loss been filled? then place a buy order double the order size *** if --dca is included ***
-				if side == model.SELL {
-					if strategy == model.STRATEGY_STOP_LOSS {
-						if order.Type == exchange.OrderTypeStopLoss || order.Type == exchange.OrderTypeStopLossLimit {
-							if flag.Dca() {
-								var prec int
-								if prec, err = self.GetSizePrec(client, order.Symbol); err == nil {
-									size := 2.2 * order.GetSize()
-									_, _, err = self.Order(client,
-										model.BUY,
-										order.Symbol,
-										precision.Round(size, prec),
-										0, model.MARKET, "",
-									)
+				if side == model.SELL && strategy == model.STRATEGY_STOP_LOSS {
+					if order.Type == exchange.OrderTypeStopLoss || order.Type == exchange.OrderTypeStopLossLimit {
+						if flag.Dca() {
+							var (
+								prec int
+								size float64
+							)
+							if prec, err = self.GetSizePrec(client, order.Symbol); err == nil {
+								if size, err = multiplier.DoubleOrNothing(order.GetSize(), prec, order.GetStopPrice()); err == nil {
+									_, _, err = self.Order(client, model.BUY, order.Symbol, size, 0, model.MARKET, "")
 								}
-								if err != nil {
-									return new, errors.Append(err, string(data))
-								}
+							}
+							if err != nil {
+								return new, errors.Append(err, string(data))
 							}
 						}
 					}

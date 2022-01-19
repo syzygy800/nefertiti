@@ -470,14 +470,14 @@ func (self *Kucoin) sell(
 					if opened.Find(&cb) > -1 {
 						log.Printf("[INFO] Not re-buying %s because you have at least one active (non-filled) stop-loss order.\n", symbol)
 					} else {
-						prec := 0
-						size := 2.2 * stop.Size
+						var (
+							prec int
+							size float64
+						)
 						if prec, err = self.GetSizePrec(client, symbol); err == nil {
-							_, _, err = self.Order(client,
-								model.BUY, symbol,
-								precision.Round(size, prec),
-								0, model.MARKET, "",
-							)
+							if size, err = multiplier.DoubleOrNothing(stop.Size, prec, avg(stop)); err == nil {
+								_, _, err = self.Order(client, model.BUY, symbol, size, 0, model.MARKET, "")
+							}
 						}
 						if err != nil {
 							logger.Error(self.Name, err, level, service)

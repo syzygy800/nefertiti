@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/svanas/nefertiti/flag"
+	"github.com/svanas/nefertiti/precision"
 )
 
 const (
@@ -69,4 +70,39 @@ func Format(mult Mult) string {
 	} else {
 		return fmt.Sprintf("-%.2f%%", ((1 - mult) * 100))
 	}
+}
+
+// after a stop-loss got filled, pass in...
+// 1) the order size, and
+// 2) the size precision, and
+// 3) what price you got stopped at.
+// assuming -mult and -stop do not change, this func will return your new stop-loss order *size*
+func DoubleOrNothing(size float64, prec int, stoppedAt float64) (float64, error) {
+	out := precision.Round((size * 2.2), prec)
+
+	if stoppedAt == 0 {
+		return out, nil
+	}
+
+	mult, err := Get(FIVE_PERCENT)
+	if err != nil {
+		return out, err
+	}
+
+	stop, err := Stop()
+	if err != nil {
+		return out, err
+	}
+
+	inc, err := strconv.ParseFloat(precision.Format(prec), 64)
+	if err != nil {
+		return out, err
+	}
+
+	loss := size * ((stoppedAt / float64(stop)) - stoppedAt)
+	for (out * ((stoppedAt * float64(mult)) - stoppedAt)) < loss {
+		out = out + inc
+	}
+
+	return out, nil
 }
