@@ -4,7 +4,7 @@ go 1.16
 
 require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
-	github.com/adshao/go-binance/v2 v2.3.3
+	github.com/adshao/go-binance/v2 v2.3.4
 	github.com/alexflint/go-filemutex v1.1.0
 	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/blang/semver v3.5.1+incompatible
@@ -18,7 +18,7 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
-	github.com/jedib0t/go-pretty/v6 v6.2.4
+	github.com/jedib0t/go-pretty/v6 v6.2.5
 	github.com/kr/pretty v0.3.0 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mitchellh/cli v1.1.2
@@ -32,6 +32,6 @@ require (
 	github.com/svanas/go-mining-hamster v0.0.0-20211213142718-f710b6b19784
 	github.com/yanzay/tbot v1.0.0
 	golang.org/x/crypto v0.0.0-20220112180741-5e0467b6c7ce // indirect
-	golang.org/x/sys v0.0.0-20220111092808-5a964db01320 // indirect
+	golang.org/x/sys v0.0.0-20220114195835-da31bd327af9 // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
 )

@@ -104,5 +104,5 @@ func DoubleOrNothing(size float64, prec int, stoppedAt float64) (float64, error)
 		out = out + inc
 	}
 
-	return out, nil
+	return precision.Round(out, prec), nil
 }
