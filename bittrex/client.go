@@ -172,6 +172,7 @@ func (client *Client) _do(method string, path string, payload []byte, auth bool)
 		return 0, nil, err
 	}
 	req.Header.Add("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:96.0) Gecko/20100101 Firefox/96.0")
 
 	if client.appId != "" {
 		req.Header.Add("Application-Id", client.appId)

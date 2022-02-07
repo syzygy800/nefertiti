@@ -933,6 +933,10 @@ func (self *Gdax) Cancel(client interface{}, market string, side model.OrderSide
 	return nil
 }
 
+func (self *Gdax) Coalesce(client interface{}, market string, side model.OrderSide) error {
+	return errors.New("not implemented")
+}
+
 func (self *Gdax) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {
 	var err error
 

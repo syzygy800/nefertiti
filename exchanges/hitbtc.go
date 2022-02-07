@@ -769,6 +769,10 @@ func (self *HitBTC) Cancel(client interface{}, market string, side model.OrderSi
 	return nil
 }
 
+func (self *HitBTC) Coalesce(client interface{}, market string, side model.OrderSide) error {
+	return errors.New("not implemented")
+}
+
 func (self *HitBTC) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {
 	var err error
 

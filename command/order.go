@@ -29,13 +29,9 @@ func (c *OrderCommand) Run(args []string) int {
 		return c.ReturnError(err)
 	}
 
-	flg = flag.Get("side")
-	if !flg.Exists {
-		return c.ReturnError(errors.New("missing argument: side"))
-	}
-	side := model.NewOrderSide(flg.String())
-	if side == model.ORDER_SIDE_NONE {
-		return c.ReturnError(errors.Errorf("side %v is invalid", flg))
+	side, err := model.Side()
+	if err != nil {
+		return c.ReturnError(err)
 	}
 
 	var kind model.OrderType = model.LIMIT

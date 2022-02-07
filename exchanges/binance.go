@@ -1072,6 +1072,10 @@ func (self *Binance) Cancel(client interface{}, market string, side model.OrderS
 	return nil
 }
 
+func (self *Binance) Coalesce(client interface{}, market string, side model.OrderSide) error {
+	return errors.New("not implemented")
+}
+
 func (self *Binance) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {
 	var err error
 

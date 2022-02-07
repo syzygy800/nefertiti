@@ -2,6 +2,8 @@ package model
 
 import (
 	"encoding/json"
+	"github.com/svanas/nefertiti/errors"
+	"github.com/svanas/nefertiti/flag"
 	"time"
 )
 
@@ -30,6 +32,19 @@ func NewOrderSide(data string) OrderSide {
 		}
 	}
 	return ORDER_SIDE_NONE
+}
+
+// --side[buy|sell]
+func Side() (OrderSide, error) {
+	arg := flag.Get("side")
+	if !arg.Exists {
+		return ORDER_SIDE_NONE, errors.New("missing argument: side")
+	}
+	out := NewOrderSide(arg.String())
+	if out == ORDER_SIDE_NONE {
+		return out, errors.Errorf("side %v is invalid", arg)
+	}
+	return out, nil
 }
 
 func FormatOrderSide(value OrderSide) string {

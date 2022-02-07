@@ -754,27 +754,102 @@ func (self *CryptoDotCom) GetMaxSize(client interface{}, base, quote string, hol
 }
 
 func (self *CryptoDotCom) Cancel(client interface{}, market string, side model.OrderSide) error {
-	var err error
-
 	crypto, ok := client.(*exchange.Client)
 	if !ok {
 		return errors.New("invalid argument: client")
 	}
 
-	var orders []exchange.Order
-	if orders, err = crypto.OpenOrders(market); err != nil {
+	orders, err := crypto.OpenOrders(market)
+	if err != nil {
 		return errors.Wrap(err, 1)
 	}
 
 	for _, order := range orders {
 		if ((side == model.BUY) && (order.GetSide() == exchange.BUY)) || ((side == model.SELL) && (order.GetSide() == exchange.SELL)) {
-			if err = crypto.CancelOrder(market, order.Id); err != nil {
+			if err := crypto.CancelOrder(market, order.Id); err != nil {
 				return errors.Wrap(err, 1)
 			}
 		}
 	}
 
 	return nil
+}
+
+func (self *CryptoDotCom) Coalesce(client interface{}, market string, side model.OrderSide) error {
+	crypto, ok := client.(*exchange.Client)
+	if !ok {
+		return errors.New("invalid argument: client")
+	}
+
+	for {
+		orders, err := crypto.OpenOrders(market)
+		if err != nil {
+			return errors.Wrap(err, 1)
+		}
+
+		// do we have any duplicates?
+		price := func() float64 {
+			for i1 := 0; i1 < len(orders); i1++ {
+				if self.getOrderSide(orders[i1].GetSide()) == side && orders[i1].Price > 0 {
+					for i2 := 0; i2 < len(orders); i2++ {
+						if i2 != i1 && self.getOrderSide(orders[i2].GetSide()) == side && orders[i2].Price == orders[i1].Price {
+							return orders[i1].Price
+						}
+					}
+				}
+			}
+			return 0
+		}()
+
+		if price == 0 { // no duplicates, nothing to coalesce
+			return nil
+		}
+
+		prec, err := self.GetSizePrec(client, market)
+		if err != nil {
+			return err
+		}
+
+		// get the cummulative order size
+		qty := 0.0
+		for _, order := range orders {
+			if self.getOrderSide(order.GetSide()) == side && order.Price == price {
+				qty = precision.Round((qty + order.Volume), prec)
+			}
+		}
+
+		// cancel every duplicate order
+		for _, order := range orders {
+			if self.getOrderSide(order.GetSide()) == side && order.Price == price {
+				if err := crypto.CancelOrder(market, order.Id); err != nil {
+					return errors.Wrap(err, 1)
+				}
+			}
+		}
+
+		// wait for the above orders to get cancelled
+		for {
+			orders, err := crypto.OpenOrders(market)
+			if err != nil {
+				return errors.Wrap(err, 1)
+			}
+			if !func() bool {
+				for _, order := range orders {
+					if self.getOrderSide(order.GetSide()) == side && order.Price == price {
+						return true
+					}
+				}
+				return false
+			}() {
+				break
+			}
+		}
+
+		// place a new order
+		if _, _, err := self.Order(client, side, market, qty, price, model.LIMIT, ""); err != nil {
+			return err
+		}
+	}
 }
 
 func (self *CryptoDotCom) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {

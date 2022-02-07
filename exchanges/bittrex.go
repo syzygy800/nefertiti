@@ -1036,6 +1036,10 @@ func (self *Bittrex) Cancel(client interface{}, market1 string, side model.Order
 	return nil
 }
 
+func (self *Bittrex) Coalesce(client interface{}, market string, side model.OrderSide) error {
+	return errors.New("not implemented")
+}
+
 func (self *Bittrex) Buy(client interface{}, cancel bool, market1 string, calls model.Calls, deviation float64, kind model.OrderType) error {
 	var err error
 

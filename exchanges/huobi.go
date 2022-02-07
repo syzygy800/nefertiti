@@ -780,6 +780,10 @@ func (self *Huobi) Cancel(client interface{}, market string, side model.OrderSid
 	return nil
 }
 
+func (self *Huobi) Coalesce(client interface{}, market string, side model.OrderSide) error {
+	return errors.New("not implemented")
+}
+
 func (self *Huobi) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {
 	huobiClient, ok := client.(*exchange.Client)
 	if !ok {

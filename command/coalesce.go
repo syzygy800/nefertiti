@@ -9,12 +9,12 @@ import (
 )
 
 type (
-	CancelCommand struct {
+	CoalesceCommand struct {
 		*CommandMeta
 	}
 )
 
-func (c *CancelCommand) Run(args []string) int {
+func (c *CoalesceCommand) Run(args []string) int {
 	exchange, err := exchanges.GetExchange()
 	if err != nil {
 		return c.ReturnError(err)
@@ -36,7 +36,7 @@ func (c *CancelCommand) Run(args []string) int {
 	}
 
 	if market != "all" {
-		if err = exchange.Cancel(client, market, side); err != nil {
+		if err := exchange.Coalesce(client, market, side); err != nil {
 			return c.ReturnError(err)
 		}
 		return 0
@@ -58,7 +58,7 @@ func (c *CancelCommand) Run(args []string) int {
 			}
 			return false
 		}() {
-			if err = exchange.Cancel(client, market.Name, side); err != nil {
+			if err := exchange.Coalesce(client, market.Name, side); err != nil {
 				return c.ReturnError(err)
 			}
 		}
@@ -67,11 +67,11 @@ func (c *CancelCommand) Run(args []string) int {
 	return 0
 }
 
-func (c *CancelCommand) Help() string {
+func (c *CoalesceCommand) Help() string {
 	text := `
-Usage: ./nefertiti cancel [options]
+Usage: ./nefertiti coalesce [options]
 
-The cancel command cancels all your buy or sell orders on a given market.
+The coalesce command joins orders having the same price.
 
 Options:
   --exchange = name
@@ -81,6 +81,6 @@ Options:
 	return strings.TrimSpace(text)
 }
 
-func (c *CancelCommand) Synopsis() string {
-	return "Cancels all your buy or sell orders on a given market."
+func (c *CoalesceCommand) Synopsis() string {
+	return "Coalesce orders having the same price."
 }

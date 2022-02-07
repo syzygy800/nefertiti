@@ -703,6 +703,10 @@ func (self *Woo) Cancel(client interface{}, market string, side model.OrderSide)
 	return nil
 }
 
+func (self *Woo) Coalesce(client interface{}, market string, side model.OrderSide) error {
+	return errors.New("not implemented")
+}
+
 func (self *Woo) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {
 	wooClient, ok := client.(*exchange.Client)
 	if !ok {

@@ -98,6 +98,9 @@ func main() {
 		"exit": func() (cli.Command, error) {
 			return &command.ExitCommand{CommandMeta: &cm}, nil
 		},
+		"coalesce": func() (cli.Command, error) {
+			return &command.CoalesceCommand{CommandMeta: &cm}, nil
+		},
 	}
 
 	if flag.Listen() {
