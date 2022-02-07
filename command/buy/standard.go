@@ -114,6 +114,16 @@ func Standard(
 			continue
 		}
 
+		if flag.Get("ignore").Contains("leveraged") {
+			base, err := model.GetBaseCurr(available, market)
+			if err == nil {
+				if exchange.IsLeveragedToken(base) {
+					log.Printf("[INFO] Ignoring %s because %s is a leveraged token.\n", market, base)
+					continue
+				}
+			}
+		}		
+
 		ticker, err := exchange.GetTicker(client, market)
 		if err != nil {
 			return err, market
