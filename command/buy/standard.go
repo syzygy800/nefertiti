@@ -122,7 +122,7 @@ func Standard(
 					continue
 				}
 			}
-		}		
+		}
 
 		ticker, err := exchange.GetTicker(client, market)
 		if err != nil {
