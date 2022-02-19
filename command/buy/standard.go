@@ -124,6 +124,11 @@ func Standard(
 			}
 		}
 
+		sellOrderLimit, err := flag.MaxOrders()
+		if err != nil {
+			log.Println(err)
+		}
+
 		ticker, err := exchange.GetTicker(client, market)
 		if err != nil {
 			return err, market
@@ -164,6 +169,20 @@ func Standard(
 					hasOpenSell++
 				}
 			}
+
+			// Notify and skip market if too many sell orders are open already.
+			if (hasOpenSell > sellOrderLimit) && (sellOrderLimit > 0) {
+				msg := fmt.Sprintf("Already %d sell orders for %s open. Limit is: %d!", hasOpenSell, market, sellOrderLimit)
+
+				logger.Info(msg)
+				if notifier != nil {
+					notifier.SendMessage(msg, (exchange.GetInfo().Name + " - INFO"), model.ALWAYS)
+				}
+
+				//Skip this market
+				continue
+			}
+
 			// step 1: loop through the filled BUY orders
 			closed, err := exchange.GetClosed(client, market)
 			if err != nil {
