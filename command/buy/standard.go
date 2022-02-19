@@ -156,6 +156,7 @@ func Standard(
 
 		mmin := min
 		mmax := max
+		mtop := int(top)
 
 		hasOpenSell := 0
 		// ignore supports where the price is higher than BUY order(s) that were (a) filled and (b) not been sold (yet)
@@ -170,17 +171,26 @@ func Standard(
 				}
 			}
 
-			// Notify and skip market if too many sell orders are open already.
-			if (hasOpenSell > sellOrderLimit) && (sellOrderLimit > 0) {
-				msg := fmt.Sprintf("Already %d sell orders for %s open. Limit is: %d!", hasOpenSell, market, sellOrderLimit)
+			// Notify and skip market (or adjust --top) if too many sell orders are already open.
+			if sellOrderLimit > 0 {
+				maxtop := sellOrderLimit - hasOpenSell
 
-				logger.Info(msg)
-				if notifier != nil {
-					notifier.SendMessage(msg, (exchange.GetInfo().Name + " - INFO"), model.ALWAYS)
+				if maxtop <= 0 {
+					msg := fmt.Sprintf("Already %d sell orders for %s open. Limit is: %d!", hasOpenSell, market, sellOrderLimit)
+
+					logger.Info(msg)
+					if notifier != nil {
+						notifier.SendMessage(msg, (exchange.GetInfo().Name + " - INFO"), model.ALWAYS)
+					}
+
+					//Skip this market
+					continue
+				} else {
+					if mtop > maxtop {
+						mtop = maxtop
+						logger.Info(fmt.Sprintf("Change top from %d to %d for %s", top, mtop, market))
+					}
 				}
-
-				//Skip this market
-				continue
 			}
 
 			// step 1: loop through the filled BUY orders
@@ -204,7 +214,7 @@ func Standard(
 			if agg != 0 {
 				return agg, dip, pip, nil
 			}
-			return aggregation.GetEx(exchange, client, market, ticker, avg, dip, pip, mmax, min, int(dist), pricePrec, int(top), flag.Strict())
+			return aggregation.GetEx(exchange, client, market, ticker, avg, dip, pip, mmax, min, int(dist), pricePrec, mtop, flag.Strict())
 		}()
 		if err != nil {
 			if errors.Is(err, aggregation.ECannotFindSupports) && (len(enumerable) > 1 || flag.Get("ignore").Contains("error")) {
@@ -329,10 +339,10 @@ func Standard(
 
 		// convert the aggregated order book into signals for the exchange to buy
 		calls := func() model.Calls {
-			if len(book2) < int(top) {
+			if len(book2) < mtop {
 				return book2.Calls()
 			} else {
-				return book2[:top].Calls()
+				return book2[:mtop].Calls()
 			}
 		}()
 
@@ -363,10 +373,10 @@ func Standard(
 		}
 
 		out, err := func() ([]byte, error) {
-			if len(book2) < int(top) {
+			if len(book2) < mtop {
 				return json.Marshal(book2)
 			} else {
-				return json.Marshal(book2[:top])
+				return json.Marshal(book2[:mtop])
 			}
 		}()
 		if err != nil {
