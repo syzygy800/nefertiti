@@ -357,50 +357,50 @@ Usage: ./nefertiti buy [options]
 The buy command opens new limit buy orders on the specified exchange/market(s).
 
 Global options:
-  --exchange = name, for example: Bittrex
-  --price    = the price in quote asset you will want to pay for one order.
-  --volume   = minimum BTC volume on the market(s) over the last 24 hours.
-               (optional, for example: --volume=10)
-  --min      = minimum price that you will want to pay for the base asset.
-               (optional, for example: --min=0.00000050)
-  --dca      = if included, then slowly but surely, the bot will proportionally
-               increase your bag while lowering your average buying price.
-               (optional, defaults to false)
-  --repeat   = if included, repeats this command every X hours.
-               (optional, for example: --repeat=1)	
+  --exchange   = name, for example: Bittrex
+  --price      = the price in quote asset you will want to pay for one order.
+  --volume     = minimum BTC volume on the market(s) over the last 24 hours.
+                 (optional, for example: --volume=10)
+  --min        = minimum price that you will want to pay for the base asset.
+                 (optional, for example: --min=0.00000050)
+  --dca        = if included, then slowly but surely, the bot will proportionally
+                 increase your bag while lowering your average buying price.
+                 (optional, defaults to false)
+  --repeat     = if included, repeats this command every X hours.
+                 (optional, for example: --repeat=1)
 
 Standard (built-in) strategy:
-  --market   = a comma-separated list of valid market pair(s).
-  --dip      = percentage that will kick the bot into action.
-               (optional, defaults to 5%)
-  --pip      = range in where the market is suspected to move up and down.
-               the bot will ignore supports outside of this range.
-               (optional, defaults to 30%)
-  --dist     = distribution/distance between your orders.
-               (optional, defaults to 2%)
-  --top      = number of orders to place in your book.
-               (optional, defaults to 2)   
-  --max-orders=if included, then no buy order is set, when there are already
-               [max-orders] open sell orders for the market
-               (optional, default to 0 -> check disabled)
-  --test     = if included, merely reports what it would do.
-               (optional, defaults to false)
+  --market     = a comma-separated list of valid market pair(s).
+  --dip        = percentage that will kick the bot into action.
+                 (optional, defaults to 5%)
+  --pip        = range in where the market is suspected to move up and down.
+                 the bot will ignore supports outside of this range.
+                 (optional, defaults to 30%)
+  --dist       = distribution/distance between your orders.
+                 (optional, defaults to 2%)
+  --top        = number of orders to place in your book.
+                 (optional, defaults to 2)
+  --max-orders = if included, then no buy order is set, when there are already
+                 [max-orders] open sell orders for the market
+                 (optional, default to 0 -> check disabled)
+  --test       = if included, merely reports what it would do.
+                  (optional, defaults to false)
 
 Alternative strategy:
   The trading bot can listen to signals (for example: Telegram bots) as an
   alternative to the built-in strategy. Please refer to the below options.
 
 Alternative strategy options:
-  --signals  = provider, for example: MiningHamster
-  --quote    = asset that is used as the reference, for example: BTC or USDT              
-  --devn     = buy price deviation. this multiplier is applied to the suggested
-               price from the signal, to calculate your actual limit price.
-               (optional, for example: --devn=1.01)
-  --valid    = if included, specifies the time (in hours, defaults to 1 hour)
-               that the signal is "active" for. after this timeout elapses, the
-               bot will cancel the (non-filled) limit buy order(s) associated
-               with the signal.
-               (optional, defaults to 1 hour)
+  --signals    = provider, for example: MiningHamster
+  --quote      = asset that is used as the reference, for example: BTC or USDT
+  --devn       = buy price deviation. this multiplier is applied to the suggested
+                 price from the signal, to calculate your actual limit price.
+                 (optional, for example: --devn=1.01)
+  --valid      = if included, specifies the time (in hours, defaults to 1 hour)
+                 that the signal is "active" for. after this timeout elapses, the
+                 bot will cancel the (non-filled) limit buy order(s) associated
+                 with the signal.
+                 (optional, defaults to 1 hour)
 `
 	return strings.TrimSpace(text)
 }
