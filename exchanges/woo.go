@@ -76,6 +76,10 @@ func init() {
 	}
 }
 
+const (
+	wooBrokerId = "b78822d1-dcc9-4cb1-807b-170e83aacccb"
+)
+
 type Woo struct {
 	*model.ExchangeInfo
 	symbols []exchange.Symbol
@@ -338,7 +342,7 @@ func (self *Woo) sell(
 							exchange.OrderTypeLimit,
 							qty,
 							pricing.Multiply(new[i].ExecutedAt(), mult, prec),
-							"NEF2021xxxxxxx",
+							wooBrokerId,
 						)
 					}
 				}
@@ -772,7 +776,7 @@ func (self *Woo) Buy(client interface{}, cancel bool, market string, calls model
 					return exchange.OrderTypeMarket
 				}
 				return exchange.OrderTypeLimit
-			}(), qty, limit, "NEF2021xxxxxxx"); err != nil {
+			}(), qty, limit, wooBrokerId); err != nil {
 				return errors.Wrap(err, 1)
 			}
 		}
