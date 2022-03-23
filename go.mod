@@ -8,7 +8,7 @@ require (
 	github.com/alexflint/go-filemutex v1.1.0
 	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/blang/semver v3.5.1+incompatible
-	github.com/dghubble/go-twitter v0.0.0-20211115160449-93a8679adecb
+	github.com/dghubble/go-twitter v0.0.0-20220319054129-995614af6514
 	github.com/dghubble/oauth1 v0.7.1
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
@@ -18,7 +18,7 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
-	github.com/jedib0t/go-pretty/v6 v6.2.5
+	github.com/jedib0t/go-pretty/v6 v6.2.7
 	github.com/kr/pretty v0.3.0 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mitchellh/cli v1.1.2
@@ -31,7 +31,7 @@ require (
 	github.com/svanas/go-crypto-dot-com v0.0.0-20211229175933-f764d3f91ae6
 	github.com/svanas/go-mining-hamster v0.0.0-20211213142718-f710b6b19784
 	github.com/yanzay/tbot v1.0.0
-	golang.org/x/crypto v0.0.0-20220131195533-30dcbda58838 // indirect
-	golang.org/x/sys v0.0.0-20220204135822-1c1b9b1eba6a // indirect
+	golang.org/x/crypto v0.0.0-20220321153916-2c7772ba3064 // indirect
+	golang.org/x/sys v0.0.0-20220319134239-a9b59b0215f8 // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
 )
