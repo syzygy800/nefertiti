@@ -171,6 +171,22 @@ func Standard(
 				}
 			}
 
+			// step 1: loop through the filled BUY orders
+			closed, err := exchange.GetClosed(client, market)
+			if err != nil {
+				return err, market
+			}
+			for _, fill := range closed {
+				if fill.Side == model.BUY {
+					// step 2: has this filled BUY order NOT been sold?
+					if opened.IndexByPrice(model.SELL, market, pricing.Multiply(fill.Price, mult, pricePrec)) > -1 {
+						if mmax == 0 || mmax >= fill.Price {
+							mmax = fill.Price
+						}
+					}
+				}
+			}
+
 			// Notify and skip market (or adjust --top) if too many sell orders are already open.
 			if sellOrderLimit > 0 {
 				maxtop := sellOrderLimit - hasOpenSell
@@ -189,22 +205,6 @@ func Standard(
 					if mtop > maxtop {
 						mtop = maxtop
 						logger.Info(fmt.Sprintf("Change top from %d to %d for %s", top, mtop, market))
-					}
-				}
-			}
-
-			// step 1: loop through the filled BUY orders
-			closed, err := exchange.GetClosed(client, market)
-			if err != nil {
-				return err, market
-			}
-			for _, fill := range closed {
-				if fill.Side == model.BUY {
-					// step 2: has this filled BUY order NOT been sold?
-					if opened.IndexByPrice(model.SELL, market, pricing.Multiply(fill.Price, mult, pricePrec)) > -1 {
-						if mmax == 0 || mmax >= fill.Price {
-							mmax = fill.Price
-						}
 					}
 				}
 			}
