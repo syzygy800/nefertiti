@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/svanas/nefertiti/empty"
+	"github.com/svanas/nefertiti/any"
 )
 
 type Side int
@@ -50,7 +50,7 @@ func (order *Order) Side() Side {
 }
 
 func (order *Order) GetTime() (time.Time, error) {
-	sec, err := strconv.ParseInt(empty.AsString(order.Time), 10, 64)
+	sec, err := strconv.ParseInt(any.AsString(order.Time), 10, 64)
 	if err != nil {
 		return time.Unix(0, 0), err
 	}

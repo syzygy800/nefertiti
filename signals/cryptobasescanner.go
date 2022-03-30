@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/svanas/nefertiti/empty"
+	"github.com/svanas/nefertiti/any"
 	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/flag"
 	"github.com/svanas/nefertiti/model"
@@ -97,7 +97,7 @@ func (self *CryptoBase) GetCrackedAt() (*time.Time, error) {
 		src string
 		out time.Time
 	)
-	src = empty.AsString(self.LatestBase.CrackedAt)
+	src = any.AsString(self.LatestBase.CrackedAt)
 	if src == "" {
 		out = time.Now()
 	} else {
