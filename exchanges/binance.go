@@ -469,6 +469,24 @@ func (self *Binance) sell(
 					)
 					if base, quote, err = model.ParseMarket(markets, order.Symbol); err == nil {
 						qty := self.GetMaxSize(client, base, quote, hold.HasMarket(order.Symbol), earn.HasMarket(order.Symbol), order.GetSize(), mult)
+
+						// Don't set buy orders for these markets
+						if order.Symbol == "ETHBTC" {
+							msgtit := "Binance - Not setting buy order"
+							msgtxt := fmt.Sprintf("%v %v %v %v %v",
+								order.ClientOrderID,
+								order.Price,
+								order.Time,
+								order.ExecutedQuantity,
+								order.CummulativeQuoteQuantity)
+
+							if err = service.SendMessage(msgtxt, msgtit, model.ALWAYS); err != nil {
+								log.Printf("[ERROR] %v", err)
+							}
+
+							qty = 0
+						}
+
 						if qty > 0 {
 							var prec int
 							if prec, err = self.GetPricePrec(client, order.Symbol); err == nil {
