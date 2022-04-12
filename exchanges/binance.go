@@ -877,8 +877,13 @@ func getBoughtAt(order binance.Order, mult float64) float64 {
 	var parts = strings.Split(coid, "-")
 	var err error
 
-	// Orders set via the web frontend contain no metadata
-	if !strings.Contains(coid, "web_") {
+	if strings.Contains(coid, "web_") {
+		// Orders set via the web frontend contain no metadata assume "--mult"
+		price = order.GetPrice() / mult
+	} else if strings.Contains(coid, "grid_") {
+		// Orders set via Binance Grid Trading contain no metadata.
+		price = math.Inf(1)
+	} else {
 
 		// format after 0.0.172
 		if len(parts) == 4 {
@@ -894,8 +899,6 @@ func getBoughtAt(order binance.Order, mult float64) float64 {
 				price = order.GetPrice() / mult
 			}
 		}
-	} else {
-		price = order.GetPrice() / mult
 	}
 
 	if math.IsInf(price, 0) && flag.Debug() {
