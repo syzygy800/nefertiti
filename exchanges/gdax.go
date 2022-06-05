@@ -108,7 +108,12 @@ func (self *Gdax) getMinOrderSize(client interface{}, market string) (float64, e
 		return 0, err
 	}
 
-	output, err := gdax.GetMinOrderSize(product)
+	gdaxClient, ok := client.(*gdax.Client)
+	if !ok {
+		return 0, errors.New("invalid argument: client")
+	}	
+
+	output, err := gdax.GetMinOrderSize(gdaxClient, product)
 	if err != nil {
 		return 0, err
 	}
@@ -499,7 +504,7 @@ func (self *Gdax) sell(
 											}
 
 											var qty float64
-											if qty, err = gdax.GetMinOrderSize(&product); err != nil {
+											if qty, err = gdax.GetMinOrderSize(client, &product); err != nil {
 												logger.Error(self.Name, err, level, service)
 											} else {
 												if hold.HasMarket(product.ID) {

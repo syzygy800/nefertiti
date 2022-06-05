@@ -27,7 +27,7 @@ require (
 	github.com/rhysd/go-github-selfupdate v1.2.3
 	github.com/rogpeppe/go-internal v1.8.1 // indirect
 	github.com/smartystreets/goconvey v1.7.2 // indirect
-	github.com/svanas/go-coinbasepro v0.0.0-20210706151135-3ac97ad777f0
+	github.com/svanas/go-coinbasepro v0.0.0-20220605180358-e165941361a6
 	github.com/svanas/go-crypto-dot-com v0.0.0-20211229175933-f764d3f91ae6
 	github.com/svanas/go-mining-hamster v0.0.0-20211213142718-f710b6b19784
 	github.com/yanzay/tbot v1.0.0

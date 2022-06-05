@@ -169,6 +169,8 @@ github.com/stretchr/testify v1.7.1 h1:5TQK59W5E3v0r2duFAb7P95B6hEeOyEnHRa8MjYSMT
 github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/svanas/go-coinbasepro v0.0.0-20210706151135-3ac97ad777f0 h1:HgPnvZJXHFgqdHY6JBc1vHImCXTwGZHZ3NvgpHSfU2Q=
 github.com/svanas/go-coinbasepro v0.0.0-20210706151135-3ac97ad777f0/go.mod h1:j/XCmlCzuAykfb9KUZATFRcvttTwn7QUL0yKLgRJg2s=
+github.com/svanas/go-coinbasepro v0.0.0-20220605180358-e165941361a6 h1:aPEb49nbNqa66If/bbG1reaMkGTV6zv6AalwNiX8ZzA=
+github.com/svanas/go-coinbasepro v0.0.0-20220605180358-e165941361a6/go.mod h1:j/XCmlCzuAykfb9KUZATFRcvttTwn7QUL0yKLgRJg2s=
 github.com/svanas/go-crypto-dot-com v0.0.0-20211229175933-f764d3f91ae6 h1:FVataGKCXTPWXHUmbz3Noufnb7iC+DXW8OOfP5qaCas=
 github.com/svanas/go-crypto-dot-com v0.0.0-20211229175933-f764d3f91ae6/go.mod h1:vs0zlihKJc7a0QxDGQ4m+etjNI/rySa3vXTQJt5fVOA=
 github.com/svanas/go-mining-hamster v0.0.0-20211213142718-f710b6b19784 h1:8PARshewhBPGWh3PDBv/HvvBPf6f/PCql4MJz+9542M=
