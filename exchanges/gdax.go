@@ -111,7 +111,7 @@ func (self *Gdax) getMinOrderSize(client interface{}, market string) (float64, e
 	gdaxClient, ok := client.(*gdax.Client)
 	if !ok {
 		return 0, errors.New("invalid argument: client")
-	}	
+	}
 
 	output, err := gdax.GetMinOrderSize(gdaxClient, product)
 	if err != nil {

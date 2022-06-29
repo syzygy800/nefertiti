@@ -265,7 +265,7 @@ func (self *Bitstamp) sell(
 						}
 					}
 				}
-				log.Printf("[WARN] user_transactions/%s returned %d orders, expected at least %d.", market.Name, len(this), len(prev))
+				log.Printf("[WARN] user_transactions/%s returned %d orders, expected at least %d. Giving it another try.", market.Name, len(this), len(prev))
 			}
 		}
 	}
@@ -434,18 +434,25 @@ func (self *Bitstamp) Sell(
 
 	// get my transaction history
 	var (
-		markets      []exchange.Market
+		markets      []model.Market
 		transactions exchange.Transactions
 	)
-	if markets, err = exchange.GetMarkets(client, true); err != nil {
+	if markets, err = self.GetMarkets(true, sandbox, nil); err != nil {
 		return err
 	}
 	for _, market := range markets {
-		var txn exchange.Transactions
-		if txn, err = client.GetUserTransactions(market.Name); err != nil {
-			return err
+		attempts := 0
+		for {
+			attempts++
+			var txn exchange.Transactions
+			if txn, err = client.GetUserTransactions(market.Name); err != nil {
+				return err
+			}
+			if len(txn) > 0 || attempts >= 10 {
+				transactions = append(transactions, txn...)
+				break
+			}
 		}
-		transactions = append(transactions, txn...)
 	}
 
 	if err = success(service); err != nil {

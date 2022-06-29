@@ -274,7 +274,11 @@ func (self *Bittrex) getMarket(client *exchange.Client, market1 string) (*exchan
 func (self *Bittrex) marketOnline(client *exchange.Client, market1 string) (bool, error) {
 	market3, err := self.getMarket(client, market1)
 	if err != nil {
-		return false, err
+		if err.Error() == fmt.Sprintf("market %s does not exist", market1) {
+			return false, nil
+		} else {
+			return false, err
+		}
 	}
 	return market3.Online(), nil
 }
