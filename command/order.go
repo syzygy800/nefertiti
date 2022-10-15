@@ -3,6 +3,7 @@ package command
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/svanas/nefertiti/errors"
 	"github.com/svanas/nefertiti/exchanges"
@@ -92,13 +93,15 @@ func (c *OrderCommand) Run(args []string) int {
 		oid []byte
 		raw []byte
 	)
+
 	if oid, raw, err = exchange.Order(
 		client,
 		side,
 		market,
 		size,
 		price,
-		kind, "",
+		kind,
+		time.Now().Format("150405.000000000"),
 	); err != nil {
 		return c.ReturnError(err)
 	}
