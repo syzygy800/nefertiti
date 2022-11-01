@@ -305,7 +305,14 @@ func (self *Bittrex) GetMarkets(cached, sandbox bool, ignore []string) ([]model.
 	}
 
 	for _, market := range self.markets {
-		if market.Active() && !market.IsProhibited(ignore) {
+		if market.Active() && !market.IsProhibited(ignore) && func() bool {
+			for _, name := range ignore {
+				if strings.EqualFold(market.MarketName(), name) {
+					return false
+				}
+			}
+			return true
+		}() {
 			out = append(out, model.Market{
 				Name:  market.MarketName(),
 				Base:  market.BaseCurrencySymbol,
