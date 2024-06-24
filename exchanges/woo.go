@@ -76,6 +76,10 @@ func init() {
 	}
 }
 
+const (
+	wooBrokerId = "b78822d1-dcc9-4cb1-807b-170e83aacccb"
+)
+
 type Woo struct {
 	*model.ExchangeInfo
 	symbols []exchange.Symbol
@@ -338,19 +342,14 @@ func (self *Woo) sell(
 							exchange.OrderTypeLimit,
 							qty,
 							pricing.Multiply(new[i].ExecutedAt(), mult, prec),
-							"NEF2021xxxxxxx",
+							wooBrokerId,
 						)
 					}
 				}
 			}
 
 			if err != nil {
-				data, _ := json.Marshal(new[i])
-				if data == nil {
-					logger.Error(self.Name, err, level, service)
-				} else {
-					logger.Error(self.Name, errors.Append(err, "\t", string(data)), level, service)
-				}
+				logger.Error(self.Name, errors.Append(errors.Wrap(err, 1), new[i]), level, service)
 			}
 		}
 	}
@@ -708,6 +707,10 @@ func (self *Woo) Cancel(client interface{}, market string, side model.OrderSide)
 	return nil
 }
 
+func (self *Woo) Coalesce(client interface{}, market string, side model.OrderSide) error {
+	return errors.New("not implemented")
+}
+
 func (self *Woo) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {
 	wooClient, ok := client.(*exchange.Client)
 	if !ok {
@@ -773,7 +776,7 @@ func (self *Woo) Buy(client interface{}, cancel bool, market string, calls model
 					return exchange.OrderTypeMarket
 				}
 				return exchange.OrderTypeLimit
-			}(), qty, limit, "NEF2021xxxxxxx"); err != nil {
+			}(), qty, limit, wooBrokerId); err != nil {
 				return errors.Wrap(err, 1)
 			}
 		}

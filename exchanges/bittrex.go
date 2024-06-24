@@ -274,7 +274,11 @@ func (self *Bittrex) getMarket(client *exchange.Client, market1 string) (*exchan
 func (self *Bittrex) marketOnline(client *exchange.Client, market1 string) (bool, error) {
 	market3, err := self.getMarket(client, market1)
 	if err != nil {
-		return false, err
+		if err.Error() == fmt.Sprintf("market %s does not exist", market1) {
+			return false, nil
+		} else {
+			return false, err
+		}
 	}
 	return market3.Online(), nil
 }
@@ -301,7 +305,14 @@ func (self *Bittrex) GetMarkets(cached, sandbox bool, ignore []string) ([]model.
 	}
 
 	for _, market := range self.markets {
-		if market.Active() && !market.IsProhibited(ignore) {
+		if market.Active() && !market.IsProhibited(ignore) && func() bool {
+			for _, name := range ignore {
+				if strings.EqualFold(market.MarketName(), name) {
+					return false
+				}
+			}
+			return true
+		}() {
 			out = append(out, model.Market{
 				Name:  market.MarketName(),
 				Base:  market.BaseCurrencySymbol,
@@ -471,7 +482,7 @@ func (self *Bittrex) sell(
 							if func() bool {
 								sold := order.Price()
 								if sold > 0 {
-									bought := sold * (1 + (1 - float64(stop)))
+									bought := sold / float64(stop)
 									if bought > sold {
 										ticker, _ := self.GetTicker(client, order.MarketName())
 										if ticker > bought {
@@ -484,18 +495,16 @@ func (self *Bittrex) sell(
 							}() {
 								var (
 									prec int
-									size float64 = 2.2 * order.QuantityFilled()
+									size float64
 								)
 								if prec, err = self.GetSizePrec(client, order.MarketName()); err != nil {
 									return new, err
 								}
+								if size, err = multiplier.DoubleOrNothing(order.QuantityFilled(), prec, order.Price()); err != nil {
+									return new, err
+								}
 								for {
-									_, _, err = self.Order(client,
-										model.BUY,
-										order.MarketName(),
-										precision.Round(size, prec),
-										0, model.MARKET, "",
-									)
+									_, _, err = self.Order(client, model.BUY, order.MarketName(), size, 0, model.MARKET, "")
 									if err == nil {
 										break
 									} else if !strings.Contains(err.Error(), "ORDERBOOK_DEPTH") {
@@ -574,7 +583,7 @@ func (self *Bittrex) sell(
 						}
 					}
 					if err != nil {
-						return new, errors.Append(err, "\t", string(data))
+						return new, errors.Append(err, order)
 					}
 				}
 			}
@@ -669,11 +678,11 @@ func (self *Bittrex) Sell(
 				if side != model.ORDER_SIDE_NONE {
 					var online bool
 					if online, err = self.marketOnline(client, order.MarketName()); err != nil {
-						logger.ErrorEx(self.Name, err, &order, level, service)
+						logger.Error(self.Name, errors.Append(err, order), level, service)
 					} else if online {
 						var openedAt time.Time
 						if openedAt, err = time.Parse(exchange.TIME_FORMAT, order.CreatedAt); err != nil {
-							logger.ErrorEx(self.Name, errors.Wrap(err, 1), &order, level, service)
+							logger.Error(self.Name, errors.Append(errors.Wrap(err, 1), order), level, service)
 						} else if time.Since(openedAt).Hours() >= float64(reopenAfterDays*24) {
 							logger.InfoEx(self.Name, fmt.Sprintf(
 								"Cancelling (and reopening) limit %s %s (market: %s, price: %g, qty: %f, opened at %s) because it is older than %d days.",
@@ -690,7 +699,7 @@ func (self *Bittrex) Sell(
 							}
 
 							if err != nil {
-								logger.ErrorEx(self.Name, errors.Wrap(err, 1), &order, level, service)
+								logger.Error(self.Name, errors.Append(errors.Wrap(err, 1), order), level, service)
 							}
 						}
 					}
@@ -965,15 +974,19 @@ func (self *Bittrex) Get24h(client interface{}, market1 string) (*model.Stats, e
 		Market: market1,
 		High:   sum.High,
 		Low:    sum.Low,
-		BtcVolume: func() float64 {
+		BtcVolume: func(ticker1 *exchange.MarketSummary) float64 {
 			_, quote, err := bittrexParseMarket(market1, 1)
 			if err == nil {
 				if strings.EqualFold(quote, model.BTC) {
-					return sum.QuoteVolume
+					return ticker1.QuoteVolume
+				}
+				ticker2, err := bittrex.GetTicker(self.FormatMarket(model.BTC, quote))
+				if err == nil {
+					return ticker1.QuoteVolume / ticker2.LastTradeRate
 				}
 			}
 			return 0
-		}(),
+		}(sum),
 	}, nil
 }
 
@@ -1032,6 +1045,10 @@ func (self *Bittrex) Cancel(client interface{}, market1 string, side model.Order
 	}
 
 	return nil
+}
+
+func (self *Bittrex) Coalesce(client interface{}, market string, side model.OrderSide) error {
+	return errors.New("not implemented")
 }
 
 func (self *Bittrex) Buy(client interface{}, cancel bool, market1 string, calls model.Calls, deviation float64, kind model.OrderType) error {

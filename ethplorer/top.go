@@ -3,7 +3,7 @@ package ethplorer
 import (
 	"strconv"
 
-	"github.com/svanas/nefertiti/empty"
+	"github.com/svanas/nefertiti/any"
 )
 
 type (
@@ -15,17 +15,17 @@ type (
 )
 
 func (top *Top) ParseVolumeCurrent() float64 {
-	if out, err := strconv.ParseFloat(empty.AsString(top.VolumeCurrent), 64); err != nil {
+	if out, err := strconv.ParseFloat(any.AsString(top.VolumeCurrent), 64); err != nil {
 		return out
 	}
-	return empty.AsFloat64(top.VolumeCurrent)
+	return any.AsFloat64(top.VolumeCurrent)
 }
 
 func (top *Top) ParseVolumePrevious() float64 {
-	if out, err := strconv.ParseFloat(empty.AsString(top.VolumePrevious), 64); err != nil {
+	if out, err := strconv.ParseFloat(any.AsString(top.VolumePrevious), 64); err != nil {
 		return out
 	}
-	return empty.AsFloat64(top.VolumePrevious)
+	return any.AsFloat64(top.VolumePrevious)
 }
 
 func (top *Top) VolumeDiff() float64 {

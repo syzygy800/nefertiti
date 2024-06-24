@@ -3,7 +3,7 @@ package ethplorer
 import (
 	"strconv"
 
-	"github.com/svanas/nefertiti/empty"
+	"github.com/svanas/nefertiti/any"
 )
 
 type (
@@ -14,8 +14,8 @@ type (
 )
 
 func (price *Price) ParseRate() float64 {
-	if out, err := strconv.ParseFloat(empty.AsString(price.Rate), 64); err != nil {
+	if out, err := strconv.ParseFloat(any.AsString(price.Rate), 64); err != nil {
 		return out
 	}
-	return empty.AsFloat64(price.Rate)
+	return any.AsFloat64(price.Rate)
 }

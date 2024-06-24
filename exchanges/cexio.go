@@ -719,6 +719,10 @@ func (self *CexIo) Cancel(client interface{}, market string, side model.OrderSid
 	return nil
 }
 
+func (self *CexIo) Coalesce(client interface{}, market string, side model.OrderSide) error {
+	return errors.New("not implemented")
+}
+
 func (self *CexIo) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {
 	var err error
 

@@ -2,10 +2,12 @@ package errors
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"unicode"
 )
 
 // The maximum number of stackframes on any error.
@@ -94,17 +96,27 @@ func Errorf(format string, a ...interface{}) *Error {
 
 // Error returns the underlying error's message.
 func (err *Error) Error() string {
-	return err.Err.Error()
+	out := err.Err.Error()
+	for _, str := range err.suffix {
+		if len(str) > 0 {
+			if len(out) > 0 && out[len(out)-1] != '.' {
+				out += "."
+			}
+			if !unicode.IsSpace(rune(str[0])) {
+				out += " "
+			}
+			out += str
+		}
+	}
+	return out
 }
 
 // Stack returns the callstack formatted the same way that go does in runtime/debug.Stack()
 func (err *Error) Stack() []byte {
 	buf := bytes.Buffer{}
-
 	for _, frame := range err.StackFrames() {
 		buf.WriteString(frame.String())
 	}
-
 	return buf.Bytes()
 }
 
@@ -114,48 +126,25 @@ func (err *Error) Callers() []uintptr {
 }
 
 // ErrorStack returns a string that contains both the error message and the callstack.
-// The prefix parameter is used to add a prefix to the error message.
-// The suffix parameter is used to add a suffix to the error message.
-func (err *Error) ErrorStack(prefix, suffix string) string {
-	var msg string
-	if prefix != "" {
-		msg = prefix
-	} else {
-		msg = err.TypeName()
-	}
-
-	if msg != "" {
-		msg = msg + " "
-	}
-	msg = msg + err.Error()
-	if suffix != "" {
-		if suffix[0] != ' ' {
-			msg = msg + " "
+// The prefix parameter is used to add an optional prefix to the error message.
+func (err *Error) ErrorStack(prefix string) string {
+	return func() string {
+		if prefix != "" {
+			return prefix
+		} else {
+			return err.TypeName()
 		}
-		msg = msg + suffix
-	}
-
-	if len(err.suffix) > 0 {
-		for _, str := range err.suffix {
-			msg = msg + "\n" + str
-		}
-	}
-
-	msg = msg + "\n" + string(err.Stack())
-
-	return msg
+	}() + " " + err.Error() + "\n" + string(err.Stack())
 }
 
 // StackFrames returns an array of frames containing information about the stack.
 func (err *Error) StackFrames() []StackFrame {
 	if err.frames == nil {
 		err.frames = make([]StackFrame, len(err.stack))
-
 		for i, pc := range err.stack {
 			err.frames[i] = NewStackFrame(pc)
 		}
 	}
-
 	return err.frames
 }
 
@@ -164,8 +153,18 @@ func (err *Error) TypeName() string {
 	return reflect.TypeOf(err.Err).String()
 }
 
-// Appends one ore more suffixes to this error. Every suffix is prefixed with this prefix.
-func Append(err error, prefix string, suffix ...string) *Error {
+// Remove the suffix(es) from this error (if any)
+func Clear(err error) error {
+	if err != nil {
+		if e, ok := err.(*Error); ok {
+			e.suffix = nil
+		}
+	}
+	return err
+}
+
+// Appends a suffix to this error.
+func Append(err error, suffix interface{}) *Error {
 	if err == nil {
 		return nil
 	}
@@ -179,12 +178,26 @@ func Append(err error, prefix string, suffix ...string) *Error {
 		out = Wrap(e, 1)
 	}
 
-	if prefix == "" {
-		out.suffix = append(out.suffix, suffix...)
-	} else {
-		for _, line := range suffix {
-			out.suffix = append(out.suffix, (prefix + line))
+	new := func() string {
+		if str, ok := suffix.(string); ok {
+			return str
 		}
+		if buf, _ := json.Marshal(suffix); buf != nil {
+			return string(buf)
+		}
+		return ""
+	}()
+
+	// do not add any empty or duplicate strings
+	if new != "" && !func() bool {
+		for _, old := range out.suffix {
+			if new == old {
+				return true
+			}
+		}
+		return false
+	}() {
+		out.suffix = append(out.suffix, new)
 	}
 
 	return out

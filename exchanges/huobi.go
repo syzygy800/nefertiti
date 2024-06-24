@@ -408,12 +408,7 @@ func (self *Huobi) sell(
 			}
 
 			if err != nil {
-				data, _ := json.Marshal(new[i])
-				if data == nil {
-					logger.Error(self.Name, err, level, service)
-				} else {
-					logger.Error(self.Name, errors.Append(err, "\t", string(data)), level, service)
-				}
+				logger.Error(self.Name, errors.Append(errors.Wrap(err, 1), new[i]), level, service)
 			}
 		}
 	}
@@ -783,6 +778,10 @@ func (self *Huobi) Cancel(client interface{}, market string, side model.OrderSid
 	}
 
 	return nil
+}
+
+func (self *Huobi) Coalesce(client interface{}, market string, side model.OrderSide) error {
+	return errors.New("not implemented")
 }
 
 func (self *Huobi) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {

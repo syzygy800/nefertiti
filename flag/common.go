@@ -35,12 +35,10 @@ func Dip(def float64) (float64, error) {
 }
 
 // --pip=[dip..100]
-func Pip() (float64, error) {
-	var (
-		err error
-		dip float64 = 5
-		pip float64 = 30
-	)
+func Pip(def float64) (float64, error) {
+	var err error
+	dip := 5.0
+	pip := def
 	arg := Get("pip")
 	if !arg.Exists {
 		Set("pip", strconv.FormatFloat(pip, 'f', -1, 64))
@@ -89,18 +87,16 @@ func Min() (float64, error) {
 }
 
 // --dist=X
-func Dist() (int64, error) {
-	var (
-		err  error
-		dist int64 = 2
-	)
+func Dist(def int64) (int64, error) {
+	var err error
+	out := def
 	arg := Get("dist")
 	if arg.Exists {
-		if dist, err = arg.Int64(); err != nil {
-			return dist, errors.Errorf("dist %v is invalid", arg)
+		if out, err = arg.Int64(); err != nil {
+			return out, errors.Errorf("dist %v is invalid", arg)
 		}
 	}
-	return dist, nil
+	return out, nil
 }
 
 // --sandbox=[Y|N]

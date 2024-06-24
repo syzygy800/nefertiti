@@ -470,14 +470,14 @@ func (self *Kucoin) sell(
 					if opened.Find(&cb) > -1 {
 						log.Printf("[INFO] Not re-buying %s because you have at least one active (non-filled) stop-loss order.\n", symbol)
 					} else {
-						prec := 0
-						size := 2.2 * stop.Size
+						var (
+							prec int
+							size float64
+						)
 						if prec, err = self.GetSizePrec(client, symbol); err == nil {
-							_, _, err = self.Order(client,
-								model.BUY, symbol,
-								precision.Round(size, prec),
-								0, model.MARKET, "",
-							)
+							if size, err = multiplier.DoubleOrNothing(stop.Size, prec, avg(stop)); err == nil {
+								_, _, err = self.Order(client, model.BUY, symbol, size, 0, model.MARKET, "")
+							}
 						}
 						if err != nil {
 							logger.Error(self.Name, err, level, service)
@@ -539,12 +539,7 @@ func (self *Kucoin) sell(
 		}
 
 		if err != nil {
-			var data []byte
-			if data, _ = json.Marshal(buy); data == nil {
-				logger.Error(self.Name, err, level, service)
-			} else {
-				logger.Error(self.Name, errors.Append(err, "\t", string(data)), level, service)
-			}
+			logger.Error(self.Name, errors.Append(err, buy), level, service)
 		}
 	}
 
@@ -728,12 +723,7 @@ func (self *Kucoin) Sell(
 							}
 						}
 						if err != nil {
-							var data []byte
-							if data, _ = json.Marshal(order); data == nil {
-								logger.Error(self.Name, err, level, service)
-							} else {
-								logger.Error(self.Name, errors.Append(err, "\t", string(data)), level, service)
-							}
+							logger.Error(self.Name, errors.Append(errors.Wrap(err, 1), order), level, service)
 						}
 					}
 				}
@@ -994,12 +984,12 @@ func (self *Kucoin) Get24h(client interface{}, market string) (*model.Stats, err
 	var (
 		err  error
 		resp *exchange.ApiResponse
-		json exchange.Stats24hrModel
+		stat exchange.Stats24hrModel
 	)
 	if resp, err = kucoin.Stats24hr(market); err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
-	if err = resp.ReadData(&json); err != nil {
+	if err = resp.ReadData(&stat); err != nil {
 		return nil, errors.Wrap(err, 1)
 	}
 
@@ -1007,10 +997,10 @@ func (self *Kucoin) Get24h(client interface{}, market string) (*model.Stats, err
 		high float64
 		low  float64
 	)
-	if high, err = strconv.ParseFloat(json.High, 64); err != nil {
+	if high, err = strconv.ParseFloat(stat.High, 64); err != nil {
 		return nil, err
 	}
-	if low, err = strconv.ParseFloat(json.Low, 64); err != nil {
+	if low, err = strconv.ParseFloat(stat.Low, 64); err != nil {
 		return nil, err
 	}
 
@@ -1018,18 +1008,23 @@ func (self *Kucoin) Get24h(client interface{}, market string) (*model.Stats, err
 		Market: market,
 		High:   high,
 		Low:    low,
-		BtcVolume: func() float64 {
+		BtcVolume: func(ticker1 exchange.Stats24hrModel) float64 {
 			symbol, err := self.getSymbol(kucoin, market)
 			if err == nil {
-				if strings.EqualFold(symbol.QuoteCurrency, model.BTC) {
-					out, err := strconv.ParseFloat(json.VolValue, 64)
-					if err == nil {
-						return out
+				volume, err := strconv.ParseFloat(ticker1.VolValue, 64)
+				if err == nil {
+					if strings.EqualFold(symbol.QuoteCurrency, model.BTC) {
+						return volume
+					} else {
+						ticker2, err := self.GetTicker(client, self.FormatMarket(model.BTC, symbol.QuoteCurrency))
+						if err == nil {
+							return volume / ticker2
+						}
 					}
 				}
 			}
 			return 0
-		}(),
+		}(stat),
 	}, nil
 }
 
@@ -1098,6 +1093,10 @@ func (self *Kucoin) Cancel(client interface{}, market string, side model.OrderSi
 	}
 
 	return nil
+}
+
+func (self *Kucoin) Coalesce(client interface{}, market string, side model.OrderSide) error {
+	return errors.New("not implemented")
 }
 
 func (self *Kucoin) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {

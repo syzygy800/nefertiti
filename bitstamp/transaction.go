@@ -5,7 +5,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/svanas/nefertiti/empty"
+	"github.com/svanas/nefertiti/any"
 	"github.com/svanas/nefertiti/errors"
 )
 
@@ -14,7 +14,7 @@ type (
 )
 
 func (transaction *Transaction) OrderId() string {
-	return empty.AsString((*transaction)["order_id"])
+	return any.AsString((*transaction)["order_id"])
 }
 
 func (transaction *Transaction) Market(client *Client) string {
@@ -23,7 +23,7 @@ func (transaction *Transaction) Market(client *Client) string {
 		markets, _ := GetMarkets(client, cached)
 		for i := range markets {
 			price := (*transaction)[fmt.Sprintf("%s_%s", markets[i].Base, markets[i].Quote)]
-			if empty.AsString(price) != "" {
+			if any.AsString(price) != "" {
 				return markets[i].Name
 			}
 		}
@@ -40,8 +40,8 @@ func (transaction *Transaction) Price(client *Client) float64 {
 		markets, _ := GetMarkets(client, cached)
 		for i := range markets {
 			price := (*transaction)[fmt.Sprintf("%s_%s", markets[i].Base, markets[i].Quote)]
-			if empty.AsString(price) != "" {
-				return empty.AsFloat64(price)
+			if any.AsString(price) != "" {
+				return any.AsFloat64(price)
 			}
 		}
 		if !cached {
@@ -57,8 +57,8 @@ func (transaction *Transaction) Amount(client *Client) float64 {
 		markets, _ := GetMarkets(client, cached)
 		for i := range markets {
 			price := (*transaction)[fmt.Sprintf("%s_%s", markets[i].Base, markets[i].Quote)]
-			if empty.AsString(price) != "" {
-				return math.Abs(empty.AsFloat64((*transaction)[markets[i].Base]))
+			if any.AsString(price) != "" {
+				return math.Abs(any.AsFloat64((*transaction)[markets[i].Base]))
 			}
 		}
 		if !cached {
@@ -74,15 +74,15 @@ func (transaction *Transaction) Side(client *Client) (string, error) {
 		markets, _ := GetMarkets(client, cached)
 		for i := range markets {
 			price := (*transaction)[fmt.Sprintf("%s_%s", markets[i].Base, markets[i].Quote)]
-			if empty.AsString(price) != "" {
-				quote := empty.AsFloat64((*transaction)[markets[i].Quote])
+			if any.AsString(price) != "" {
+				quote := any.AsFloat64((*transaction)[markets[i].Quote])
 				if quote < 0 {
 					return BUY, nil
 				}
 				if quote > 0 {
 					return SELL, nil
 				}
-				base := empty.AsFloat64((*transaction)[markets[i].Base])
+				base := any.AsFloat64((*transaction)[markets[i].Base])
 				if base < 0 {
 					return SELL, nil
 				}
@@ -102,7 +102,7 @@ func (transaction *Transaction) DateTime() time.Time {
 	dt := (*transaction)["datetime"]
 	var out time.Time
 	if dt != nil {
-		out, _ = time.Parse(TimeFormat, empty.AsString(dt))
+		out, _ = time.Parse(TimeFormat, any.AsString(dt))
 	}
 	return out
 }

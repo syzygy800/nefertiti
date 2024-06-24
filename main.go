@@ -98,6 +98,9 @@ func main() {
 		"exit": func() (cli.Command, error) {
 			return &command.ExitCommand{CommandMeta: &cm}, nil
 		},
+		"coalesce": func() (cli.Command, error) {
+			return &command.CoalesceCommand{CommandMeta: &cm}, nil
+		},
 	}
 
 	if flag.Listen() {
@@ -146,7 +149,7 @@ func main() {
 		prefix := errors.FormatCaller(cnt, file, line)
 		_, ok := err.(*errors.Error)
 		if ok && flag.Debug() {
-			log.Printf("[ERROR] %s", err.(*errors.Error).ErrorStack(prefix, ""))
+			log.Printf("[ERROR] %s", err.(*errors.Error).ErrorStack(prefix))
 		} else {
 			log.Printf("[ERROR] %s", fmt.Sprintf("%s %v", prefix, err))
 		}

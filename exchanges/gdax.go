@@ -102,32 +102,23 @@ type Gdax struct {
 	products []exchange.Product
 }
 
-func (self *Gdax) getMinOrderSize(client *gdax.Client, market string) (float64, error) {
-	cached := true
-	for {
-		products, err := self.getProducts(client, cached)
-
-		if err != nil {
-			return 0, err
-		}
-
-		for _, product := range products {
-			if product.ID == market {
-				out, err := gdax.GetMinOrderSize(&product)
-				if err != nil {
-					return 0, err
-				} else {
-					return out, nil
-				}
-			}
-		}
-
-		if cached {
-			cached = false
-		} else {
-			return 0, errors.Errorf("market %s does not exist", market)
-		}
+func (self *Gdax) getMinOrderSize(client interface{}, market string) (float64, error) {
+	product, err := self.getProduct(client, market)
+	if err != nil {
+		return 0, err
 	}
+
+	gdaxClient, ok := client.(*gdax.Client)
+	if !ok {
+		return 0, errors.New("invalid argument: client")
+	}
+
+	output, err := gdax.GetMinOrderSize(gdaxClient, product)
+	if err != nil {
+		return 0, err
+	}
+
+	return output, nil
 }
 
 func (self *Gdax) GetInfo() *model.ExchangeInfo {
@@ -164,15 +155,40 @@ func (self *Gdax) GetClient(permission model.Permission, sandbox bool) (interfac
 	return self.getClient(apiKey, apiSecret, apiPassphrase, sandbox), nil
 }
 
+func (self *Gdax) getProduct(client interface{}, market string) (*exchange.Product, error) {
+	cached := true
+	for {
+		products, err := self.getProducts(client, cached)
+		if err != nil {
+			return nil, err
+		}
+		for _, product := range products {
+			if product.ID == market {
+				return &product, nil
+			}
+		}
+		if !cached {
+			return nil, errors.Errorf("market %s does not exist", market)
+		}
+		cached = false
+	}
+}
+
 func (self *Gdax) getProducts(client interface{}, cached bool) ([]exchange.Product, error) {
 	if self.products == nil || !cached {
 		gdaxClient, ok := client.(*gdax.Client)
 		if !ok {
 			return nil, errors.New("invalid argument: client")
 		}
-		var err error
-		if self.products, err = gdaxClient.GetProducts(); err != nil {
+		products, err := gdaxClient.GetProducts()
+		if err != nil {
 			return nil, err
+		}
+		self.products = nil
+		for _, product := range products {
+			if !product.CancelOnly && !product.TradingDisabled {
+				self.products = append(self.products, product)
+			}
 		}
 	}
 	return self.products, nil
@@ -488,7 +504,7 @@ func (self *Gdax) sell(
 											}
 
 											var qty float64
-											if qty, err = gdax.GetMinOrderSize(&product); err != nil {
+											if qty, err = gdax.GetMinOrderSize(client, &product); err != nil {
 												logger.Error(self.Name, err, level, service)
 											} else {
 												if hold.HasMarket(product.ID) {
@@ -852,29 +868,19 @@ func (self *Gdax) Get24h(client interface{}, market string) (*model.Stats, error
 }
 
 func (self *Gdax) GetPricePrec(client interface{}, market string) (int, error) {
-	products, err := self.getProducts(client, true)
+	product, err := self.getProduct(client, market)
 	if err != nil {
 		return 8, err
 	}
-	for _, p := range products {
-		if p.ID == market {
-			return precision.Parse(p.QuoteIncrement, 8), nil
-		}
-	}
-	return 8, errors.Errorf("market %s not found", market)
+	return precision.Parse(product.QuoteIncrement, 8), nil
 }
 
 func (self *Gdax) GetSizePrec(client interface{}, market string) (int, error) {
-	products, err := self.getProducts(client, true)
+	product, err := self.getProduct(client, market)
 	if err != nil {
 		return 0, err
 	}
-	for _, p := range products {
-		if p.ID == market {
-			return precision.Parse(p.BaseIncrement, 0), nil
-		}
-	}
-	return 0, errors.Errorf("market %s not found", market)
+	return precision.Parse(product.BaseIncrement, 0), nil
 }
 
 func (self *Gdax) GetMaxSize(client interface{}, base, quote string, hold, earn bool, def float64, mult multiplier.Mult) float64 {
@@ -889,13 +895,10 @@ func (self *Gdax) GetMaxSize(client interface{}, base, quote string, hold, earn 
 	})
 
 	if hold {
-		gdaxClient, ok := client.(*gdax.Client)
-		if ok {
-			min, err := self.getMinOrderSize(gdaxClient, market)
-			if err == nil {
-				if min > out {
-					out = min
-				}
+		min, err := self.getMinOrderSize(client, market)
+		if err == nil {
+			if min > out {
+				out = min
 			}
 		}
 	}
@@ -933,6 +936,10 @@ func (self *Gdax) Cancel(client interface{}, market string, side model.OrderSide
 	}
 
 	return nil
+}
+
+func (self *Gdax) Coalesce(client interface{}, market string, side model.OrderSide) error {
+	return errors.New("not implemented")
 }
 
 func (self *Gdax) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {
@@ -986,12 +993,7 @@ func (self *Gdax) Buy(client interface{}, cancel bool, market string, calls mode
 				},
 			}).SetSize(call.Size).SetPrice(limit)
 			if _, err = gdaxClient.CreateOrder(order); err != nil {
-				var raw []byte
-				if raw, _ = json.Marshal(order); raw == nil {
-					return errors.Wrap(err, 1)
-				} else {
-					return errors.Wrap(errors.Append(err, "\t", string(raw)), 1)
-				}
+				return errors.Append(errors.Wrap(err, 1), order)
 			}
 		}
 	}

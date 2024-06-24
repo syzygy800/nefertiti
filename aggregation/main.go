@@ -27,32 +27,30 @@ func Get(
 	dist, top int,
 	strict, sandbox bool,
 ) (float64, float64, float64, error) {
-	var (
-		err    error
-		client interface{}
-		ticker float64
-		stats  *model.Stats // 24-hour statistics
-		avg    float64      // 24-hour average
-		prec   int          // price precision
-	)
-
-	if client, err = exchange.GetClient(model.BOOK, sandbox); err != nil {
+	client, err := exchange.GetClient(model.BOOK, sandbox)
+	if err != nil {
 		return 0, dip, pip, err
 	}
 
-	if ticker, err = exchange.GetTicker(client, market); err != nil {
+	ticker, err := exchange.GetTicker(client, market)
+	if err != nil {
 		return 0, dip, pip, err
 	}
 
-	if stats, err = exchange.Get24h(client, market); err != nil {
+	// 24-hour statistics
+	stats, err := exchange.Get24h(client, market)
+	if err != nil {
 		return 0, dip, pip, err
 	}
 
-	if avg, err = stats.Avg(exchange, sandbox); err != nil {
+	// 24-hour average
+	avg, err := stats.Avg(exchange, sandbox)
+	if err != nil {
 		return 0, dip, pip, err
 	}
 
-	if prec, err = exchange.GetPricePrec(client, market); err != nil {
+	prec, err := exchange.GetPricePrec(client, market)
+	if err != nil {
 		return 0, dip, pip, err
 	}
 
@@ -71,12 +69,6 @@ func GetEx(
 	dist, prec, top int,
 	strict bool,
 ) (float64, float64, float64, error) {
-	var (
-		err  error
-		out  float64
-		book interface{} // bids
-	)
-
 	Max := func(a, b int) int {
 		if a > b {
 			return a
@@ -84,12 +76,13 @@ func GetEx(
 		return b
 	}
 
-	if book, err = exchange.GetBook(client, market, model.BOOK_SIDE_BIDS); err != nil {
+	book, err := exchange.GetBook(client, market, model.BOOK_SIDE_BIDS)
+	if err != nil {
 		return 0, dip, pip, err
 	}
 
 	for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
-		if out, err = get(exchange, client, market, ticker, avg, book, dip, pip, max, min, dist, prec, cnt); err == nil {
+		if out, err := get(exchange, client, market, ticker, avg, book, dip, pip, max, min, dist, prec, cnt); err == nil {
 			return out, dip, pip, err
 		}
 	}
@@ -97,20 +90,20 @@ func GetEx(
 	if !strict {
 		x := math.Round(dip)
 		y := math.Round(pip)
-		// if we cannot find any supports, upper your pip setting one percentage at a time until (a) we can, or (b) 50%
-		for y < 50 {
+		// if we cannot find any supports, upper your pip setting one percentage at a time until (a) we can, or (b) 60%
+		for y < 60 {
 			y++
 			for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
-				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, prec, cnt); err == nil {
+				if out, err := get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, prec, cnt); err == nil {
 					return out, x, y, err
 				}
 			}
 		}
-		// if we cannot find any supports, lower your dip setting one percentage at a time until (a) we can, or (b) 0%
-		for x > 0 {
+		// if we cannot find any supports, lower your dip setting one percentage at a time until (a) we can, or (b) 1%
+		for x > 1 {
 			x--
 			for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
-				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, prec, cnt); err == nil {
+				if out, err := get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, prec, cnt); err == nil {
 					return out, x, y, err
 				}
 			}
@@ -119,7 +112,16 @@ func GetEx(
 		for y < 100 {
 			y++
 			for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
-				if out, err = get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, prec, cnt); err == nil {
+				if out, err := get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, prec, cnt); err == nil {
+					return out, x, y, err
+				}
+			}
+		}
+		// if nothing else worked, try a 0% dip
+		if x > 0 {
+			x--
+			for cnt := Max(top, 4); cnt >= Max(top, 2); cnt-- {
+				if out, err := get(exchange, client, market, ticker, avg, book, x, y, max, min, dist, prec, cnt); err == nil {
 					return out, x, y, err
 				}
 			}
@@ -144,17 +146,22 @@ func get(
 	max, min float64,
 	dist, prec, cnt int,
 ) (float64, error) {
-	var (
-		err  error
-		agg  float64 = 5000
-		last float64 // the last step we can make
-	)
+	agg := float64(5000)
+
+	low := func() float64 {
+		if ticker < avg {
+			return ticker
+		}
+		return avg
+	}()
 
 	next := func(step float64) float64 {
 		return precision.Round((agg * step), prec)
 	}
 
-	if last, err = strconv.ParseFloat(precision.Format(prec), 64); err != nil {
+	// the last step we can make
+	last, err := strconv.ParseFloat(precision.Format(prec), 64)
+	if err != nil {
 		return 0, err
 	}
 
@@ -189,9 +196,9 @@ func get(
 				}
 			}
 
-			// ignore supports that are cheaper than ticker minus 30%
+			// ignore supports that are cheaper than min(ticker, 24h average) minus 30%
 			if min == 0 && pip < 100 {
-				min = ticker - ((pip / 100) * ticker)
+				min = low - ((pip / 100) * low)
 			}
 			if min > 0 {
 				i = 0
@@ -204,11 +211,11 @@ func get(
 				}
 			}
 
-			// ignore supports that are more expensive than 24h average minus 5%
+			// ignore supports that are more expensive than min(ticker, 24h average) minus 5%
 			if dip > 0 {
 				i = 0
 				for i < len(book2) {
-					if book2[i].Price > (avg - ((dip / 100) * avg)) {
+					if book2[i].Price > (low - ((dip / 100) * low)) {
 						book2 = append(book2[:i], book2[i+1:]...)
 					} else {
 						i++

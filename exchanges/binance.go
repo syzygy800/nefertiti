@@ -419,23 +419,20 @@ func (self *Binance) sell(
 				}
 
 				// has a stop loss been filled? then place a buy order double the order size *** if --dca is included ***
-				if side == model.SELL {
-					if strategy == model.STRATEGY_STOP_LOSS {
-						if order.Type == exchange.OrderTypeStopLoss || order.Type == exchange.OrderTypeStopLossLimit {
-							if flag.Dca() {
-								var prec int
-								if prec, err = self.GetSizePrec(client, order.Symbol); err == nil {
-									size := 2.2 * order.GetSize()
-									_, _, err = self.Order(client,
-										model.BUY,
-										order.Symbol,
-										precision.Round(size, prec),
-										0, model.MARKET, "",
-									)
+				if side == model.SELL && strategy == model.STRATEGY_STOP_LOSS {
+					if order.Type == exchange.OrderTypeStopLoss || order.Type == exchange.OrderTypeStopLossLimit {
+						if flag.Dca() {
+							var (
+								prec int
+								size float64
+							)
+							if prec, err = self.GetSizePrec(client, order.Symbol); err == nil {
+								if size, err = multiplier.DoubleOrNothing(order.GetSize(), prec, order.GetStopPrice()); err == nil {
+									_, _, err = self.Order(client, model.BUY, order.Symbol, size, 0, model.MARKET, "")
 								}
-								if err != nil {
-									return new, errors.Append(err, "\t", string(data))
-								}
+							}
+							if err != nil {
+								return new, errors.Append(err, string(data))
 							}
 						}
 					}
@@ -536,7 +533,7 @@ func (self *Binance) sell(
 						}
 					}
 					if err != nil {
-						return new, errors.Append(err, "\t", string(data))
+						return new, errors.Append(err, string(data))
 					}
 				}
 			}
@@ -977,27 +974,26 @@ func (self *Binance) Get24h(client interface{}, market string) (*model.Stats, er
 		Market: market,
 		High:   high,
 		Low:    low,
-		BtcVolume: func() float64 {
+		BtcVolume: func(ticker1 *exchange.PriceChangeStats) float64 {
 			symbol, err := binance.GetSymbol(binanceClient, market)
 			if err == nil {
-				volume, err := strconv.ParseFloat(stats.QuoteVolume, 64)
+				volume, err := strconv.ParseFloat(ticker1.QuoteVolume, 64)
 				if err == nil {
 					if strings.EqualFold(symbol.QuoteAsset, model.BTC) {
 						return volume
 					} else {
-						btcSymbol := self.FormatMarket(model.BTC, symbol.QuoteAsset)
-						ticker2, err := binanceClient.Ticker(btcSymbol)
+						ticker2, err := binanceClient.Ticker(self.FormatMarket(model.BTC, symbol.QuoteAsset))
 						if err == nil {
-							price, err := strconv.ParseFloat(ticker2.LastPrice, 64)
+							last, err := strconv.ParseFloat(ticker2.LastPrice, 64)
 							if err == nil {
-								return volume / price
+								return volume / last
 							}
 						}
 					}
 				}
 			}
 			return 0
-		}(),
+		}(stats),
 	}, nil
 }
 
@@ -1074,6 +1070,10 @@ func (self *Binance) Cancel(client interface{}, market string, side model.OrderS
 	}
 
 	return nil
+}
+
+func (self *Binance) Coalesce(client interface{}, market string, side model.OrderSide) error {
+	return errors.New("not implemented")
 }
 
 func (self *Binance) Buy(client interface{}, cancel bool, market string, calls model.Calls, deviation float64, kind model.OrderType) error {
